@@ -1,0 +1,417 @@
+---
+description: 
+alwaysApply: true
+---
+
+# ============================================================
+#  .cursorrules — KMSAR
+#  Knowledge Management System for Academic Research
+#  Angeles University Foundation · OVPRI / CDAIC / CCS / MISS
+#  Stack: Laravel 11 · PHP 8.3 · MySQL 8.0 · Blade · Alpine.js
+#         Tailwind CSS 3 · KMSAR.css · Chart.js 4
+# ============================================================
+
+## PROJECT IDENTITY
+
+This is KMSAR — the Knowledge Management System for Academic Research at
+Angeles University Foundation (AUF). It is a Laravel 11 MVC web application
+with server-rendered Blade templates. It is NOT a SPA. Do not suggest React,
+Vue, Next.js, or any client-side framework.
+
+The system manages the full research lifecycle:
+- Faculty register and update research records
+- College Deans endorse or return submissions
+- OVPRI/CDAIC administrators give final approval
+- Filtered reports are generated as PDF and Excel
+
+---
+
+## STACK RULES — ALWAYS FOLLOW
+
+### PHP / Laravel
+- PHP version: 8.3 — use modern PHP (readonly properties, enums, named args, match)
+- Laravel version: 11 — use current conventions (no legacy patterns)
+- Always use Eloquent ORM. Never write raw SQL strings with string interpolation.
+- Always use Form Requests for validation — never validate in controllers directly
+- Business logic belongs in Service classes under `app/Services/` — keep controllers thin
+- All multi-step operations (approval + audit + notification) must be wrapped in DB::transaction()
+- Always soft delete research records and documents — never hard delete in normal flows
+- Use Gates and Policies for all authorization — never check roles inline in controllers
+- Dispatch async Jobs for: file virus scanning, report generation, email notifications
+- Queue driver: database (local/dev), redis (production)
+- All routes must be named — always use `route()` helper, never hardcoded URLs
+- Use `config('kmsar.xxx')` for app-specific constants — never hardcode values in logic
+
+### Blade Templates
+- All pages extend `layouts.app` — never build a standalone HTML page without the layout
+- Use Blade components for all UI: `<x-button>`, `<x-badge>`, `<x-card>`, `<x-alert>`, `<x-modal>`
+- Use Alpine.js for all interactivity — tabs, modals, dropdowns, SDG chips, form steppers
+- Never use jQuery — Alpine.js only
+- Chart.js 4 for all data visualizations — initialize in Blade view scripts, not separate JS files
+- Always use `{{ }}` for output — never `{!! !!}` unless explicitly sanitized
+- Flash messages use `session('success')`, `session('error')` patterns
+- Use `@stack('modals')` in `layouts/app.blade.php` for modal portal
+
+### CSS / Styling
+- Use Tailwind CSS utility classes as the primary styling method
+- For semantic, reusable component classes, use KMSAR.css (located at `public/css/KMSAR.css`)
+- Link KMSAR.css in the layout: `<link rel="stylesheet" href="{{ asset('css/KMSAR.css') }}">`
+- Use KMSAR.css class names with the `kmsar-` prefix for component classes:
+  - Layout: `kmsar-app`, `kmsar-sidebar`, `kmsar-navbar`, `kmsar-main-content`, `kmsar-page-container`
+  - Components: `kmsar-btn`, `kmsar-badge`, `kmsar-card`, `kmsar-alert`, `kmsar-modal`
+  - Forms: `kmsar-input`, `kmsar-select`, `kmsar-textarea`, `kmsar-sdg-chip`
+  - Tables: `kmsar-table`, `kmsar-table-wrap`
+  - Charts: `kmsar-chart-card`, `kmsar-chart-canvas-wrap`, `kmsar-chart-legend`
+- Color values to use (match the design system exactly):
+  - Primary: `#1E3A8A`  (navy blue)
+  - Primary hover: `#1E40AF`
+  - Gold accent: `#D4AF37`  (use sparingly — reference numbers, badges, gold CTAs)
+  - Background: `#F8FAFC`
+  - Card: `#FFFFFF`
+  - Border: `#E2E8F0`
+  - Success: `#059669`
+  - Warning: `#D97706`
+  - Danger: `#DC2626`
+  - Revision/info: `#2563EB`
+- Never use inline `style=""` for colors — use Tailwind classes or KMSAR.css classes
+- No emojis in UI — use SVG icons only (Heroicons style, stroke, not filled)
+- No playful or casual design elements — institutional, clean, minimal
+
+---
+
+## NAMING CONVENTIONS
+
+### PHP
+- Controllers: `PascalCase` + `Controller` suffix — e.g. `ResearchController`
+- Services: `PascalCase` + `Service` suffix — e.g. `ApprovalService`
+- Jobs: `PascalCase` + `Job` suffix — e.g. `FileVirusScanJob`
+- Policies: `PascalCase` + `Policy` suffix — e.g. `ResearchPolicy`
+- Form Requests: descriptive + `Request` suffix — e.g. `StoreResearchRequest`
+- Models: singular `PascalCase` — e.g. `Research`, `College`, `Approval`
+- Methods: `camelCase` — e.g. `endorseResearch()`, `generateReport()`
+- Variables: `camelCase` — e.g. `$motherCollege`, `$approvalStage`
+- Constants: `SCREAMING_SNAKE_CASE`
+
+### Database
+- Tables: `snake_case`, plural — e.g. `research`, `research_authors`, `audit_logs`
+- Columns: `snake_case` — e.g. `mother_college_id`, `av_result`, `approval_stage`
+- Foreign keys: `{table_singular}_id` — e.g. `college_id`, `research_id`
+- Enum values: `snake_case` strings — e.g. `'dean_review'`, `'ovpri_review'`, `'published_scopus'`
+
+### Blade
+- View files: `kebab-case.blade.php` — e.g. `research-detail.blade.php`
+- Component files: `kebab-case.blade.php` in `resources/views/components/`
+- Component usage: `<x-component-name>` — e.g. `<x-page-header>`, `<x-stat-card>`
+
+### Routes
+- Named routes follow: `{module}.{action}` — e.g. `research.index`, `approval.endorse`, `ovpri.dashboard`
+- Route parameters: `{camelCase}` — e.g. `{research}`, `{document}`
+
+---
+
+## ROLES & PERMISSIONS — ALWAYS CHECK
+
+There are exactly 9 roles in KMSAR:
+1. `super_admin`     — Full system access
+2. `ovpri_admin`     — University-wide approval and reporting
+3. `cdaic_admin`     — Same as ovpri_admin
+4. `college_dean`    — Endorse/return for own college only
+5. `unit_head`       — Same as college_dean but scoped to unit
+6. `faculty`         — Submit and update own research
+7. `co_author`       — View + optionally upload on shared research
+8. `registrar`       — Read-only, approved research only
+9. `viewer`          — Read-only, published summaries only
+
+When writing any controller method that touches research data:
+- Always apply the corresponding Policy — never skip authorization
+- Always scope queries to the user's visible data — never return all records without role check
+- Dean can only see `mother_college_id = auth()->user()->college_id`
+- Faculty can only see own research or research where they are a co-author
+- OVPRI/CDAIC can see everything
+
+---
+
+## APPROVAL WORKFLOW — STATE MACHINE
+
+The `research.approval_stage` follows this state machine:
+
+```
+draft → dean_review → ovpri_review → approved
+                    ↓               ↓
+               dean_review ←── return (from ovpri)
+draft ← return (from dean)
+rejected ← reject (from dean OR ovpri)
+approved → dean_review (on progress update — restarts chain)
+```
+
+Rules:
+- ALL state transitions must go through `ApprovalService` — never update `approval_stage` directly in a controller
+- Every transition must be in `DB::transaction()`
+- Return and reject actions REQUIRE non-empty remarks (enforced in `ApprovalActionRequest`)
+- `revision_count` on the research record increments on every `return` action
+- Submission blocked if no `Document` with `av_result = 'clean'` matching the status requirement
+
+---
+
+## FILE HANDLING — SECURITY RULES
+
+Always follow this pipeline. Never skip steps.
+
+1. Client-side: validate extension, count (≤10), size (≤100MB) before upload
+2. Server: `UploadDocumentRequest` validates extension whitelist + max size
+3. `FileValidationService::validateMime()`: use `finfo_file()` to check actual MIME vs extension
+4. Store file as `{uuid}.{ext}` in `storage/app/research_files/{college_id}/{research_id}/`
+5. NEVER store in `public/` — files must never be directly accessible via URL
+6. Insert `Document` record with `av_result = 'pending'`
+7. Dispatch `FileVirusScanJob` to queue
+8. `DocumentPolicy::view()` checks `av_result = 'clean'` before every download
+9. Serve downloads via `Storage::download()` — never expose real path
+
+Allowed extensions: `pdf`, `doc`, `docx`, `xls`, `xlsx`, `jpg`, `jpeg`, `png`
+
+---
+
+## DATABASE RULES
+
+- Always use Eloquent — no raw SQL with string interpolation
+- Always add appropriate indexes: foreign keys, status columns, frequently filtered columns
+- Use soft deletes on `research` and `documents` tables — `SoftDeletes` trait
+- Use JSON columns for `sdg_tags` (array of integers 1–17)
+- `audit_logs` table is append-only — never update or delete audit records
+- Use `DB::transaction()` for any operation that touches more than one table
+- Always eager load relationships to prevent N+1 queries — `with(['primaryAuthor', 'motherCollege'])`
+- Use `cursor()` for large dataset iteration in exports — never `get()` on unbounded result sets
+
+---
+
+## WHAT TO NEVER DO
+
+- Never use `{!! !!}` without explicit sanitization
+- Never store uploaded files in `public/` or `storage/app/public/`
+- Never check `$user->role === 'dean'` inline — always use Policies/Gates
+- Never update `research.approval_stage` directly — always use `ApprovalService`
+- Never call Mail::send() or Notification::send() synchronously inside a transaction
+- Never use jQuery — Alpine.js only
+- Never use React, Vue, Livewire, or Inertia — Blade + Alpine.js only
+- Never build a standalone HTML page — always extend `layouts.app`
+- Never use `$guarded = []` on models — always define explicit `$fillable`
+- Never hardcode colors inline with `style=""` — use Tailwind or KMSAR.css
+- Never add emojis to UI — SVG icons only
+- Never skip Form Request validation — all user input goes through Form Requests
+- Never return all records without a scope — always apply role-based filtering
+- Never commit `.env` to version control
+
+---
+
+## CODE GENERATION PATTERNS
+
+### When generating a Controller method:
+```php
+// Thin controller — delegate to service
+public function endorse(ApprovalActionRequest $request, Research $research): RedirectResponse
+{
+    $this->authorize('endorse', $research);
+    $this->approvalService->endorse($research, auth()->user(), $request->remarks);
+    return redirect()->route('approval.queue')->with('success', 'Research endorsed to OVPRI.');
+}
+```
+
+### When generating a Service method:
+```php
+// Always use DB::transaction(), always dispatch jobs outside the transaction
+public function endorse(Research $research, User $dean, ?string $remarks = null): void
+{
+    DB::transaction(function () use ($research, $dean, $remarks) {
+        $research->update(['approval_stage' => 'ovpri_review']);
+        Approval::create([
+            'research_id' => $research->id,
+            'approver_id' => $dean->id,
+            'stage'       => 'dean',
+            'action'      => 'endorsed',
+            'remarks'     => $remarks,
+            'acted_at'    => now(),
+        ]);
+        AuditLog::create([
+            'user_id'        => $dean->id,
+            'action'         => 'approval.endorsed',
+            'auditable_type' => Research::class,
+            'auditable_id'   => $research->id,
+            'new_values'     => ['approval_stage' => 'ovpri_review'],
+            'ip_address'     => request()->ip(),
+        ]);
+    });
+    // Dispatch AFTER transaction commits
+    SendNotificationJob::dispatch($research, 'endorsed');
+}
+```
+
+### When generating a Blade view:
+```blade
+@extends('layouts.app')
+
+@section('content')
+<x-page-header
+    title="Approval Queue"
+    subtitle="College of Computer Studies · {{ count($pending) }} submissions pending"
+>
+    <x-slot name="actions">
+        {{-- page-level actions here --}}
+    </x-slot>
+</x-page-header>
+
+<x-card title="Pending Submissions">
+    @forelse($pending as $research)
+        <div class="kmsar-queue-card">
+            <div class="flex-1">
+                <div class="kmsar-ref">{{ $research->reference_number }}</div>
+                <div class="kmsar-card-title mt-1">{{ $research->title }}</div>
+                <div class="kmsar-body mt-1">{{ $research->primaryAuthor->name }}</div>
+                <div class="mt-2">
+                    <x-badge :status="$research->status">{{ $research->status }}</x-badge>
+                </div>
+            </div>
+            <div class="kmsar-queue-card-actions">
+                <form action="{{ route('approval.endorse', $research) }}" method="POST">
+                    @csrf
+                    <x-button variant="success" size="sm" type="submit">Endorse</x-button>
+                </form>
+                <x-button variant="warning" size="sm" @click="$dispatch('open-modal', 'return-{{ $research->id }}')">
+                    Return
+                </x-button>
+                <x-button variant="danger-outline" size="sm" @click="$dispatch('open-modal', 'reject-{{ $research->id }}')">
+                    Reject
+                </x-button>
+            </div>
+        </div>
+    @empty
+        <div class="text-center py-10 text-slate-400 text-sm">No submissions pending your review.</div>
+    @endforelse
+</x-card>
+@endsection
+
+@push('modals')
+{{-- Return and Reject modals rendered here --}}
+@endpush
+```
+
+### When generating a Chart.js chart:
+```html
+{{-- Always: CDN import, KMSAR color palette, Chart.defaults set once --}}
+<canvas id="myChart" class="kmsar-chart-canvas-wrap"></canvas>
+<script>
+Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#94A3B8';
+Chart.defaults.plugins.legend.display = false;
+
+new Chart(document.getElementById('myChart'), {
+    type: 'bar',
+    data: {
+        labels: {!! json_encode($labels) !!},
+        datasets: [{
+            data: {!! json_encode($data) !!},
+            backgroundColor: '#1E3A8A',
+            borderRadius: 5,
+            borderSkipped: false,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false }, border: { display: false } },
+            y: { grid: { color: '#E2E8F0' }, border: { display: false }, beginAtZero: true }
+        }
+    }
+});
+</script>
+```
+
+---
+
+## FOLDER REMINDERS
+
+- Controllers: `app/Http/Controllers/`
+- Services: `app/Services/`
+- Jobs: `app/Jobs/`
+- Policies: `app/Policies/`
+- Form Requests: `app/Http/Requests/`
+- Models: `app/Models/`
+- Blade views: `resources/views/`
+- Blade components: `resources/views/components/`
+- CSS design system: `public/css/KMSAR.css`
+- Research files: `storage/app/research_files/` (never in public/)
+- Config: `config/kmsar.php` for app constants
+- Routes: `routes/web.php` (all named)
+
+---
+
+## REFERENCE FILES IN THIS PROJECT
+
+- `KMSAR_ARCHITECTURE.md` — full system design, ERD, role matrix, state machine
+- `public/css/KMSAR.css` — design system CSS (28 sections, all component classes)
+- `config/kmsar.php` — app-specific configuration values
+- `.cursorrules` — this file (Cursor AI rules)
+
+Always read `KMSAR_ARCHITECTURE.md` when unsure about:
+- Database schema or column names
+- Role permissions or data visibility rules
+- Approval workflow transitions
+- File handling pipeline steps
+- Required documents per research status
+
+---
+
+## QUICK REFERENCE
+
+### Research Status Values (research.status)
+`proposal` · `ongoing` · `completed_unpublished` · `presented_internal` ·
+`presented_external` · `published_non_indexed` · `published_scopus` ·
+`patent_submitted` · `patent_granted`
+
+### Approval Stage Values (research.approval_stage)
+`draft` · `dean_review` · `ovpri_review` · `approved` · `rejected`
+
+### AV Result Values (documents.av_result)
+`pending` · `clean` · `infected` · `failed`
+
+### Approval Action Values (approvals.action)
+`endorsed` · `approved` · `returned` · `rejected`
+
+### Approval Stage Values (approvals.stage)
+`dean` · `ovpri`
+
+---
+
+## AUF COLLEGES & PROGRAMS (Official — use these EXACTLY in seeders, dropdowns, and migrations)
+
+There is a `programs` table in addition to `colleges`. Schema:
+- `programs`: id, college_id (FK), code VARCHAR(30) UQ, name VARCHAR(200), is_active TINYINT(1), timestamps
+
+### CollegeSeeder — exact data:
+```php
+CAMP → College of Allied Medical Professions
+CAS  → College of Arts and Sciences
+CBA  → College of Business and Accountancy
+CCS  → College of Computer Studies
+CCJE → College of Criminal Justice Education
+CED  → College of Education
+CEA  → College of Engineering
+```
+
+### ProgramSeeder — exact data per college:
+```
+CAMP: BSClinPhar, BSMT, BSOT, PHARM, BSPT, BSRT
+CAS:  AB Com, BSBIO, BS Human Bio, BSPSY, SABPsych-MAPsych
+CBA:  BSA, BSBA, BSHM, BSMA, BSTM
+CCS:  BMMA, BSCS, BSIT
+CCJE: BSCRM
+CED:  BEEd, BSEd, BSNEd
+CEA:  BSARCHI, BSCE, BSCOE, BS ECE
+```
+
+When generating any college dropdown, seeder, migration, factory, or filter —
+always use EXACTLY these 7 colleges and their programs. Never invent or abbreviate.
+The `users` table has a `college_id` FK and optionally a `program_id` FK → programs.id.
+Faculty belong to one college and one program.

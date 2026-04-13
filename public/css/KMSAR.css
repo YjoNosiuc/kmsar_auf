@@ -1,0 +1,2309 @@
+/*
+ * ============================================================
+ *  KMSAR.css — Knowledge Management System for Academic Research
+ *  Angeles University Foundation · OVPRI / CDAIC / CCS / MISS
+ *  Version: 1.0.0
+ *  Built for: Laravel Blade + Tailwind CSS
+ * ============================================================
+ *
+ *  TABLE OF CONTENTS
+ *  -----------------
+ *  1.  CSS Custom Properties (Design Tokens)
+ *  2.  Base / Reset
+ *  3.  Typography
+ *  4.  Layout — App Shell
+ *  5.  Sidebar
+ *  6.  Top Navbar
+ *  7.  Page Header & Breadcrumb
+ *  8.  Buttons
+ *  9.  Status Badges
+ *  10. Cards & Stat Cards
+ *  11. Form Elements
+ *  12. File Upload
+ *  13. Data Tables
+ *  14. Alerts
+ *  15. Modals
+ *  16. Tabs
+ *  17. Timeline
+ *  18. Stepper (Form Steps)
+ *  19. Approval Queue Cards
+ *  20. Charts (Bar, Donut, Line)
+ *  21. Report Cards
+ *  22. Notifications Panel
+ *  23. Dashboard Stats Grid
+ *  24. Pagination
+ *  25. Utility Classes
+ *  26. Scrollbars
+ *  27. Animations & Transitions
+ *  28. Responsive Breakpoints
+ * ============================================================
+ */
+
+
+/* ============================================================
+   1. CSS CUSTOM PROPERTIES (DESIGN TOKENS)
+   ============================================================ */
+
+:root {
+  /* --- Brand Colors --- */
+  --color-primary:        #1E3A8A;
+  --color-primary-hover:  #1E40AF;
+  --color-primary-light:  #2563EB;
+  --color-primary-dark:   #162D6E;
+  --color-primary-muted:  #EFF6FF;
+
+  --color-gold:           #D4AF37;
+  --color-gold-hover:     #B8971F;
+  --color-gold-light:     #E8CC6A;
+  --color-gold-muted:     #FBF5DC;
+  --color-gold-border:    #E8D48A;
+
+  /* --- Semantic Status Colors --- */
+  --color-pending:        #D97706;
+  --color-pending-bg:     #FFFBEB;
+  --color-pending-border: #FDE68A;
+
+  --color-approved:       #059669;
+  --color-approved-bg:    #ECFDF5;
+  --color-approved-border:#A7F3D0;
+
+  --color-rejected:       #DC2626;
+  --color-rejected-bg:    #FEF2F2;
+  --color-rejected-border:#FCA5A5;
+
+  --color-revision:       #2563EB;
+  --color-revision-bg:    #EFF6FF;
+  --color-revision-border:#BFDBFE;
+
+  --color-draft:          #64748B;
+  --color-draft-bg:       #F8FAFC;
+  --color-draft-border:   #CBD5E1;
+
+  --color-info:           #0284C7;
+  --color-info-bg:        #E0F2FE;
+  --color-info-border:    #BAE6FD;
+
+  /* --- Neutral / Surface --- */
+  --color-surface:        #F8FAFC;
+  --color-card:           #FFFFFF;
+  --color-border:         #E2E8F0;
+  --color-border-strong:  #CBD5E1;
+
+  /* --- Text --- */
+  --color-text-primary:   #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-muted:     #94A3B8;
+  --color-text-inverse:   #FFFFFF;
+  --color-text-gold:      #D4AF37;
+
+  /* --- Danger --- */
+  --color-danger:         #DC2626;
+  --color-danger-hover:   #B91C1C;
+  --color-danger-bg:      #FEF2F2;
+  --color-danger-border:  #FCA5A5;
+
+  /* --- Warning --- */
+  --color-warning:        #D97706;
+  --color-warning-hover:  #B45309;
+  --color-warning-bg:     #FFFBEB;
+
+  /* --- Success --- */
+  --color-success:        #059669;
+  --color-success-hover:  #047857;
+  --color-success-bg:     #ECFDF5;
+
+  /* --- Sidebar --- */
+  --sidebar-bg:           #1E3A8A;
+  --sidebar-width:        224px;
+  --sidebar-border:       rgba(255, 255, 255, 0.10);
+  --sidebar-hover:        rgba(255, 255, 255, 0.08);
+  --sidebar-active:       rgba(255, 255, 255, 0.12);
+  --sidebar-text:         rgba(255, 255, 255, 0.65);
+  --sidebar-text-active:  #FFFFFF;
+  --sidebar-text-section: rgba(255, 255, 255, 0.30);
+
+  /* --- Navbar --- */
+  --navbar-height:        56px;
+  --navbar-bg:            #FFFFFF;
+  --navbar-border:        #E2E8F0;
+
+  /* --- Typography --- */
+  --font-sans:            'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:            'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+  --text-2xs:             0.625rem;   /* 10px */
+  --text-xs:              0.75rem;    /* 12px */
+  --text-sm:              0.8125rem;  /* 13px */
+  --text-base:            0.875rem;   /* 14px */
+  --text-md:              0.9375rem;  /* 15px */
+  --text-lg:              1rem;       /* 16px */
+  --text-xl:              1.125rem;   /* 18px */
+  --text-2xl:             1.25rem;    /* 20px */
+  --text-3xl:             1.5rem;     /* 24px */
+
+  /* --- Spacing --- */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+
+  /* --- Border Radius --- */
+  --radius-sm: 0.25rem;   /* 4px */
+  --radius:    0.375rem;  /* 6px */
+  --radius-md: 0.5rem;    /* 8px */
+  --radius-lg: 0.75rem;   /* 12px */
+  --radius-xl: 1rem;      /* 16px */
+  --radius-full: 9999px;
+
+  /* --- Shadows --- */
+  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow:      0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:   0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg:   0 8px 24px rgba(0, 0, 0, 0.10);
+  --shadow-xl:   0 16px 40px rgba(0, 0, 0, 0.12);
+  --shadow-inner:inset 0 2px 4px rgba(0, 0, 0, 0.06);
+
+  /* --- Transition --- */
+  --transition-fast:   0.1s ease;
+  --transition:        0.15s ease;
+  --transition-slow:   0.25s ease;
+}
+
+
+/* ============================================================
+   2. BASE / RESET
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  background-color: var(--color-surface);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: inherit; text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+button { cursor: pointer; font-family: inherit; }
+input, select, textarea { font-family: inherit; }
+ul, ol { list-style: none; }
+
+
+/* ============================================================
+   3. TYPOGRAPHY
+   ============================================================ */
+
+.kmsar-h1 {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.kmsar-h2 {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1.3;
+}
+
+.kmsar-h3 {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.kmsar-card-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.kmsar-ref {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-gold);
+  letter-spacing: 0.06em;
+}
+
+.kmsar-body {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+
+.kmsar-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.375rem;
+}
+
+
+/* ============================================================
+   4. LAYOUT — APP SHELL
+   ============================================================ */
+
+.kmsar-app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.kmsar-main-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.kmsar-main-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--color-surface);
+}
+
+.kmsar-page-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6);
+}
+
+
+/* ============================================================
+   5. SIDEBAR
+   ============================================================ */
+
+.kmsar-sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--sidebar-bg);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  overflow: hidden;
+}
+
+.kmsar-sidebar-brand {
+  padding: 1.125rem var(--space-5) 1rem;
+  border-bottom: 1px solid var(--sidebar-border);
+  flex-shrink: 0;
+}
+
+.kmsar-sidebar-brand-inst {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 0.25rem;
+}
+
+.kmsar-sidebar-brand-name {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text-inverse);
+  line-height: 1.2;
+}
+
+.kmsar-sidebar-brand-sub {
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 0.125rem;
+}
+
+.kmsar-sidebar-user {
+  padding: 0.875rem var(--space-4);
+  border-bottom: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  cursor: pointer;
+  transition: background var(--transition);
+  flex-shrink: 0;
+}
+
+.kmsar-sidebar-user:hover {
+  background: var(--sidebar-hover);
+}
+
+.kmsar-sidebar-user-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-inverse);
+  line-height: 1.3;
+}
+
+.kmsar-sidebar-user-role {
+  display: inline-block;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: rgba(212, 175, 55, 0.18);
+  color: var(--color-gold-light);
+  border: 1px solid rgba(212, 175, 55, 0.28);
+  margin-top: 0.2rem;
+}
+
+.kmsar-sidebar-nav {
+  flex: 1;
+  padding: 0.5rem 0;
+  overflow-y: auto;
+}
+
+.kmsar-sidebar-section {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sidebar-text-section);
+  padding: 0.625rem var(--space-5) 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.kmsar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem var(--space-4);
+  color: var(--sidebar-text);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: all var(--transition);
+  position: relative;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.kmsar-nav-item:hover {
+  background: var(--sidebar-hover);
+  color: var(--color-text-inverse);
+}
+
+.kmsar-nav-item.active {
+  background: var(--sidebar-active);
+  border-left-color: var(--color-gold);
+  color: var(--color-text-inverse);
+  font-weight: 500;
+}
+
+.kmsar-sidebar-nav-form {
+  margin: 0;
+  padding: 0;
+}
+
+button.kmsar-nav-item {
+  width: 100%;
+  font: inherit;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  text-align: left;
+  margin: 0;
+  color: inherit;
+}
+
+.kmsar-nav-item svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+
+.kmsar-nav-item:hover svg,
+.kmsar-nav-item.active svg {
+  opacity: 1;
+}
+
+.kmsar-nav-badge {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  padding: 0.125rem 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--color-gold);
+  color: var(--color-primary-dark);
+  line-height: 1.4;
+}
+
+.kmsar-sidebar-footer {
+  padding: 0.625rem var(--space-4);
+  border-top: 1px solid var(--sidebar-border);
+  font-size: var(--text-2xs);
+  color: rgba(255, 255, 255, 0.2);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Avatar */
+.kmsar-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--color-gold);
+  color: var(--color-primary-dark);
+}
+
+.kmsar-avatar--blue {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.kmsar-avatar--lg {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: var(--text-sm);
+}
+
+
+/* ============================================================
+   6. TOP NAVBAR
+   ============================================================ */
+
+.kmsar-navbar {
+  height: var(--navbar-height);
+  background: var(--navbar-bg);
+  border-bottom: 1px solid var(--navbar-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  box-shadow: var(--shadow-sm);
+}
+
+.kmsar-navbar-context {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.kmsar-navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.kmsar-navbar-icon-btn {
+  position: relative;
+  padding: 0.4rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  transition: all var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kmsar-navbar-icon-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+}
+
+.kmsar-navbar-notif-dot {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--color-gold);
+  border: 2px solid var(--navbar-bg);
+}
+
+.kmsar-user-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem 0.375rem 0.75rem;
+  border-left: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: none;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  transition: background var(--transition);
+}
+
+.kmsar-user-menu-trigger:hover {
+  background: var(--color-surface);
+}
+
+.kmsar-user-menu-name {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.kmsar-user-menu-role {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* Dropdown */
+.kmsar-dropdown {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  width: 13rem;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.kmsar-dropdown-header {
+  padding: 0.875rem var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.kmsar-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  transition: background var(--transition);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+}
+
+.kmsar-dropdown-item:hover {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.kmsar-dropdown-item--danger {
+  color: var(--color-danger);
+  border-top: 1px solid var(--color-border);
+}
+
+.kmsar-dropdown-item--danger:hover {
+  background: var(--color-danger-bg);
+}
+
+
+/* ============================================================
+   7. PAGE HEADER & BREADCRUMB
+   ============================================================ */
+
+.kmsar-page-header {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  box-shadow: var(--shadow);
+}
+
+.kmsar-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-bottom: 0.5rem;
+}
+
+.kmsar-breadcrumb-link {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  transition: color var(--transition);
+  text-decoration: none;
+}
+
+.kmsar-breadcrumb-link:hover {
+  color: var(--color-primary);
+}
+
+.kmsar-breadcrumb-sep {
+  font-size: var(--text-xs);
+  color: var(--color-border-strong);
+}
+
+.kmsar-breadcrumb-current {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.kmsar-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+}
+
+
+/* ============================================================
+   8. BUTTONS
+   ============================================================ */
+
+.kmsar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.5625rem 1.125rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  border-radius: var(--radius-md);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.kmsar-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.kmsar-btn:active {
+  transform: scale(0.97);
+}
+
+.kmsar-btn:disabled,
+.kmsar-btn[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sizes */
+.kmsar-btn--xs  { padding: 0.3125rem 0.625rem;  font-size: var(--text-2xs); }
+.kmsar-btn--sm  { padding: 0.4375rem 0.875rem;  font-size: var(--text-xs);  }
+.kmsar-btn--md  { padding: 0.5625rem 1.125rem;  font-size: var(--text-sm);  }
+.kmsar-btn--lg  { padding: 0.75rem   1.5rem;    font-size: var(--text-base);}
+
+/* Primary */
+.kmsar-btn--primary {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+.kmsar-btn--primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+/* Secondary / Outline */
+.kmsar-btn--secondary {
+  background: var(--color-card);
+  color: var(--color-text-secondary);
+  border-width: 1.5px;
+  border-style: solid;
+  border-color: var(--color-border);
+}
+.kmsar-btn--secondary:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-primary);
+}
+
+/* Outline Primary */
+.kmsar-btn--outline {
+  background: var(--color-card);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.kmsar-btn--outline:hover {
+  background: var(--color-primary-muted);
+}
+
+/* Gold */
+.kmsar-btn--gold {
+  background: var(--color-gold);
+  color: var(--color-primary-dark);
+  border-color: var(--color-gold);
+  font-weight: 700;
+}
+.kmsar-btn--gold:hover {
+  background: var(--color-gold-hover);
+  border-color: var(--color-gold-hover);
+}
+
+/* Success / Approve */
+.kmsar-btn--success {
+  background: var(--color-success);
+  color: var(--color-text-inverse);
+  border-color: var(--color-success);
+}
+.kmsar-btn--success:hover {
+  background: var(--color-success-hover);
+  border-color: var(--color-success-hover);
+}
+
+/* Warning / Return */
+.kmsar-btn--warning {
+  background: var(--color-warning);
+  color: var(--color-text-inverse);
+  border-color: var(--color-warning);
+}
+.kmsar-btn--warning:hover {
+  background: var(--color-warning-hover);
+  border-color: var(--color-warning-hover);
+}
+
+/* Danger / Reject */
+.kmsar-btn--danger {
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+  border-color: var(--color-danger);
+}
+.kmsar-btn--danger:hover {
+  background: var(--color-danger-hover);
+  border-color: var(--color-danger-hover);
+}
+
+/* Danger Outline */
+.kmsar-btn--danger-outline {
+  background: var(--color-card);
+  color: var(--color-danger);
+  border-color: var(--color-danger-border);
+}
+.kmsar-btn--danger-outline:hover {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+}
+
+/* Ghost */
+.kmsar-btn--ghost {
+  background: none;
+  color: var(--color-text-secondary);
+  border-color: transparent;
+  box-shadow: none;
+}
+.kmsar-btn--ghost:hover {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+
+/* ============================================================
+   9. STATUS BADGES
+   ============================================================ */
+
+.kmsar-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.625rem;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  border-width: 1px;
+  border-style: solid;
+}
+
+/* Badge variants */
+.kmsar-badge--pending {
+  background: var(--color-pending-bg);
+  color: var(--color-pending);
+  border-color: var(--color-pending-border);
+}
+
+.kmsar-badge--approved {
+  background: var(--color-approved-bg);
+  color: var(--color-approved);
+  border-color: var(--color-approved-border);
+}
+
+.kmsar-badge--rejected {
+  background: var(--color-rejected-bg);
+  color: var(--color-rejected);
+  border-color: var(--color-rejected-border);
+}
+
+.kmsar-badge--revision {
+  background: var(--color-revision-bg);
+  color: var(--color-revision);
+  border-color: var(--color-revision-border);
+}
+
+.kmsar-badge--draft {
+  background: var(--color-draft-bg);
+  color: var(--color-draft);
+  border-color: var(--color-draft-border);
+}
+
+.kmsar-badge--info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border-color: var(--color-info-border);
+}
+
+.kmsar-badge--gold {
+  background: var(--color-gold-muted);
+  color: var(--color-gold-hover);
+  border-color: var(--color-gold-border);
+}
+
+/* Solid badge (for SDG tags, etc.) */
+.kmsar-badge--solid-primary {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+
+/* Square variant (for classification tags) */
+.kmsar-badge--square {
+  border-radius: var(--radius-sm);
+}
+
+
+/* ============================================================
+   10. CARDS & STAT CARDS
+   ============================================================ */
+
+.kmsar-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.kmsar-card--accent-primary {
+  border-top: 3px solid var(--color-primary);
+}
+
+.kmsar-card--accent-gold {
+  border-top: 3px solid var(--color-gold);
+}
+
+.kmsar-card--accent-success {
+  border-top: 3px solid var(--color-success);
+}
+
+.kmsar-card--accent-pending {
+  border-top: 3px solid var(--color-pending);
+}
+
+.kmsar-card--accent-danger {
+  border-top: 3px solid var(--color-danger);
+}
+
+.kmsar-card--accent-revision {
+  border-top: 3px solid var(--color-revision);
+}
+
+.kmsar-card--hoverable {
+  transition: border-color var(--transition), box-shadow var(--transition);
+  cursor: pointer;
+}
+
+.kmsar-card--hoverable:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.kmsar-card-header {
+  padding: 0.875rem var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.kmsar-card-body {
+  padding: var(--space-5);
+}
+
+.kmsar-card-footer {
+  padding: 0.875rem var(--space-5);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* Stat Card */
+.kmsar-stat-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow);
+  position: relative;
+  overflow: hidden;
+}
+
+.kmsar-stat-card-label {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 0.375rem;
+}
+
+.kmsar-stat-card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-primary);
+}
+
+.kmsar-stat-card-value--pending  { color: var(--color-pending); }
+.kmsar-stat-card-value--approved { color: var(--color-approved); }
+.kmsar-stat-card-value--revision { color: var(--color-revision); }
+.kmsar-stat-card-value--danger   { color: var(--color-danger); }
+
+.kmsar-stat-card-delta {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-approved);
+  margin-top: 0.375rem;
+}
+
+.kmsar-stat-card-delta--down { color: var(--color-danger); }
+
+
+/* ============================================================
+   11. FORM ELEMENTS
+   ============================================================ */
+
+.kmsar-form-group {
+  margin-bottom: var(--space-4);
+}
+
+.kmsar-form-label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin-bottom: 0.375rem;
+}
+
+.kmsar-form-required {
+  color: var(--color-danger);
+  margin-left: 0.125rem;
+}
+
+.kmsar-form-section-header {
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  padding: 0.875rem var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* Display-only: uppercase in fields; does not change submitted values (browser value property). */
+input[type="text"],
+input[type="email"],
+textarea {
+  text-transform: uppercase;
+}
+
+.kmsar-input,
+.kmsar-select,
+.kmsar-textarea {
+  width: 100%;
+  padding: 0.5625rem 0.875rem;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background: var(--color-card);
+  line-height: 1.5;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.kmsar-input::placeholder { color: var(--color-text-muted); }
+.kmsar-textarea { resize: vertical; min-height: 5rem; }
+
+.kmsar-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394A3B8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.25rem;
+  cursor: pointer;
+}
+
+.kmsar-input:focus,
+.kmsar-select:focus,
+.kmsar-textarea:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.08);
+}
+
+.kmsar-input--error {
+  border-color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+.kmsar-input--error:focus {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08);
+}
+
+.kmsar-form-error {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-danger);
+  margin-top: 0.375rem;
+}
+
+.kmsar-form-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.375rem;
+}
+
+/* Grid helpers for form rows */
+.kmsar-form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.kmsar-form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-4); }
+
+/* SDG Chip Picker */
+.kmsar-sdg-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.kmsar-sdg-chip {
+  padding: 0.3125rem 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  background: var(--color-card);
+  transition: all var(--transition);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.kmsar-sdg-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.kmsar-sdg-chip.selected,
+.kmsar-sdg-chip[aria-pressed="true"] {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+/* Checkbox & Radio */
+.kmsar-checkbox-group,
+.kmsar-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.kmsar-checkbox,
+.kmsar-radio {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+
+/* ============================================================
+   12. FILE UPLOAD
+   ============================================================ */
+
+.kmsar-dropzone {
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-8) var(--space-6);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition);
+  background: var(--color-card);
+}
+
+.kmsar-dropzone:hover,
+.kmsar-dropzone--drag {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.kmsar-dropzone-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0 auto 0.5rem;
+  color: var(--color-text-muted);
+}
+
+.kmsar-dropzone-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.kmsar-dropzone-title span {
+  color: var(--color-primary);
+}
+
+.kmsar-dropzone-hint {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+/* File row — uploaded file display */
+.kmsar-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--color-approved-bg);
+  border: 1px solid var(--color-approved-border);
+  border-radius: var(--radius-md);
+  margin-top: 0.5rem;
+}
+
+.kmsar-file-row--infected {
+  background: var(--color-rejected-bg);
+  border-color: var(--color-rejected-border);
+}
+
+.kmsar-file-row--pending {
+  background: var(--color-pending-bg);
+  border-color: var(--color-pending-border);
+}
+
+.kmsar-file-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-approved);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kmsar-file-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.125rem;
+}
+
+/* Progress bar */
+.kmsar-progress {
+  height: 0.375rem;
+  background: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-top: 0.375rem;
+}
+
+.kmsar-progress-bar {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}
+
+.kmsar-progress-bar--success { background: var(--color-approved); }
+
+
+/* ============================================================
+   13. DATA TABLES
+   ============================================================ */
+
+.kmsar-table-wrap {
+  overflow-x: auto;
+}
+
+.kmsar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.kmsar-table thead th {
+  padding: 0.625rem 0.875rem;
+  text-align: left;
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.kmsar-table tbody td {
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  vertical-align: middle;
+}
+
+/* Explicit cell padding utilities (override default tbody td padding) */
+.kmsar-table tbody td.px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.kmsar-table tbody td.py-3 {
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+}
+
+.kmsar-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.kmsar-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.kmsar-table tbody tr:hover td {
+  background: var(--color-surface);
+}
+
+.kmsar-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.kmsar-table-cell-title {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.kmsar-table-cell-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.125rem;
+}
+
+/* Table toolbar */
+.kmsar-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.kmsar-table-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+
+/* ============================================================
+   14. ALERTS
+   ============================================================ */
+
+.kmsar-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+  border-width: 1px;
+  border-style: solid;
+  margin-bottom: var(--space-4);
+}
+
+.kmsar-alert svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.kmsar-alert--info {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border-color: var(--color-info-border);
+}
+
+.kmsar-alert--success {
+  background: var(--color-approved-bg);
+  color: var(--color-approved);
+  border-color: var(--color-approved-border);
+}
+
+.kmsar-alert--warning {
+  background: var(--color-pending-bg);
+  color: var(--color-pending);
+  border-color: var(--color-pending-border);
+}
+
+.kmsar-alert--danger {
+  background: var(--color-rejected-bg);
+  color: var(--color-rejected);
+  border-color: var(--color-rejected-border);
+}
+
+.kmsar-alert-link {
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  color: inherit;
+}
+
+
+/* ============================================================
+   15. MODALS
+   ============================================================ */
+
+.kmsar-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.kmsar-modal {
+  background: var(--color-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  animation: kmsar-modal-in 0.22s ease;
+}
+
+.kmsar-modal--lg { max-width: 48rem; }
+.kmsar-modal--sm { max-width: 24rem; }
+
+@keyframes kmsar-modal-in {
+  from { transform: scale(0.94) translateY(-8px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.kmsar-modal-header {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.kmsar-modal-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-modal-title--danger { color: var(--color-danger); }
+
+.kmsar-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.375rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.25rem;
+  border-radius: var(--radius);
+  transition: color var(--transition), background var(--transition);
+}
+
+.kmsar-modal-close:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface);
+}
+
+.kmsar-modal-body {
+  padding: var(--space-5) var(--space-6);
+}
+
+.kmsar-modal-footer {
+  padding: 0.875rem var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.625rem;
+}
+
+
+/* ============================================================
+   16. TABS
+   ============================================================ */
+
+.kmsar-tabs {
+  display: flex;
+  border-bottom: 2px solid var(--color-border);
+  gap: 0;
+  margin-bottom: var(--space-5);
+}
+
+.kmsar-tab {
+  padding: 0.75rem var(--space-4);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all var(--transition);
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+
+.kmsar-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.kmsar-tab.active,
+.kmsar-tab[aria-selected="true"] {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-gold);
+  font-weight: 600;
+}
+
+/* ============================================================
+   17. TIMELINE
+   ============================================================ */
+
+.kmsar-timeline {
+  position: relative;
+  padding-left: 1.75rem;
+}
+
+.kmsar-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5625rem;
+  top: 0.75rem;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-border);
+}
+
+.kmsar-timeline-item {
+  position: relative;
+  margin-bottom: 1.125rem;
+}
+
+.kmsar-timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.kmsar-timeline-dot {
+  position: absolute;
+  left: -1.375rem;
+  top: 0.3125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border);
+  background: var(--color-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.5rem;
+}
+
+.kmsar-timeline-dot--done {
+  background: var(--color-approved);
+  border-color: var(--color-approved);
+  color: var(--color-text-inverse);
+}
+
+.kmsar-timeline-dot--active {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  color: var(--color-primary-dark);
+}
+
+.kmsar-timeline-dot--pending {
+  background: var(--color-card);
+  border-color: var(--color-border-strong);
+}
+
+.kmsar-timeline-dot--progress {
+  background: #2563eb;
+  border-color: #1d4ed8;
+}
+
+.kmsar-timeline-content {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem var(--space-4);
+}
+
+.kmsar-timeline-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-timeline-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.125rem;
+}
+
+.kmsar-timeline-remark {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-pending-bg);
+  border-left: 3px solid var(--color-gold);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+
+/* ============================================================
+   18. STEPPER (FORM STEPS)
+   ============================================================ */
+
+.kmsar-stepper {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-6);
+}
+
+.kmsar-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.kmsar-step-num {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.kmsar-step-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.kmsar-step--done .kmsar-step-num {
+  background: var(--color-approved);
+  color: var(--color-text-inverse);
+}
+.kmsar-step--done .kmsar-step-label { color: var(--color-approved); }
+
+.kmsar-step--active .kmsar-step-num {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+.kmsar-step--active .kmsar-step-label { color: var(--color-primary); font-weight: 600; }
+
+.kmsar-step--pending .kmsar-step-num {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}
+.kmsar-step--pending .kmsar-step-label { color: var(--color-text-muted); }
+
+.kmsar-step-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--color-border);
+  margin: 0 0.375rem;
+  max-width: 3rem;
+}
+
+.kmsar-step-connector--done { background: var(--color-approved); }
+
+
+/* ============================================================
+   19. APPROVAL QUEUE CARDS
+   ============================================================ */
+
+.kmsar-queue-card {
+  background: var(--color-card);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: 0.75rem;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  cursor: pointer;
+}
+
+.kmsar-queue-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.kmsar-queue-card--revision {
+  border-left: 4px solid var(--color-gold);
+}
+
+.kmsar-queue-card-ref {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-gold);
+  letter-spacing: 0.06em;
+  margin-bottom: 0.25rem;
+}
+
+.kmsar-queue-card-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.kmsar-queue-card-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
+}
+
+.kmsar-queue-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+
+/* ============================================================
+   20. CHARTS (Bar, Donut, Line — CSS-based skeletons)
+      Full chart rendering uses Chart.js — see JS setup below.
+   ============================================================ */
+
+/* Chart wrapper card */
+.kmsar-chart-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.kmsar-chart-header {
+  padding: 0.875rem var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.kmsar-chart-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-chart-subtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.125rem;
+}
+
+.kmsar-chart-body {
+  padding: var(--space-5);
+}
+
+/* Chart.js canvas container */
+.kmsar-chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.kmsar-chart-canvas-wrap canvas {
+  max-width: 100%;
+}
+
+/* Legend */
+.kmsar-chart-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: var(--space-4);
+}
+
+.kmsar-chart-legend--horizontal {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.kmsar-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.kmsar-legend-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.kmsar-legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.kmsar-legend-value {
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-left: auto;
+}
+
+/* Chart.js global color palette for KMSAR */
+/* Use these CSS variables when configuring Chart.js datasets */
+.kmsar-chart-colors {
+  --chart-c1: #1E3A8A;   /* primary navy */
+  --chart-c2: #2563EB;   /* blue light */
+  --chart-c3: #D4AF37;   /* gold */
+  --chart-c4: #059669;   /* success green */
+  --chart-c5: #D97706;   /* warning amber */
+  --chart-c6: #DC2626;   /* danger red */
+  --chart-c7: #7C3AED;   /* purple */
+  --chart-c8: #0284C7;   /* info blue */
+  --chart-c9: #64748B;   /* neutral slate */
+}
+
+/* Donut center text (for custom donut labels) */
+.kmsar-donut-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.kmsar-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.kmsar-donut-center-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.kmsar-donut-center-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+/* Stats row for chart summary */
+.kmsar-chart-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(5rem, 1fr));
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.kmsar-chart-summary-item {
+  text-align: center;
+}
+
+.kmsar-chart-summary-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.kmsar-chart-summary-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+
+/* ============================================================
+   21. REPORT CARDS
+   ============================================================ */
+
+.kmsar-report-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  margin-bottom: 0.625rem;
+}
+
+.kmsar-report-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-md);
+}
+
+.kmsar-report-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kmsar-report-icon--pdf   { background: #FEF2F2; }
+.kmsar-report-icon--excel { background: #ECFDF5; }
+.kmsar-report-icon--data  { background: var(--color-primary-muted); }
+.kmsar-report-icon--users { background: var(--color-gold-muted); }
+
+.kmsar-report-info { flex: 1; min-width: 0; }
+
+.kmsar-report-name {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-report-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.2rem;
+}
+
+.kmsar-report-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Export button pill */
+.kmsar-export-btn {
+  padding: 0.3125rem 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid;
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font-sans);
+}
+
+.kmsar-export-btn--pdf {
+  background: #FEF2F2;
+  color: var(--color-danger);
+  border-color: #FCA5A5;
+}
+.kmsar-export-btn--pdf:hover { background: #FEE2E2; }
+
+.kmsar-export-btn--excel {
+  background: #ECFDF5;
+  color: var(--color-approved);
+  border-color: #A7F3D0;
+}
+.kmsar-export-btn--excel:hover { background: #D1FAE5; }
+
+
+/* ============================================================
+   22. NOTIFICATIONS PANEL
+   ============================================================ */
+
+.kmsar-notif-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 22rem;
+  background: var(--color-card);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xl);
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--transition-slow) ease;
+}
+
+.kmsar-notif-panel.open {
+  transform: translateX(0);
+}
+
+.kmsar-notif-header {
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.kmsar-notif-header-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-notif-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+
+.kmsar-notif-item {
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.kmsar-notif-item:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+}
+
+.kmsar-notif-item--unread {
+  background: var(--color-gold-muted);
+  border-color: var(--color-gold-border);
+  border-left: 3px solid var(--color-gold);
+}
+
+.kmsar-notif-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.kmsar-notif-message {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin-top: 0.25rem;
+  line-height: 1.55;
+}
+
+.kmsar-notif-time {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-muted);
+  margin-top: 0.375rem;
+}
+
+
+/* ============================================================
+   23. DASHBOARD STATS GRID
+   ============================================================ */
+
+.kmsar-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.875rem;
+  margin-bottom: var(--space-5);
+}
+
+.kmsar-stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.kmsar-stats-grid--2 { grid-template-columns: repeat(2, 1fr); }
+
+.kmsar-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.kmsar-three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-4); }
+
+
+/* ============================================================
+   24. PAGINATION
+   ============================================================ */
+
+.kmsar-pagination {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.kmsar-page-btn {
+  padding: 0.375rem 0.625rem;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text-secondary);
+  background: var(--color-card);
+  cursor: pointer;
+  transition: all var(--transition);
+  font-family: var(--font-sans);
+}
+
+.kmsar-page-btn:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+}
+
+.kmsar-page-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+}
+
+.kmsar-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+
+/* ============================================================
+   25. UTILITY CLASSES
+   ============================================================ */
+
+/* Spacing helpers */
+.mt-0 { margin-top: 0; }
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mb-0 { margin-bottom: 0; }
+.mb-1 { margin-bottom: var(--space-1); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-4 { margin-bottom: var(--space-4); }
+.mb-5 { margin-bottom: var(--space-5); }
+
+/* Flex */
+.flex         { display: flex; }
+.inline-flex  { display: inline-flex; }
+.flex-col     { flex-direction: column; }
+.items-center { align-items: center; }
+.items-start  { align-items: flex-start; }
+.justify-between { justify-content: space-between; }
+.justify-end  { justify-content: flex-end; }
+.flex-1       { flex: 1; }
+.flex-shrink-0{ flex-shrink: 0; }
+.gap-2        { gap: var(--space-2); }
+.gap-3        { gap: var(--space-3); }
+.gap-4        { gap: var(--space-4); }
+.flex-wrap    { flex-wrap: wrap; }
+
+/* Padding (Tailwind-compatible; use with .kmsar-table td for override below) */
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+
+/* Alignment & borders */
+.align-middle { vertical-align: middle; }
+.whitespace-nowrap { white-space: nowrap; }
+.border-b {
+  border-bottom-width: 1px;
+  border-bottom-style: solid;
+}
+.border-slate-100 { border-color: #f1f5f9; }
+
+/* Text */
+.text-center  { text-align: center; }
+.text-right   { text-align: right; }
+.truncate     { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.font-mono    { font-family: var(--font-mono); }
+.font-medium  { font-weight: 500; }
+.font-semibold{ font-weight: 600; }
+.font-bold    { font-weight: 700; }
+
+/* Display */
+.hidden   { display: none; }
+.block    { display: block; }
+.w-full   { width: 100%; }
+
+/* Divider */
+.kmsar-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-4) 0;
+}
+
+.kmsar-divider--sm { margin: var(--space-3) 0; }
+
+
+/* ============================================================
+   26. SCROLLBARS
+   ============================================================ */
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+
+
+/* ============================================================
+   27. ANIMATIONS & TRANSITIONS
+   ============================================================ */
+
+@keyframes kmsar-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes kmsar-slide-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes kmsar-spin {
+  to { transform: rotate(360deg); }
+}
+
+.kmsar-animate-in { animation: kmsar-fade-in 0.2s ease; }
+
+/* Spinner */
+.kmsar-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  animation: kmsar-spin 0.65s linear infinite;
+}
+
+
+/* ============================================================
+   28. RESPONSIVE BREAKPOINTS
+   ============================================================ */
+
+/* Tablet — hide sidebar labels, show only icons */
+@media (max-width: 1024px) {
+  .kmsar-sidebar { width: 3.5rem; }
+  .kmsar-sidebar-brand-name,
+  .kmsar-sidebar-brand-sub,
+  .kmsar-sidebar-brand-inst,
+  .kmsar-sidebar-user-name,
+  .kmsar-sidebar-user-role,
+  .kmsar-sidebar-section,
+  .kmsar-nav-item span,
+  .kmsar-nav-badge,
+  .kmsar-sidebar-footer {
+    display: none;
+  }
+  .kmsar-sidebar-user { justify-content: center; padding: 0.875rem var(--space-2); }
+  .kmsar-sidebar-brand { padding: 1rem var(--space-2); text-align: center; }
+  .kmsar-nav-item { justify-content: center; padding: 0.75rem; }
+  .kmsar-nav-item svg { opacity: 0.7; width: 1.25rem; height: 1.25rem; }
+  .kmsar-nav-item.active svg { opacity: 1; }
+  .kmsar-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .kmsar-two-col { grid-template-columns: 1fr; }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .kmsar-stats-grid { grid-template-columns: 1fr 1fr; }
+  .kmsar-three-col  { grid-template-columns: 1fr; }
+  .kmsar-form-row-2,
+  .kmsar-form-row-3 { grid-template-columns: 1fr; }
+  .kmsar-page-header { flex-direction: column; }
+  .kmsar-queue-card  { flex-direction: column; }
+  .kmsar-queue-card-actions { width: 100%; justify-content: flex-end; }
+  .kmsar-modal { border-radius: var(--radius-lg) var(--radius-lg) 0 0; max-width: 100%; margin-top: auto; }
+  .kmsar-modal-overlay { align-items: flex-end; padding: 0; }
+}

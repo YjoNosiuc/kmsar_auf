@@ -1,0 +1,299 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Research;
+use App\Models\User;
+use App\Notifications\ResearchApproved;
+use App\Notifications\ResearchApprovedDean;
+use App\Notifications\ResearchRejectedDean;
+use App\Services\ApprovalService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\View\View;
+
+class ApprovalController extends Controller
+{
+    use AuthorizesRequests;
+
+    public function __construct(
+        private ApprovalService $approvalService
+    ) {}
+
+    public function queue(Request $request): View
+    {
+        $collegeId = $request->user()->college_id;
+
+        $pending = Research::query()
+            ->with(['motherCollege', 'primaryAuthor'])
+            ->where('mother_college_id', $collegeId)
+            ->where('approval_stage', 'dean_review')
+            ->orderBy('submitted_at', 'asc')
+            ->get();
+
+        $endorsed = Research::query()
+            ->with(['motherCollege', 'primaryAuthor'])
+            ->where('mother_college_id', $collegeId)
+            ->whereIn('approval_stage', ['ovpri_review', 'approved'])
+            ->whereHas('approvals', function ($q) use ($request) {
+                $q->where('approver_id', $request->user()->id)
+                    ->where('stage', 'dean')
+                    ->where('action', 'endorsed');
+            })
+            ->orderByDesc('updated_at')
+            ->get();
+
+        $returned = Research::query()
+            ->with(['motherCollege', 'primaryAuthor'])
+            ->where('mother_college_id', $collegeId)
+            ->whereHas('approvals', function ($q) use ($request) {
+                $q->where('approver_id', $request->user()->id)
+                    ->where('stage', 'dean')
+                    ->whereIn('action', ['returned', 'rejected']);
+            })
+            ->orderByDesc('updated_at')
+            ->get();
+
+        return view('approval.queue', compact('pending', 'endorsed', 'returned'));
+    }
+
+    public function review(Request $request, Research $research): View
+    {
+        $this->authorize('view', $research);
+        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+
+        $isActiveDeanQueue = $research->approval_stage === 'dean_review';
+        $hasDeanHistory = $research->approvals()
+            ->where('approver_id', $request->user()->id)
+            ->where('stage', 'dean')
+            ->exists();
+        abort_unless($isActiveDeanQueue || $hasDeanHistory, 403);
+
+        $research->load([
+            'motherCollege',
+            'otherCollege',
+            'primaryAuthor.college',
+            'primaryAuthor.program',
+            'researchAuthors.college',
+            'researchAuthors.program',
+            'documents',
+            'approvals' => fn ($q) => $q->orderBy('created_at'),
+            'approvals.approver',
+        ]);
+
+        return view('approval.review', [
+            'research' => $research,
+        ]);
+    }
+
+    public function endorse(Request $request, Research $research): RedirectResponse
+    {
+        $this->authorize('view', $research);
+        abort_unless($research->approval_stage === 'dean_review', 403);
+        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+
+        $validated = $request->validate([
+            'remarks' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $this->approvalService->endorse($research, $request->user(), $validated['remarks'] ?? null);
+
+        $this->forgetResearchDashboardCaches($research);
+
+        return redirect()
+            ->route('approval.queue')
+            ->with('success', __('Research has been endorsed and forwarded to OVPRI.'));
+    }
+
+    /**
+     * Dean / unit head return-to-faculty (architecture: ApprovalController::return — PHP reserves "return").
+     */
+    public function returnSubmission(Request $request, Research $research): RedirectResponse
+    {
+        $this->authorize('view', $research);
+        abort_unless($research->approval_stage === 'dean_review', 403);
+        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+
+        $validated = $request->validate([
+            'remarks' => ['required', 'string', 'min:10', 'max:5000'],
+        ]);
+
+        $this->approvalService->return($research, $request->user(), $validated['remarks']);
+
+        $this->forgetResearchDashboardCaches($research);
+
+        return redirect()
+            ->route('approval.queue')
+            ->with('success', __('Research has been returned to the author for revision.'));
+    }
+
+    public function reject(Request $request, Research $research): RedirectResponse
+    {
+        $this->authorize('view', $research);
+        abort_unless($research->approval_stage === 'dean_review', 403);
+        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+
+        $validated = $request->validate([
+            'remarks' => ['required', 'string', 'min:1', 'max:5000'],
+        ]);
+
+        $this->approvalService->reject($research, $request->user(), $validated['remarks']);
+
+        $research->refresh();
+
+        $dean = User::whereHas('roles', function ($q) {
+            $q->where('name', 'college_dean');
+        })
+            ->where('college_id', $research->mother_college_id)
+            ->first();
+
+        if ($dean) {
+            $dean->notify(new ResearchRejectedDean($research));
+        }
+
+        $this->forgetResearchDashboardCaches($research);
+
+        return redirect()
+            ->route('approval.queue')
+            ->with('success', __('Research submission has been rejected.'));
+    }
+
+    public function ovpriQueue(Request $request): View
+    {
+        $pending = Research::query()
+            ->with(['motherCollege', 'primaryAuthor'])
+            ->where('approval_stage', 'ovpri_review')
+            ->orderBy('submitted_at', 'asc')
+            ->get();
+
+        $approved = Research::query()
+            ->with(['motherCollege', 'primaryAuthor'])
+            ->where('approval_stage', 'approved')
+            ->whereHas('approvals', function ($q) use ($request) {
+                $q->where('approver_id', $request->user()->id)
+                    ->where('stage', 'ovpri')
+                    ->where('action', 'approved');
+            })
+            ->orderByDesc('updated_at')
+            ->get();
+
+        $returned = Research::query()
+            ->with(['motherCollege', 'primaryAuthor'])
+            ->whereHas('approvals', function ($q) use ($request) {
+                $q->where('approver_id', $request->user()->id)
+                    ->where('stage', 'ovpri')
+                    ->whereIn('action', ['returned', 'rejected']);
+            })
+            ->orderByDesc('updated_at')
+            ->get();
+
+        return view('ovpri.queue', compact('pending', 'approved', 'returned'));
+    }
+
+    public function approve(Request $request, Research $research): RedirectResponse
+    {
+        $this->authorize('view', $research);
+        abort_unless($research->approval_stage === 'ovpri_review', 403);
+
+        $validated = $request->validate([
+            'remarks' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $this->approvalService->approve($research, $request->user(), $validated['remarks'] ?? null);
+
+        $research->refresh();
+
+        $research->primaryAuthor?->notify(
+            new ResearchApproved($research)
+        );
+
+        $dean = User::whereHas('roles', function ($q) {
+            $q->where('name', 'college_dean');
+        })
+            ->where('college_id', $research->mother_college_id)
+            ->first();
+
+        if ($dean) {
+            $dean->notify(new ResearchApprovedDean($research));
+        }
+
+        $this->forgetResearchDashboardCaches($research);
+
+        return redirect()
+            ->route('ovpri.queue')
+            ->with('success', __('Research has been approved successfully.'));
+    }
+
+    public function ovpriReturn(Request $request, Research $research): RedirectResponse
+    {
+        $this->authorize('view', $research);
+        abort_unless($research->approval_stage === 'ovpri_review', 403);
+
+        $validated = $request->validate([
+            'remarks' => ['required', 'string', 'min:10', 'max:5000'],
+        ]);
+
+        $this->approvalService->return($research, $request->user(), $validated['remarks']);
+
+        $this->forgetResearchDashboardCaches($research);
+
+        return redirect()
+            ->route('ovpri.queue')
+            ->with('success', __('Research has been returned to the college for dean review.'));
+    }
+
+    public function ovpriReject(Request $request, Research $research): RedirectResponse
+    {
+        $this->authorize('view', $research);
+        abort_unless($research->approval_stage === 'ovpri_review', 403);
+
+        $validated = $request->validate([
+            'remarks' => ['required', 'string', 'min:1', 'max:5000'],
+        ]);
+
+        $this->approvalService->reject($research, $request->user(), $validated['remarks']);
+
+        $research->refresh();
+
+        $dean = User::whereHas('roles', function ($q) {
+            $q->where('name', 'college_dean');
+        })
+            ->where('college_id', $research->mother_college_id)
+            ->first();
+
+        if ($dean) {
+            $dean->notify(new ResearchRejectedDean($research));
+        }
+
+        $this->forgetResearchDashboardCaches($research);
+
+        return redirect()
+            ->route('ovpri.queue')
+            ->with('success', __('Research submission has been rejected.'));
+    }
+
+    private function forgetResearchDashboardCaches(Research $research): void
+    {
+        Cache::forget('ovpri_stats_'.now()->format('Y-m-d-H'));
+        Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
+        Cache::forget('sdg_counts');
+
+        foreach ($this->deanUserIdsForCollege((int) $research->mother_college_id) as $id) {
+            Cache::forget('dean_stats_'.$id.'_'.now()->format('Y-m-d'));
+        }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function deanUserIdsForCollege(int $collegeId): array
+    {
+        return User::query()
+            ->where('college_id', $collegeId)
+            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['college_dean', 'unit_head']))
+            ->pluck('id')
+            ->all();
+    }
+}

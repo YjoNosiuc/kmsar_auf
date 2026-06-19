@@ -64,6 +64,35 @@
         </div>
     </div>
 
+    @php
+        $statusBreakdown = [
+            'draft' => ['label' => __('Draft'), 'color' => '#94A3B8'],
+            'dean_review' => ['label' => __('Dean review'), 'color' => '#D97706'],
+            'ovpri_review' => ['label' => __('OVPRI review'), 'color' => '#2563EB'],
+            'approved' => ['label' => __('Approved'), 'color' => '#059669'],
+            'rejected' => ['label' => __('Rejected'), 'color' => '#DC2626'],
+        ];
+    @endphp
+
+    <div class="kmsar-card kmsar-card--accent-primary" style="margin-bottom:20px;">
+        <div class="kmsar-card-header">
+            <div>
+                <h2 class="kmsar-card-title">{{ __('Research by approval stage') }}</h2>
+                <p class="kmsar-body mt-1" style="font-size:0.875rem;color:var(--color-text-secondary);">{{ __('Breakdown of all registered research by current approval stage') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-card-body">
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;" role="region" aria-label="{{ __('Research approval stage breakdown') }}">
+                @foreach ($statusBreakdown as $key => $meta)
+                    <div class="kmsar-stat-card" style="padding:1rem 1.125rem;">
+                        <div class="kmsar-stat-card-value" style="color:{{ $meta['color'] }};font-size:1.5rem;">{{ number_format($researchByStatus[$key] ?? 0) }}</div>
+                        <div class="kmsar-stat-card-label" style="margin-top:0.375rem;margin-bottom:0;">{{ $meta['label'] }}</div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    </div>
+
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:20px;">
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">

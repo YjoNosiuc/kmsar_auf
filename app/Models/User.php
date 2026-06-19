@@ -32,6 +32,7 @@ class User extends Authenticatable
         'password',
         'employee_number',
         'college_id',
+        'office',
         'program_id',
         'is_active',
         'last_login_at',

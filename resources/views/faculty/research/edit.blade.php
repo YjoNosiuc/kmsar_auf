@@ -36,6 +36,13 @@
         </x-alert>
     @endif
 
+    @php
+        $selectedOtherColleges = $selectedOtherColleges ?? [];
+        if (old('other_college_id')) {
+            $selectedOtherColleges = array_values(array_map('intval', (array) old('other_college_id')));
+        }
+    @endphp
+
     <x-card :title="__('Research information')" accent="primary">
         <form
             method="post"
@@ -72,9 +79,6 @@
                 $currentSdgs = old('sdg_tags')
                     ? array_values(array_map('intval', is_array(old('sdg_tags')) ? old('sdg_tags') : (json_decode(old('sdg_tags'), true) ?? [])))
                     : array_values(array_map('intval', is_array($research->sdg_tags) ? $research->sdg_tags : (json_decode($research->sdg_tags ?? '[]', true) ?? [])));
-                $selectedOtherColleges = old('other_college_id')
-                    ? array_values(array_map('intval', (array) old('other_college_id')))
-                    : $research->otherCollegeIds();
             @endphp
 
             <x-form.textarea

@@ -80,6 +80,7 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'college_id' => ['nullable', 'exists:colleges,id'],
+            'office' => ['nullable', 'string', 'max:100'],
             'role' => ['required', 'string', Rule::in(self::KMSAR_ROLES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -96,6 +97,7 @@ class UserController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
             'college_id' => $validated['college_id'] ?? null,
+            'office' => filled($validated['office'] ?? '') ? strtoupper(trim((string) $validated['office'])) : null,
             'is_active' => $request->boolean('is_active', true),
         ]);
 
@@ -123,6 +125,7 @@ class UserController extends Controller
             'suffix' => $user->suffix,
             'email' => $user->email,
             'college_id' => $user->college_id,
+            'office' => $user->office,
             'role' => $user->getRoleNames()->first(),
             'is_active' => $user->is_active,
         ]);
@@ -139,6 +142,7 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'college_id' => ['nullable', 'exists:colleges,id'],
+            'office' => ['nullable', 'string', 'max:100'],
             'role' => ['required', 'string', Rule::in(self::KMSAR_ROLES)],
             'is_active' => ['sometimes', 'boolean'],
         ]);
@@ -154,6 +158,7 @@ class UserController extends Controller
             'name' => strtoupper($validated['first_name']).' '.strtoupper($validated['last_name']),
             'email' => $validated['email'],
             'college_id' => $validated['college_id'] ?? null,
+            'office' => filled($validated['office'] ?? '') ? strtoupper(trim((string) $validated['office'])) : null,
             'is_active' => $request->boolean('is_active'),
         ]);
 

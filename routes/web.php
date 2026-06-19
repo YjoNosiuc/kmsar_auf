@@ -188,6 +188,14 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'colors' => ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#94A3B8'],
                 ];
 
+                $researchByStatus = [
+                    'draft' => 0,
+                    'dean_review' => 0,
+                    'ovpri_review' => 0,
+                    'approved' => 0,
+                    'rejected' => 0,
+                ];
+
                 return view('admin.dashboard', [
                     'totalUsers' => $totalUsers,
                     'totalColleges' => $totalColleges,
@@ -195,6 +203,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'pendingApprovals' => 0,
                     'submissionsThisYear' => 0,
                     'researchByCollege' => [],
+                    'researchByStatus' => $researchByStatus,
                     'researchByStage' => [
                         'labels' => ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'],
                         'counts' => [0, 0, 0, 0, 0],
@@ -205,6 +214,14 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             }
 
             $totalResearch = (int) DB::table('research')->count();
+
+            $researchByStatus = [
+                'draft' => (int) DB::table('research')->where('approval_stage', 'draft')->count(),
+                'dean_review' => (int) DB::table('research')->where('approval_stage', 'dean_review')->count(),
+                'ovpri_review' => (int) DB::table('research')->where('approval_stage', 'ovpri_review')->count(),
+                'approved' => (int) DB::table('research')->where('approval_stage', 'approved')->count(),
+                'rejected' => (int) DB::table('research')->where('approval_stage', 'rejected')->count(),
+            ];
 
             $pendingApprovals = (int) DB::table('research')
                 ->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
@@ -316,6 +333,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'pendingApprovals' => $pendingApprovals,
                 'submissionsThisYear' => $submissionsThisYear,
                 'researchByCollege' => $researchByCollege,
+                'researchByStatus' => $researchByStatus,
                 'researchByStage' => $researchByStage,
                 'researchByClassification' => $researchByClassification,
                 'monthlySubmissions' => $monthlySubmissions,

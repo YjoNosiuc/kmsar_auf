@@ -345,9 +345,16 @@ class ResearchController extends Controller
 
         $research->loadMissing(['motherCollege', 'primaryAuthor', 'researchAuthors']);
 
+        $selectedOtherColleges = is_array($research->other_college_id)
+            ? $research->other_college_id
+            : (is_string($research->other_college_id)
+                ? json_decode($research->other_college_id, true) ?? []
+                : []);
+
         return view('faculty.research.edit', [
             'research' => $research,
             'colleges' => College::query()->where('is_active', true)->orderBy('code')->get(),
+            'selectedOtherColleges' => array_values(array_map('intval', $selectedOtherColleges)),
         ]);
     }
 

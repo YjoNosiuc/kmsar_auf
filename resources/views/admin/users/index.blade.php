@@ -31,6 +31,7 @@
                 'suffix' => old('suffix', ''),
                 'email' => old('email', ''),
                 'college_id' => old('college_id') !== null && old('college_id') !== '' ? (string) old('college_id') : '',
+                'office' => old('office', ''),
                 'role' => old('role', ''),
                 'is_active' => filter_var(old('is_active', '1'), FILTER_VALIDATE_BOOLEAN),
             ]
@@ -46,6 +47,7 @@
             'employee_number' => $user->employee_number,
             'role' => $primaryRole?->name ?? '',
             'college_id' => $user->college_id,
+            'office' => $user->office,
             'is_active' => (bool) $user->is_active,
         ];
     })->values()->all();
@@ -204,7 +206,7 @@
                             <th scope="col">{{ __('Employee No.') }}</th>
                             <th scope="col">{{ __('Name') }}</th>
                             <th scope="col">{{ __('Role') }}</th>
-                            <th scope="col">{{ __('College') }}</th>
+                            <th scope="col">{{ __('College / Office') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
                             <th scope="col">{{ __('Last login') }}</th>
                             <th scope="col"><span class="sr-only">{{ __('Actions') }}</span></th>
@@ -250,6 +252,9 @@
                                     @if ($user->college)
                                         <span class="kmsar-table-cell-title">{{ $user->college->code }}</span>
                                         <span class="kmsar-table-cell-sub block">{{ $user->college->name }}</span>
+                                    @elseif ($user->office)
+                                        <span class="kmsar-table-cell-title">{{ $user->office }}</span>
+                                        <span class="kmsar-table-cell-sub block">{{ __('Non-college unit') }}</span>
                                     @else
                                         <span class="kmsar-table-cell-sub">—</span>
                                     @endif
@@ -425,7 +430,7 @@
 
                     <div class="kmsar-form-row-3">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="add-college_id">{{ __('College') }}</label>
+                            <label class="kmsar-form-label" for="add-college_id">{{ __('College') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
                             <select id="add-college_id" name="college_id" class="kmsar-select">
                                 <option value="">{{ __('— Select college —') }}</option>
                                 @foreach ($colleges as $college)
@@ -433,6 +438,24 @@
                                 @endforeach
                             </select>
                             @error('college_id')
+                                <p class="kmsar-form-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="kmsar-form-group">
+                            <label class="kmsar-form-label" for="add-office">{{ __('Office / department') }}</label>
+                            <input
+                                id="add-office"
+                                type="text"
+                                name="office"
+                                class="kmsar-input @error('office') kmsar-input--error @enderror"
+                                value="{{ old('office') }}"
+                                maxlength="100"
+                                placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
+                                style="text-transform: uppercase"
+                            >
+                            <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
+                            @error('office')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
@@ -616,7 +639,7 @@
 
                     <div class="kmsar-form-row-3">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-college_id">{{ __('College') }}</label>
+                            <label class="kmsar-form-label" for="edit-college_id">{{ __('College') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
                             <select id="edit-college_id" name="college_id" class="kmsar-select" x-model="editUser.college_id">
                                 <option value="">{{ __('— Select college —') }}</option>
                                 @foreach ($colleges as $college)
@@ -624,6 +647,24 @@
                                 @endforeach
                             </select>
                             @error('college_id')
+                                <p class="kmsar-form-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="kmsar-form-group">
+                            <label class="kmsar-form-label" for="edit-office">{{ __('Office / department') }}</label>
+                            <input
+                                id="edit-office"
+                                type="text"
+                                name="office"
+                                class="kmsar-input @error('office') kmsar-input--error @enderror"
+                                maxlength="100"
+                                placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
+                                x-model="editUser.office"
+                                style="text-transform: uppercase"
+                            >
+                            <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
+                            @error('office')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
@@ -740,6 +781,7 @@ document.addEventListener('alpine:init', () => {
                         suffix: data.suffix ?? '',
                         email: data.email ?? '',
                         college_id: data.college_id != null ? String(data.college_id) : '',
+                        office: data.office ?? '',
                         role: data.role ?? '',
                         is_active: !!data.is_active,
                     };

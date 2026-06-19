@@ -97,7 +97,7 @@ class DocumentController extends Controller
             Document::create([
                 'research_id' => $research->id,
                 'uploaded_by' => (int) $user->id,
-                'original_filename' => $file->getClientOriginalName(),
+                'original_filename' => $this->standardizeOriginalFilename($file->getClientOriginalName()),
                 'stored_filename' => $storedBasename,
                 'disk_path' => $relativePath,
                 'external_link' => null,
@@ -110,6 +110,23 @@ class DocumentController extends Controller
             $disk->delete($relativePath);
             throw $e;
         }
+    }
+
+    private function standardizeOriginalFilename(string $originalName): string
+    {
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+        $basename = pathinfo($originalName, PATHINFO_FILENAME);
+
+        $cleaned = preg_replace('/[^a-zA-Z0-9\s]+/', '', $basename) ?? '';
+        $cleaned = preg_replace('/\s+/', '_', trim($cleaned)) ?? '';
+        $cleaned = strtolower($cleaned);
+        $cleaned = trim($cleaned, '_');
+
+        if ($cleaned === '') {
+            $cleaned = 'document';
+        }
+
+        return $extension !== '' ? "{$cleaned}.{$extension}" : $cleaned;
     }
 
     private function researchAppDisk(): Filesystem

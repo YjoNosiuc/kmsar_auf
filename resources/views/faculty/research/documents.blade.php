@@ -61,7 +61,7 @@
                 :class="{ 'active': tab === 'finish' }"
                 :aria-selected="tab === 'finish'"
                 @click="tab = 'finish'"
-            >{{ __('Finish registration') }}</button>
+            >@if ($research->revision_count > 0){{ __('Finish') }}@else{{ __('Finish registration') }}@endif</button>
         </div>
 
         {{-- Tab 1: Upload documents --}}
@@ -362,7 +362,13 @@
         <div x-show="tab === 'finish'" x-cloak class="space-y-6" style="display: none;" role="tabpanel">
             <div class="kmsar-card kmsar-card--accent-primary">
                 <div class="kmsar-card-header">
-                    <h2 class="kmsar-card-title">{{ __('Finish registration') }}</h2>
+                    <h2 class="kmsar-card-title">
+                        @if ($research->revision_count > 0)
+                            {{ __('Changes saved') }}
+                        @else
+                            {{ __('Finish registration') }}
+                        @endif
+                    </h2>
                 </div>
                 <div class="kmsar-card-body" style="padding:0;">
                     @php
@@ -380,22 +386,33 @@
                             </div>
                         </div>
 
-                        <div style="margin-bottom:24px;">
-                            <div style="font-size:13px;font-weight:600;color:#0F172A;margin-bottom:12px;">{{ __('Before submitting for review:') }}</div>
-                            <div style="display:flex;flex-direction:column;gap:8px;">
-                                <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
-                                    <span style="width:20px;height:20px;border-radius:50%;background:{{ $detailsComplete ? '#059669' : '#E2E8F0' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;">{{ $detailsComplete ? '✓' : '!' }}</span>
-                                    {{ __('Research details completed') }}
-                                </div>
-                                <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
-                                    <span style="width:20px;height:20px;border-radius:50%;background:{{ $docCount > 0 ? '#059669' : '#E2E8F0' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;">{{ $docCount > 0 ? '✓' : '!' }}</span>
-                                    {{ __('Required document uploaded') }} ({{ $docCount }} {{ $docCount === 1 ? __('file') : __('files') }})
+                        @if ($research->revision_count > 0)
+                            <p class="kmsar-body" style="margin:0 0 24px;font-size:13px;color:#475569;line-height:1.6;">
+                                {{ __('Your changes have been saved. Review your research and submit for dean review when ready.') }}
+                            </p>
+                        @else
+                            <div style="margin-bottom:24px;">
+                                <div style="font-size:13px;font-weight:600;color:#0F172A;margin-bottom:12px;">{{ __('Before submitting for review:') }}</div>
+                                <div style="display:flex;flex-direction:column;gap:8px;">
+                                    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
+                                        <span style="width:20px;height:20px;border-radius:50%;background:{{ $detailsComplete ? '#059669' : '#E2E8F0' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;">{{ $detailsComplete ? '✓' : '!' }}</span>
+                                        {{ __('Research details completed') }}
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
+                                        <span style="width:20px;height:20px;border-radius:50%;background:{{ $docCount > 0 ? '#059669' : '#E2E8F0' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;">{{ $docCount > 0 ? '✓' : '!' }}</span>
+                                        {{ __('Required document uploaded') }} ({{ $docCount }} {{ $docCount === 1 ? __('file') : __('files') }})
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        @endif
 
                         <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
-                            @if ($research->approval_stage === 'draft')
+                            @if ($research->revision_count > 0)
+                                <a href="{{ route('research.show', $research) }}"
+                                   style="display:inline-block;padding:10px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;">
+                                    {{ __('Save Changes & View Research') }}
+                                </a>
+                            @else
                                 <form method="POST" action="{{ route('research.submit', $research) }}">
                                     @csrf
                                     <button type="submit" style="padding:10px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
@@ -405,9 +422,6 @@
                             @endif
                             <a href="{{ route('research.index') }}" style="padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;">
                                 {{ __('Back to My Research') }}
-                            </a>
-                            <a href="{{ route('research.show', $research) }}" style="padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;">
-                                {{ __('View Research Record') }}
                             </a>
                         </div>
                     </div>

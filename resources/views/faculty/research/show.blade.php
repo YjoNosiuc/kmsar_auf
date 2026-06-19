@@ -113,6 +113,15 @@
                         @endcan
                     @endif
                 @endif
+
+                @if ($research->approval_stage === 'rejected')
+                    @can('revise', $research)
+                        <form method="post" action="{{ route('research.revise', $research) }}" class="inline">
+                            @csrf
+                            <x-button type="submit" variant="secondary">{{ __('Revise') }}</x-button>
+                        </form>
+                    @endcan
+                @endif
             </div>
         </div>
 

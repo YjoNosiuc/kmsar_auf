@@ -48,6 +48,7 @@ class ApprovalController extends Controller
         $returned = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
             ->where('mother_college_id', $collegeId)
+            ->whereNotIn('approval_stage', ['dean_review', 'ovpri_review', 'approved'])
             ->whereHas('approvals', function ($q) use ($request) {
                 $q->where('approver_id', $request->user()->id)
                     ->where('stage', 'dean')

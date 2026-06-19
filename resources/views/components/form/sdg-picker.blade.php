@@ -66,7 +66,7 @@
         @endforeach
     </div>
 
-    <input type="hidden" name="{{ $name }}" :value="JSON.stringify(selected)">
+    <input type="hidden" name="{{ $name }}" x-ref="sdgInput" x-effect="$refs.sdgInput.value = JSON.stringify(selected)">
 
     @if ($hint !== null && $hint !== '' && ! $hasError)
         <p class="kmsar-form-hint" id="{{ $fieldId }}-hint">{{ $hint }}</p>

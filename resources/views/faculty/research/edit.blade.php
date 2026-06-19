@@ -56,28 +56,9 @@
                 $currentOutputs = old('expected_output')
                     ? (array) old('expected_output')
                     : ($research->expectedOutputKeys());
-                $sdgNames = [
-                    1 => 'No Poverty',
-                    2 => 'Zero Hunger',
-                    3 => 'Good Health and Well-being',
-                    4 => 'Quality Education',
-                    5 => 'Gender Equality',
-                    6 => 'Clean Water and Sanitation',
-                    7 => 'Affordable and Clean Energy',
-                    8 => 'Decent Work and Economic Growth',
-                    9 => 'Industry, Innovation and Infrastructure',
-                    10 => 'Reduced Inequalities',
-                    11 => 'Sustainable Cities and Communities',
-                    12 => 'Responsible Consumption and Production',
-                    13 => 'Climate Action',
-                    14 => 'Life Below Water',
-                    15 => 'Life on Land',
-                    16 => 'Peace, Justice and Strong Institutions',
-                    17 => 'Partnerships for the Goals',
-                ];
                 $currentSdgs = old('sdg_tags')
-                    ? (is_array(old('sdg_tags')) ? old('sdg_tags') : json_decode(old('sdg_tags'), true) ?? [])
-                    : (is_array($research->sdg_tags) ? $research->sdg_tags : (json_decode($research->sdg_tags ?? '[]', true) ?? []));
+                    ? array_values(array_map('intval', is_array(old('sdg_tags')) ? old('sdg_tags') : (json_decode(old('sdg_tags'), true) ?? [])))
+                    : array_values(array_map('intval', is_array($research->sdg_tags) ? $research->sdg_tags : (json_decode($research->sdg_tags ?? '[]', true) ?? [])));
             @endphp
 
             <x-form.textarea
@@ -241,49 +222,11 @@
                 required
             />
 
-            <div class="kmsar-form-group">
-                <span class="kmsar-form-label">{{ __('SDG alignment') }}</span>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-                    @foreach ($sdgNames as $num => $name)
-                        <label style="position:relative;display:inline-flex;" x-data="{ show: false }">
-                            <input
-                                type="checkbox"
-                                name="sdg_tags[]"
-                                value="{{ $num }}"
-                                {{ in_array($num, $currentSdgs, true) ? 'checked' : '' }}
-                                style="position:absolute;opacity:0;width:0;height:0;"
-                                id="sdg_edit_{{ $num }}"
-                            >
-                            <span
-                                @mouseenter="show=true"
-                                @mouseleave="show=false"
-                                onclick="document.getElementById('sdg_edit_{{ $num }}').click();this.classList.toggle('sdg-active', document.getElementById('sdg_edit_{{ $num }}').checked)"
-                                class="{{ in_array($num, $currentSdgs, true) ? 'sdg-active' : '' }}"
-                                style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:28px;border-radius:6px;border:1.5px solid #CBD5E1;font-size:11px;font-weight:700;cursor:pointer;background:#fff;color:#475569;transition:all 0.15s;user-select:none;"
-                            >
-                                SDG {{ $num }}
-                            </span>
-                            <span
-                                x-show="show"
-                                x-cloak
-                                style="position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#0F172A;color:#fff;font-size:11px;font-weight:500;padding:5px 10px;border-radius:6px;white-space:nowrap;z-index:50;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,0.2);"
-                            >
-                                <strong>SDG {{ $num }}:</strong> {{ $name }}
-                                <span style="position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0F172A;"></span>
-                            </span>
-                        </label>
-                    @endforeach
-                </div>
-                <p class="kmsar-form-hint">{{ __('Select Sustainable Development Goals that apply.') }}</p>
-                @error('sdg_tags')
-                    <p class="kmsar-form-error">{{ $message }}</p>
-                @enderror
-            </div>
-
-            <style>
-                .sdg-active { background:#1E3A8A !important; color:#fff !important; border-color:#1E3A8A !important; }
-                [x-cloak] { display:none !important; }
-            </style>
+            <x-form.sdg-picker
+                name="sdg_tags"
+                :selected="$currentSdgs"
+                :error="$errors->first('sdg_tags')"
+            />
 
             <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[var(--color-border)]">
                 <x-button variant="secondary" href="{{ route('research.show', $research) }}">{{ __('Cancel') }}</x-button>

@@ -597,7 +597,15 @@ class ResearchController extends Controller
 
         if (is_string($raw)) {
             $decoded = json_decode($raw, true);
-            $request->merge(['sdg_tags' => is_array($decoded) ? $decoded : []]);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+
+        if (is_array($raw)) {
+            $request->merge([
+                'sdg_tags' => array_values(array_map('intval', $raw)),
+            ]);
+        } else {
+            $request->merge(['sdg_tags' => []]);
         }
     }
 
@@ -621,6 +629,7 @@ class ResearchController extends Controller
      */
     private function finalizeResearchPayload(array $data, Request $request): array
     {
+        $data['sdg_tags'] = array_values(array_map('intval', $data['sdg_tags'] ?? []));
         $data['expected_output'] = array_values(array_unique($data['expected_output'] ?? []));
         $data['expected_output_other'] = in_array('other', $data['expected_output'], true)
             ? ($data['expected_output_other'] ?? null)

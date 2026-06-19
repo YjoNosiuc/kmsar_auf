@@ -6,6 +6,7 @@ use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
@@ -15,15 +16,17 @@ class DeanController extends Controller
 
     private const PRESENTED_STATUSES = ['presented_internal', 'presented_external'];
 
-    public function dashboard(): View
+    public function dashboard(Request $request): View
     {
         $collegeId = auth()->user()->college_id;
+        $academicYear = $request->filled('academic_year') ? $request->integer('academic_year') : null;
+        $academicYearOptions = $this->academicYearOptions();
 
         $college = $collegeId
             ? College::query()->find($collegeId)
             : null;
 
-        $base = $this->collegeResearchQuery($college);
+        $base = $this->collegeResearchQuery($college, $academicYear);
 
         $recentResearch = (clone $base)
             ->with(['primaryAuthor'])
@@ -31,10 +34,10 @@ class DeanController extends Controller
             ->limit(15)
             ->get();
 
-        $cacheKey = 'dean_stats_'.auth()->id().'_'.now()->format('Y-m-d');
+        $cacheKey = 'dean_stats_'.auth()->id().'_'.($academicYear ?? 'all').'_'.now()->format('Y-m-d');
 
-        $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId) {
-            $base = $this->collegeResearchQuery($college);
+        $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $academicYear) {
+            $base = $this->collegeResearchQuery($college, $academicYear);
 
             $totalResearch = (clone $base)->count();
 
@@ -50,15 +53,17 @@ class DeanController extends Controller
                 ->where('is_scopus_indexed', true)
                 ->count();
 
-            $yearList = $this->lastNYears(5);
+            $yearList = $academicYear !== null
+                ? [$academicYear]
+                : $this->lastNYears(5);
 
             $isSqlite = (clone $base)->getConnection()->getDriverName() === 'sqlite';
             $yearSelect = $isSqlite
-                ? 'CAST(strftime(\'%Y\', created_at) AS INTEGER) as year'
-                : 'YEAR(created_at) as year';
+                ? 'CAST(strftime(\'%Y\', start_date) AS INTEGER) as year'
+                : 'YEAR(start_date) as year';
             $yearGroup = $isSqlite
-                ? 'CAST(strftime(\'%Y\', created_at) AS INTEGER)'
-                : 'YEAR(created_at)';
+                ? 'CAST(strftime(\'%Y\', start_date) AS INTEGER)'
+                : 'YEAR(start_date)';
 
             $submissionsByYearCounts = (clone $base)
                 ->selectRaw("{$yearSelect}, COUNT(*) as total")
@@ -102,7 +107,7 @@ class DeanController extends Controller
             });
 
             $facultyStats = $collegeId
-                ? $this->facultyResearchBreakdown((int) $collegeId)
+                ? $this->facultyResearchBreakdown((int) $collegeId, $academicYear)
                 : [];
 
             return [
@@ -128,10 +133,12 @@ class DeanController extends Controller
             'publishedByYear' => $cached['publishedByYear'],
             'presentedByYear' => $cached['presentedByYear'],
             'facultyStats' => $cached['facultyStats'],
+            'academicYear' => $academicYear,
+            'academicYearOptions' => $academicYearOptions,
         ]);
     }
 
-    private function collegeResearchQuery(?College $college): Builder
+    private function collegeResearchQuery(?College $college, ?int $academicYear = null): Builder
     {
         $q = Research::query();
 
@@ -139,6 +146,10 @@ class DeanController extends Controller
             $q->where('mother_college_id', $college->id);
         } else {
             $q->whereRaw('1 = 0');
+        }
+
+        if ($academicYear !== null) {
+            $q->whereYear('start_date', $academicYear);
         }
 
         return $q;
@@ -156,9 +167,19 @@ class DeanController extends Controller
     }
 
     /**
+     * @return list<int>
+     */
+    private function academicYearOptions(): array
+    {
+        $current = (int) date('Y');
+
+        return range($current, $current - 10);
+    }
+
+    /**
      * @return list<array{name: string, total: int, published: int, presented: int, scopus: int}>
      */
-    private function facultyResearchBreakdown(int $collegeId): array
+    private function facultyResearchBreakdown(int $collegeId, ?int $academicYear = null): array
     {
         $facultyUsers = User::query()
             ->role('faculty')
@@ -172,12 +193,18 @@ class DeanController extends Controller
 
         $facultyIds = $facultyUsers->pluck('id')->all();
 
-        $allResearch = Research::query()
+        $researchQuery = Research::query()
             ->where('mother_college_id', $collegeId)
             ->where(function (Builder $b) use ($facultyIds) {
                 $b->whereIn('primary_author_id', $facultyIds)
                     ->orWhereHas('researchAuthors', fn (Builder $a) => $a->whereIn('user_id', $facultyIds));
-            })
+            });
+
+        if ($academicYear !== null) {
+            $researchQuery->whereYear('start_date', $academicYear);
+        }
+
+        $allResearch = $researchQuery
             ->with(['researchAuthors:id,research_id,user_id'])
             ->get(['id', 'primary_author_id', 'status', 'is_scopus_indexed']);
 

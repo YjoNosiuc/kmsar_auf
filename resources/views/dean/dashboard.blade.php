@@ -26,19 +26,24 @@
     </div>
 
     @if ($college)
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-            <label style="font-size:13px;color:#475569;font-weight:500;">Show last</label>
-            <input
-                type="number"
-                id="yearRangeInput"
-                min="1"
-                max="10"
-                value="5"
-                style="width:70px;padding:6px 10px;border:1px solid #CBD5E1;border-radius:6px;font-size:13px;text-align:center;font-family:inherit;"
-                onchange="updateCharts(this.value)"
-            >
-            <label style="font-size:13px;color:#475569;font-weight:500;">years</label>
-        </div>
+        <form method="get" action="{{ route('dean.dashboard') }}" class="kmsar-card" style="margin-bottom:16px;padding:16px 20px;">
+            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;">
+                <div style="min-width:200px;">
+                    <label for="academic_year" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('Academic year') }}</label>
+                    <select id="academic_year" name="academic_year" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
+                        <option value="">{{ __('All years (last 5)') }}</option>
+                        @foreach ($academicYearOptions as $year)
+                            <option value="{{ $year }}" @selected($academicYear === $year)>{{ $year }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @if ($academicYear)
+                    <p class="kmsar-body" style="margin:0;font-size:13px;color:#475569;align-self:center;">
+                        {{ __('Showing data for academic year :year', ['year' => $academicYear]) }}
+                    </p>
+                @endif
+            </div>
+        </form>
     @endif
 
     {{-- Section 2 — Stat cards --}}
@@ -67,7 +72,13 @@
             <div class="kmsar-chart-card">
                 <div class="kmsar-chart-header">
                     <div>
-                        <h2 class="kmsar-chart-title">{{ __('Research submitted — last N years') }}</h2>
+                        <h2 class="kmsar-chart-title">
+                            @if ($academicYear)
+                                {{ __('Research submitted — :year', ['year' => $academicYear]) }}
+                            @else
+                                {{ __('Research submitted — last 5 years') }}
+                            @endif
+                        </h2>
                         <p class="kmsar-chart-subtitle">{{ __('Count of research registered per year (your college)') }}</p>
                     </div>
                 </div>
@@ -83,10 +94,21 @@
                         <h2 class="kmsar-chart-title">{{ __('Research per faculty') }}</h2>
                         <p class="kmsar-chart-subtitle">{{ __('Totals where the faculty member is primary author or listed author') }}</p>
                     </div>
+                    <div style="min-width:200px;">
+                        <label for="facultySearch" class="sr-only">{{ __('Search faculty') }}</label>
+                        <input
+                            id="facultySearch"
+                            type="search"
+                            class="kmsar-input"
+                            style="width:100%;"
+                            placeholder="{{ __('Search faculty…') }}"
+                            autocomplete="off"
+                        >
+                    </div>
                 </div>
                 <div class="kmsar-chart-body" style="padding: 0;">
                     <div class="kmsar-table-wrap" style="font-size:0.8125rem;">
-                        <table class="kmsar-table">
+                        <table class="kmsar-table" id="facultyStatsTable">
                             <thead>
                                 <tr>
                                     <th scope="col">{{ __('Faculty name') }}</th>
@@ -97,14 +119,14 @@
                             </thead>
                             <tbody>
                                 @forelse ($facultyStats as $row)
-                                    <tr>
+                                    <tr data-faculty-name="{{ strtolower($row['name']) }}">
                                         <td>{{ $row['name'] }}</td>
                                         <td style="text-align:center;">{{ number_format($row['total']) }}</td>
                                         <td style="text-align:center;">{{ number_format($row['published']) }}</td>
                                         <td style="text-align:center;">{{ number_format($row['presented']) }}</td>
                                     </tr>
                                 @empty
-                                    <tr>
+                                    <tr id="facultyStatsEmpty">
                                         <td colspan="4" class="text-center kmsar-body" style="padding: var(--space-6);">
                                             {{ __('No faculty in this college yet.') }}
                                         </td>
@@ -122,7 +144,13 @@
             <div class="kmsar-chart-card">
                 <div class="kmsar-chart-header">
                     <div>
-                        <h2 class="kmsar-chart-title">{{ __('Published research — last N years') }}</h2>
+                        <h2 class="kmsar-chart-title">
+                            @if ($academicYear)
+                                {{ __('Published research — :year', ['year' => $academicYear]) }}
+                            @else
+                                {{ __('Published research — last 5 years') }}
+                            @endif
+                        </h2>
                         <p class="kmsar-chart-subtitle">{{ __('Published status counts by year') }}</p>
                     </div>
                 </div>
@@ -135,7 +163,13 @@
             <div class="kmsar-chart-card">
                 <div class="kmsar-chart-header">
                     <div>
-                        <h2 class="kmsar-chart-title">{{ __('Presented research — last N years') }}</h2>
+                        <h2 class="kmsar-chart-title">
+                            @if ($academicYear)
+                                {{ __('Presented research — :year', ['year' => $academicYear]) }}
+                            @else
+                                {{ __('Presented research — last 5 years') }}
+                            @endif
+                        </h2>
                         <p class="kmsar-chart-subtitle">{{ __('Internal and external presentations by year') }}</p>
                     </div>
                 </div>
@@ -228,52 +262,24 @@
 @push('scripts')
     @if ($college)
         <script>
-            let submissionsChart;
-            let publishedChart;
-            let presentedChart;
-            let allYearLabels;
-            let allSubmissionsData;
-            let allPublishedData;
-            let allPresentedData;
-
-            function updateCharts(years) {
-                if (typeof Chart === 'undefined') {
-                    return;
-                }
-                const currentYear = new Date().getFullYear();
-                const n = Math.min(10, Math.max(1, parseInt(years, 10) || 5));
-                const cutoff = currentYear - n;
-                const filteredLabels = [];
-                const filteredSubmissions = [];
-                const filteredPublished = [];
-                const filteredPresented = [];
-                allYearLabels.forEach(function (lbl, i) {
-                    const y = parseInt(lbl, 10);
-                    if (!isNaN(y) && y > cutoff) {
-                        filteredLabels.push(lbl);
-                        filteredSubmissions.push(allSubmissionsData[i]);
-                        filteredPublished.push(allPublishedData[i]);
-                        filteredPresented.push(allPresentedData[i]);
-                    }
-                });
-                if (submissionsChart) {
-                    submissionsChart.data.labels = filteredLabels;
-                    submissionsChart.data.datasets[0].data = filteredSubmissions;
-                    submissionsChart.update();
-                }
-                if (publishedChart) {
-                    publishedChart.data.labels = filteredLabels;
-                    publishedChart.data.datasets[0].data = filteredPublished;
-                    publishedChart.update();
-                }
-                if (presentedChart) {
-                    presentedChart.data.labels = filteredLabels;
-                    presentedChart.data.datasets[0].data = filteredPresented;
-                    presentedChart.update();
-                }
-            }
-
             document.addEventListener('DOMContentLoaded', function () {
+                const facultySearchEl = document.getElementById('facultySearch');
+                const facultyTable = document.getElementById('facultyStatsTable');
+
+                if (facultySearchEl && facultyTable) {
+                    facultySearchEl.addEventListener('input', function () {
+                        const q = this.value.trim().toLowerCase();
+                        let visible = 0;
+                        facultyTable.querySelectorAll('tbody tr[data-faculty-name]').forEach(function (row) {
+                            const matches = !q || row.getAttribute('data-faculty-name').includes(q);
+                            row.style.display = matches ? '' : 'none';
+                            if (matches) {
+                                visible++;
+                            }
+                        });
+                    });
+                }
+
                 if (typeof Chart === 'undefined') {
                     return;
                 }
@@ -283,18 +289,13 @@
                 const publishedData = @json($publishedByYear->pluck('count'));
                 const presentedData = @json($presentedByYear->pluck('count'));
 
-                allYearLabels = yearLabels.slice();
-                allSubmissionsData = submissionsData.slice();
-                allPublishedData = publishedData.slice();
-                allPresentedData = presentedData.slice();
-
                 const primary = '#1E3A8A';
                 const gold = '#D4AF37';
                 const success = '#059669';
 
                 const submittedEl = document.getElementById('kmsarDeanSubmitted');
                 if (submittedEl) {
-                    submissionsChart = new Chart(submittedEl, {
+                    new Chart(submittedEl, {
                         type: 'line',
                         data: {
                             labels: yearLabels,
@@ -326,7 +327,7 @@
 
                 const publishedEl = document.getElementById('kmsarDeanPublished');
                 if (publishedEl) {
-                    publishedChart = new Chart(publishedEl, {
+                    new Chart(publishedEl, {
                         type: 'bar',
                         data: {
                             labels: yearLabels,
@@ -356,7 +357,7 @@
 
                 const presentedEl = document.getElementById('kmsarDeanPresented');
                 if (presentedEl) {
-                    presentedChart = new Chart(presentedEl, {
+                    new Chart(presentedEl, {
                         type: 'bar',
                         data: {
                             labels: yearLabels,
@@ -382,11 +383,6 @@
                             },
                         },
                     });
-                }
-
-                const input = document.getElementById('yearRangeInput');
-                if (input) {
-                    updateCharts(input.value);
                 }
             });
         </script>

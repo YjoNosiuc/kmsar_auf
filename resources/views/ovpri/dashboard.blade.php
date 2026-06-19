@@ -23,6 +23,36 @@
         ]"
     />
 
+    <form method="get" action="{{ route('ovpri.dashboard') }}" class="kmsar-card" style="margin-bottom:16px;padding:16px 20px;">
+        <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;">
+            <div style="min-width:200px;">
+                <label for="academic_year" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('Academic year') }}</label>
+                <select id="academic_year" name="academic_year" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
+                    <option value="">{{ __('All years') }}</option>
+                    @foreach ($academicYearOptions as $year)
+                        <option value="{{ $year }}" @selected($academicYear === $year)>{{ $year }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="flex:1;min-width:220px;">
+                <label for="collegeSearch" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('Search college') }}</label>
+                <input
+                    id="collegeSearch"
+                    type="search"
+                    class="kmsar-input"
+                    style="width:100%;"
+                    placeholder="{{ __('Filter charts by college code or name…') }}"
+                    autocomplete="off"
+                >
+            </div>
+            @if ($academicYear)
+                <p class="kmsar-body" style="margin:0;font-size:13px;color:#475569;align-self:center;">
+                    {{ __('Showing data for academic year :year', ['year' => $academicYear]) }}
+                </p>
+            @endif
+        </div>
+    </form>
+
     {{-- Section 2 — Stat cards --}}
     <div class="kmsar-stats-grid kmsar-animate-in mb-8" role="region" aria-label="{{ __('Dashboard statistics') }}">
         <div class="kmsar-stat-card kmsar-card--accent-primary">
@@ -69,6 +99,21 @@
                 <div style="position:relative;height:280px;width:100%;">
                     <canvas id="sdgChart" aria-label="{{ __('SDG Distribution') }}"></canvas>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Workflow / approval status --}}
+    <div class="kmsar-chart-card" style="margin-bottom:16px;">
+        <div class="kmsar-chart-header">
+            <div>
+                <h2 class="kmsar-chart-title">{{ __('Research by approval stage') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Workflow status across dean review, OVPRI review, approved, and rejected') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div style="position:relative;height:220px;width:100%;">
+                <canvas id="kmsarOvpriWorkflow" aria-label="{{ __('Research by approval stage') }}"></canvas>
             </div>
         </div>
     </div>
@@ -150,21 +195,24 @@
                 return;
             }
 
-            const collegeLabels = @json($researchByCollege->pluck('label'));
-            const collegeData = @json($researchByCollege->pluck('count'));
-            const scopusData = @json($scopusByCollege->pluck('count'));
-            const presentedData = @json($presentedByCollege->pluck('count'));
+            const allCollegeRows = @json($researchByCollege->values());
+            const allScopusRows = @json($scopusByCollege->values());
+            const allPresentedRows = @json($presentedByCollege->values());
             const classificationLabels = @json($classificationBreakdown->pluck('label'));
             const classificationCounts = @json($classificationBreakdown->pluck('count'));
             const sdgLabels = @json($sdgDistribution->pluck('label')->values());
             const sdgCounts = @json($sdgDistribution->pluck('count')->values());
             const sdgNums = @json($sdgDistribution->pluck('sdg')->values());
+            const workflowLabels = @json($workflowStatus->pluck('label'));
+            const workflowCounts = @json($workflowStatus->pluck('count'));
             const monthlyLabels = @json($monthlyTrend->pluck('label'));
             const monthlyCounts = @json($monthlyTrend->pluck('count'));
 
             const primary = '#1E3A8A';
             const gold = '#D4AF37';
             const success = '#059669';
+            const warning = '#D97706';
+            const danger = '#DC2626';
             const sdgColors = [
                 '#E5243B', '#DDA63A', '#4C9F38', '#C5192D', '#FF3A21',
                 '#26BDE2', '#FCC30B', '#A21942', '#FD6925', '#DD1367',
@@ -172,6 +220,46 @@
                 '#00689D', '#19486A',
             ];
             const classColors = ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#94A3B8'];
+            const workflowColors = [warning, '#2563EB', success, danger];
+
+            let byCollegeChart;
+            let scopusChart;
+            let presentedChart;
+
+            function filterCollegeRows(rows, term) {
+                const q = (term || '').trim().toLowerCase();
+                if (!q) {
+                    return rows;
+                }
+                return rows.filter((row) => {
+                    return (row.label || '').toLowerCase().includes(q)
+                        || (row.name || '').toLowerCase().includes(q);
+                });
+            }
+
+            function applyCollegeFilter(term) {
+                const collegeRows = filterCollegeRows(allCollegeRows, term);
+                const labels = collegeRows.map((row) => row.label);
+                const researchData = collegeRows.map((row) => row.count);
+                const scopusData = filterCollegeRows(allScopusRows, term).map((row) => row.count);
+                const presentedData = filterCollegeRows(allPresentedRows, term).map((row) => row.count);
+
+                if (byCollegeChart) {
+                    byCollegeChart.data.labels = labels;
+                    byCollegeChart.data.datasets[0].data = researchData;
+                    byCollegeChart.update();
+                }
+                if (scopusChart) {
+                    scopusChart.data.labels = labels;
+                    scopusChart.data.datasets[0].data = scopusData;
+                    scopusChart.update();
+                }
+                if (presentedChart) {
+                    presentedChart.data.labels = labels;
+                    presentedChart.data.datasets[0].data = presentedData;
+                    presentedChart.update();
+                }
+            }
 
             const barOptionsShort = {
                 responsive: true,
@@ -187,13 +275,13 @@
 
             const byCollegeEl = document.getElementById('kmsarOvpriByCollege');
             if (byCollegeEl) {
-                new Chart(byCollegeEl, {
+                byCollegeChart = new Chart(byCollegeEl, {
                     type: 'bar',
                     data: {
-                        labels: collegeLabels,
+                        labels: allCollegeRows.map((row) => row.label),
                         datasets: [{
                             label: @json(__('Research')),
-                            data: collegeData,
+                            data: allCollegeRows.map((row) => row.count),
                             backgroundColor: primary,
                             borderColor: primary,
                             borderWidth: 1,
@@ -210,6 +298,36 @@
                         scales: {
                             x: { stacked: false, ticks: { maxRotation: 45, minRotation: 0 } },
                             y: { beginAtZero: true, ticks: { precision: 0 } },
+                        },
+                    },
+                });
+            }
+
+            const workflowEl = document.getElementById('kmsarOvpriWorkflow');
+            if (workflowEl) {
+                new Chart(workflowEl, {
+                    type: 'bar',
+                    data: {
+                        labels: workflowLabels,
+                        datasets: [{
+                            label: @json(__('Research count')),
+                            data: workflowCounts,
+                            backgroundColor: workflowColors,
+                            borderColor: workflowColors,
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        }],
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                        },
+                        scales: {
+                            x: { beginAtZero: true, ticks: { precision: 0 } },
+                            y: { ticks: { autoSkip: false } },
                         },
                     },
                 });
@@ -233,6 +351,7 @@
                         responsive: true,
                         maintainAspectRatio: false,
                         cutout: '60%',
+                        rotation: -Math.PI / 2,
                         plugins: {
                             legend: {
                                 display: true,
@@ -251,13 +370,13 @@
 
             const scopusEl = document.getElementById('kmsarOvpriScopus');
             if (scopusEl) {
-                new Chart(scopusEl, {
+                scopusChart = new Chart(scopusEl, {
                     type: 'bar',
                     data: {
-                        labels: collegeLabels,
+                        labels: allCollegeRows.map((row) => row.label),
                         datasets: [{
                             label: @json(__('Scopus indexed')),
-                            data: scopusData,
+                            data: allScopusRows.map((row) => row.count),
                             backgroundColor: gold,
                             borderColor: gold,
                             borderWidth: 1,
@@ -270,13 +389,13 @@
 
             const presentedEl = document.getElementById('kmsarOvpriPresented');
             if (presentedEl) {
-                new Chart(presentedEl, {
+                presentedChart = new Chart(presentedEl, {
                     type: 'bar',
                     data: {
-                        labels: collegeLabels,
+                        labels: allCollegeRows.map((row) => row.label),
                         datasets: [{
                             label: @json(__('Presented')),
-                            data: presentedData,
+                            data: allPresentedRows.map((row) => row.count),
                             backgroundColor: success,
                             borderColor: success,
                             borderWidth: 1,
@@ -284,6 +403,13 @@
                         }],
                     },
                     options: barOptionsShort,
+                });
+            }
+
+            const collegeSearchEl = document.getElementById('collegeSearch');
+            if (collegeSearchEl) {
+                collegeSearchEl.addEventListener('input', function () {
+                    applyCollegeFilter(this.value);
                 });
             }
 

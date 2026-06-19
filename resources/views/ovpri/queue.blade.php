@@ -239,7 +239,7 @@
                 <div class="queue-empty">
                     <div class="queue-empty-icon">📋</div>
                     <div class="queue-empty-title">{{ __('No approved submissions yet') }}</div>
-                    <div class="queue-empty-sub">{{ __('Research you approve will appear here.') }}</div>
+                    <div class="queue-empty-sub">{{ __('Research approved at the university level will appear here.') }}</div>
                 </div>
             @else
                 <div class="queue-meta-row">
@@ -270,7 +270,7 @@
                 <div class="queue-empty">
                     <div class="queue-empty-icon">👍</div>
                     <div class="queue-empty-title">{{ __('No returned submissions') }}</div>
-                    <div class="queue-empty-sub">{{ __('Research returned or rejected will appear here.') }}</div>
+                    <div class="queue-empty-sub">{{ __('Research returned or rejected at the university level will appear here.') }}</div>
                 </div>
             @else
                 <div class="queue-meta-row">

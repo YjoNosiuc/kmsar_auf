@@ -75,7 +75,6 @@ class ApprovalController extends Controller
 
         $research->load([
             'motherCollege',
-            'otherCollege',
             'primaryAuthor.college',
             'primaryAuthor.program',
             'researchAuthors.college',
@@ -177,9 +176,8 @@ class ApprovalController extends Controller
         $approved = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
             ->where('approval_stage', 'approved')
-            ->whereHas('approvals', function ($q) use ($request) {
-                $q->where('approver_id', $request->user()->id)
-                    ->where('stage', 'ovpri')
+            ->whereHas('approvals', function ($q) {
+                $q->where('stage', 'ovpri')
                     ->where('action', 'approved');
             })
             ->orderByDesc('updated_at')
@@ -188,9 +186,8 @@ class ApprovalController extends Controller
         $returned = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
             ->whereNotIn('approval_stage', ['ovpri_review', 'approved', 'dean_review'])
-            ->whereHas('approvals', function ($q) use ($request) {
-                $q->where('approver_id', $request->user()->id)
-                    ->where('stage', 'ovpri')
+            ->whereHas('approvals', function ($q) {
+                $q->where('stage', 'ovpri')
                     ->whereIn('action', ['returned', 'rejected']);
             })
             ->orderByDesc('updated_at')
@@ -201,8 +198,7 @@ class ApprovalController extends Controller
 
     public function approve(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('view', $research);
-        abort_unless($research->approval_stage === 'ovpri_review', 403);
+        $this->authorizeOvpriStageAction($request, $research);
 
         $validated = $request->validate([
             'remarks' => ['nullable', 'string', 'max:5000'],
@@ -235,8 +231,7 @@ class ApprovalController extends Controller
 
     public function ovpriReturn(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('view', $research);
-        abort_unless($research->approval_stage === 'ovpri_review', 403);
+        $this->authorizeOvpriStageAction($request, $research);
 
         $validated = $request->validate([
             'remarks' => ['required', 'string', 'min:10', 'max:5000'],
@@ -253,8 +248,7 @@ class ApprovalController extends Controller
 
     public function ovpriReject(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('view', $research);
-        abort_unless($research->approval_stage === 'ovpri_review', 403);
+        $this->authorizeOvpriStageAction($request, $research);
 
         $validated = $request->validate([
             'remarks' => ['required', 'string', 'min:1', 'max:5000'],
@@ -294,6 +288,22 @@ class ApprovalController extends Controller
         foreach ($this->deanUserIdsForCollege((int) $research->mother_college_id) as $id) {
             Cache::forget('dean_stats_'.$id.'_'.now()->format('Y-m-d'));
         }
+    }
+
+    /**
+     * OVPRI and CDAIC admins may approve, return, or reject any research in ovpri_review.
+     */
+    private function authorizeOvpriStageAction(Request $request, Research $research): void
+    {
+        $user = $request->user();
+
+        abort_unless(
+            $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']),
+            403,
+            __('You are not authorized to perform this action.')
+        );
+
+        abort_unless($research->approval_stage === 'ovpri_review', 403);
     }
 
     /**

@@ -82,7 +82,7 @@
         @endif
     @endif
 
-    @if($u->hasAnyRole(['ovpri_admin', 'cdaic_admin']) && (Route::has('ovpri.dashboard') || Route::has('ovpri.queue') || Route::has('reports.index')))
+    @if($u->hasAnyRole(['ovpri_admin', 'cdaic_admin']) && (Route::has('ovpri.dashboard') || Route::has('ovpri.queue') || Route::has('reports.index') || Route::has('ovpri.research')))
         <div class="kmsar-sidebar-section">OVPRI</div>
         @if(Route::has('ovpri.dashboard'))
             <a href="{{ route('ovpri.dashboard') }}"
@@ -115,6 +115,17 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                 </svg>
                 <span>Reports</span>
+            </a>
+        @endif
+        @if(Route::has('ovpri.research'))
+            <a href="{{ route('ovpri.research') }}"
+               class="kmsar-nav-item {{ request()->routeIs('ovpri.research') ? 'active' : '' }}"
+               aria-label="All Research"
+               @if(request()->routeIs('ovpri.research')) aria-current="page" @endif>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v15.128A23.922 23.922 0 0112 18c3.243 0 6.328.612 9 1.718V4.756c-.938-.332-1.948-.512-3-.512-2.25 0-4.485.707-6 2.042zM19.5 4.756v15.128A23.922 23.922 0 0018 18c-1.052 0-2.062.18-3 .512" />
+                </svg>
+                <span>All Research</span>
             </a>
         @endif
     @endif

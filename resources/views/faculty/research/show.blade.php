@@ -212,11 +212,11 @@
                 align-items: center; 
                 gap: 0.5rem;
                 justify-content: flex-end;">
-                                                            <a href="{{ route('documents.preview', [$research, $document]) }}"
-                                                                target="_blank"
+                                                            <button type="button"
+                                                                onclick="kmsarOpenPreviewModal('{{ route('documents.preview', [$research, $document]) }}', '{{ addslashes($document->original_filename) }}')"
                                                                 class="kmsar-btn kmsar-btn--outline kmsar-btn--sm">
                                                                 {{ __('Preview') }}
-                                                            </a>
+                                                            </button>
                                                             <a href="{{ route('documents.download', [$research, $document]) }}"
                                                                 class="kmsar-btn kmsar-btn--secondary kmsar-btn--sm"
                                                                 style="border: 1.5px solid var(--color-border) !important;">
@@ -661,7 +661,59 @@
                 }
             }
         </style>
+
+        <div id="kmsar-preview-modal"
+            style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;box-sizing:border-box;">
+            <div style="background:#fff;border-radius:12px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid #E2E8F0;flex-shrink:0;">
+                    <span id="kmsar-preview-modal-filename" style="font-size:13px;font-weight:600;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 48px);"></span>
+                    <button type="button" onclick="kmsarClosePreviewModal()"
+                        style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#64748B;border-radius:6px;cursor:pointer;flex-shrink:0;">
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+                <div style="flex:1;overflow:auto;padding:16px;background:#F8FAFC;min-height:0;">
+                    <iframe id="kmsar-preview-modal-iframe"
+                        src=""
+                        style="width:100%;height:75vh;border:none;border-radius:8px;background:#fff;display:block;"
+                        title="{{ __('Document preview') }}">
+                    </iframe>
+                </div>
+            </div>
+        </div>
     </div>
+
+@push('scripts')
+<script>
+window.kmsarOpenPreviewModal = function(url, filename) {
+    var modal = document.getElementById('kmsar-preview-modal');
+    var iframe = document.getElementById('kmsar-preview-modal-iframe');
+    var label = document.getElementById('kmsar-preview-modal-filename');
+    if (!modal || !iframe) return;
+    iframe.src = url;
+    if (label) label.textContent = filename || '';
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+};
+window.kmsarClosePreviewModal = function() {
+    var modal = document.getElementById('kmsar-preview-modal');
+    var iframe = document.getElementById('kmsar-preview-modal-iframe');
+    if (!modal || !iframe) return;
+    iframe.src = '';
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+};
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') window.kmsarClosePreviewModal();
+});
+document.addEventListener('DOMContentLoaded', function() {
+    var modal = document.getElementById('kmsar-preview-modal');
+    if (modal) modal.addEventListener('click', function(e) {
+        if (e.target === modal) window.kmsarClosePreviewModal();
+    });
+});
+</script>
+@endpush
 @endsection
 
 @push('scripts')

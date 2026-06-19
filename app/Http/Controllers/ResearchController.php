@@ -573,14 +573,21 @@ class ResearchController extends Controller
         ]);
     }
 
-    public function allResearch(): View
+    public function allResearch(Request $request): View
     {
         $this->authorize('viewAny', Research::class);
 
-        $research = $this->approvalService->paginateAllResearch();
+        $research = $this->approvalService->paginateAllResearch(
+            perPage: 20,
+            college: $request->input('college'),
+            stage: $request->input('stage'),
+        );
+
+        $colleges = \App\Models\College::where('is_active', true)->orderBy('code')->get();
 
         return view('ovpri.research.index', [
             'research' => $research,
+            'colleges' => $colleges,
         ]);
     }
 

@@ -24,6 +24,10 @@ class ResearchPolicy
             return $user->can('research.view_all') && $research->approval_stage === 'approved';
         }
 
+        if ($user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'super_admin'])) {
+            return true;
+        }
+
         if ($user->can('research.view_all')) {
             return true;
         }

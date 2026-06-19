@@ -216,12 +216,16 @@ class OvpriController extends Controller
             ])
             ->findOrFail($research->id);
 
+        $user = $request->user();
+        $isInstitutionalReviewer = $user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'super_admin']);
+
         $isActiveOvpriQueue = $research->approval_stage === 'ovpri_review';
         $hasOvpriHistory = $research->approvals
-            ->where('approver_id', $request->user()->id)
+            ->where('approver_id', $user->id)
             ->where('stage', 'ovpri')
             ->isNotEmpty();
-        abort_unless($isActiveOvpriQueue || $hasOvpriHistory, 403);
+
+        abort_unless($isInstitutionalReviewer || $isActiveOvpriQueue || $hasOvpriHistory, 403);
 
         return view('ovpri.review', ['research' => $research]);
     }

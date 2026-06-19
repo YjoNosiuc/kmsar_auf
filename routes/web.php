@@ -54,7 +54,7 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'nocache'])->group(function () {
     Route::get('/profile',
         [ProfileController::class, 'edit'])
         ->name('profile.edit');
@@ -82,7 +82,7 @@ Route::middleware('auth')->group(function () {
 | Faculty & co-author — research module
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:faculty|co_author'])
+Route::middleware(['auth', 'nocache', 'role:faculty|co_author'])
     ->prefix('research')
     ->group(function () {
         Route::get('/', [ResearchController::class, 'index'])->name('research.index');
@@ -105,7 +105,7 @@ Route::middleware(['auth', 'role:faculty|co_author'])
         Route::get('/{research}/documents/{document}/preview', [FileController::class, 'preview'])->name('documents.preview');
     });
 
-Route::middleware(['auth', 'role:faculty|co_author'])
+Route::middleware(['auth', 'nocache', 'role:faculty|co_author'])
     ->delete('/documents/{document}', [DocumentController::class, 'destroy'])
     ->name('documents.destroy');
 
@@ -114,12 +114,12 @@ Route::middleware(['auth', 'role:faculty|co_author'])
 | College dean / unit head — dashboard & approval queue
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:college_dean|unit_head'])
+Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head'])
     ->group(function () {
         Route::get('/dean/dashboard', [DeanController::class, 'dashboard'])->name('dean.dashboard');
     });
 
-Route::middleware(['auth', 'role:college_dean|unit_head'])
+Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head'])
     ->prefix('approval')
     ->group(function () {
         Route::get('/queue', [ApprovalController::class, 'queue'])->name('approval.queue');
@@ -136,7 +136,7 @@ Route::middleware(['auth', 'role:college_dean|unit_head'])
 | OVPRI / CDAIC
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:ovpri_admin|cdaic_admin'])
+Route::middleware(['auth', 'nocache', 'role:ovpri_admin|cdaic_admin'])
     ->prefix('ovpri')
     ->group(function () {
         Route::get('/dashboard', [OvpriController::class, 'dashboard'])->name('ovpri.dashboard');
@@ -155,7 +155,7 @@ Route::middleware(['auth', 'role:ovpri_admin|cdaic_admin'])
 | Reports — university (OVPRI/super admin) or college scope (dean / unit head)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:ovpri_admin|cdaic_admin|super_admin|college_dean|unit_head'])
+Route::middleware(['auth', 'nocache', 'role:ovpri_admin|cdaic_admin|super_admin|college_dean|unit_head'])
     ->prefix('reports')
     ->group(function () {
         Route::get('/', [ReportController::class, 'index'])->name('reports.index');
@@ -168,7 +168,7 @@ Route::middleware(['auth', 'role:ovpri_admin|cdaic_admin|super_admin|college_dea
 | Super admin
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'role:super_admin'])
+Route::middleware(['auth', 'nocache', 'role:super_admin'])
     ->prefix('admin')
     ->group(function () {
         Route::get('dashboard', function () {

@@ -55,10 +55,15 @@ class ApprovalService
         return $query->paginate($perPage);
     }
 
-    public function paginateAllResearch(int $perPage = 20): LengthAwarePaginator
-    {
+    public function paginateAllResearch(
+        int $perPage = 20,
+        ?string $college = null,
+        ?string $stage = null,
+    ): LengthAwarePaginator {
         return Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
+            ->when($college, fn ($q) => $q->where('mother_college_id', $college))
+            ->when($stage, fn ($q) => $q->where('approval_stage', $stage))
             ->latest()
             ->paginate($perPage);
     }

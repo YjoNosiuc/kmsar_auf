@@ -219,11 +219,11 @@
                 align-items: center; 
                 gap: 0.5rem;
                 justify-content: flex-end;">
-                                                                <a href="{{ route('ovpri.documents.preview', [$research, $document]) }}"
-                                                                    target="_blank"
+                                                                <button type="button"
+                                                                    onclick="kmsarOpenPreviewModal('{{ route('ovpri.documents.preview', [$research, $document]) }}', '{{ addslashes($document->original_filename) }}')"
                                                                     class="kmsar-btn kmsar-btn--outline kmsar-btn--sm">
                                                                     {{ __('Preview') }}
-                                                                </a>
+                                                                </button>
                                                                 <a href="{{ route('ovpri.documents.download', [$research, $document]) }}"
                                                                     class="kmsar-btn kmsar-btn--secondary kmsar-btn--sm"
                                                                     style="border: 1.5px solid var(--color-border) !important;">

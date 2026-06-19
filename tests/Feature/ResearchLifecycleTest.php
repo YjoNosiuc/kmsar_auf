@@ -13,7 +13,9 @@ use App\Notifications\ResearchReturned;
 use App\Notifications\ResearchReturnedToDean;
 use App\Notifications\ResearchApproved;
 use App\Notifications\ResearchApprovedDean;
+use App\Notifications\ResearchRejected;
 use App\Notifications\ResearchRejectedDean;
+use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchProgressUpdated;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -161,7 +163,7 @@ describe('Submit: draft → dean_review', function () {
         expect($research->submitted_at)->not->toBeNull();
     });
 
-    it('submit sends ResearchSubmitted notification to college dean', function () {
+    it('submit sends ResearchSubmitted notification to college dean and confirmation to faculty', function () {
         Notification::fake();
         $college  = makeCollege();
         $faculty  = makeFaculty($college);
@@ -172,6 +174,7 @@ describe('Submit: draft → dean_review', function () {
             ->post(route('research.submit', $research));
 
         Notification::assertSentTo($dean, ResearchSubmitted::class);
+        Notification::assertSentTo($faculty, ResearchSubmissionConfirmed::class);
     });
 
     it('submit fails when research has no documents', function () {
@@ -324,7 +327,7 @@ describe('Dean: endorse / return / reject', function () {
         expect($research->fresh()->approval_stage)->toBe('rejected');
     });
 
-    it('rejection does NOT notify the primary author (only dean)', function () {
+    it('rejection notifies the primary author and the college dean', function () {
         Notification::fake();
         $college  = makeCollege();
         $faculty  = makeFaculty($college);
@@ -335,7 +338,7 @@ describe('Dean: endorse / return / reject', function () {
         $this->actingAs($dean)
             ->post(route('approval.reject', $research), ['remarks' => 'Out of scope.']);
 
-        Notification::assertNotSentTo($faculty, \App\Notifications\ResearchRejected::class);
+        Notification::assertSentTo($faculty, ResearchRejected::class);
         Notification::assertSentTo($dean, ResearchRejectedDean::class);
     });
 
@@ -452,7 +455,7 @@ describe('OVPRI: approve / return / reject', function () {
         expect($research->fresh()->approval_stage)->toBe('rejected');
     });
 
-    it('OVPRI rejection notifies dean only', function () {
+    it('OVPRI rejection notifies dean and primary author', function () {
         Notification::fake();
         $college  = makeCollege();
         $faculty  = makeFaculty($college);
@@ -465,7 +468,7 @@ describe('OVPRI: approve / return / reject', function () {
             ->post(route('ovpri.reject', $research), ['remarks' => 'Rejected.']);
 
         Notification::assertSentTo($dean, ResearchRejectedDean::class);
-        Notification::assertNotSentTo($faculty, \App\Notifications\ResearchRejected::class);
+        Notification::assertSentTo($faculty, ResearchRejected::class);
     });
 
     it('OVPRI cannot approve research still in dean_review', function () {

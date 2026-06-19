@@ -10,6 +10,7 @@ use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
 use App\Notifications\ResearchProgressUpdated;
+use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchSubmitted;
 use App\Services\ApprovalService;
 use App\Services\FileValidationService;
@@ -381,6 +382,8 @@ class ResearchController extends Controller
         if ($dean) {
             $dean->notify(new ResearchSubmitted($research));
         }
+
+        $research->primaryAuthor?->notify(new ResearchSubmissionConfirmed($research));
 
         $this->forgetResearchDashboardCaches($research);
 

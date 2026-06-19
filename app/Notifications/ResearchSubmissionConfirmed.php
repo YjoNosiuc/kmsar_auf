@@ -6,14 +6,12 @@ use App\Models\Research;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 
-class ResearchRejected extends Notification
+class ResearchSubmissionConfirmed extends Notification
 {
     use Queueable;
 
     public function __construct(
-        public Research $research,
-        public string $remarks,
-        public string $rejectedBy = 'dean',
+        public Research $research
     ) {}
 
     public function via(object $notifiable): array
@@ -23,24 +21,15 @@ class ResearchRejected extends Notification
 
     public function toArray(object $notifiable): array
     {
-        $rejectorLabel = $this->rejectedBy === 'ovpri'
-            ? 'OVPRI'
-            : 'your college dean';
-
         return [
             'research_id' => $this->research->id,
             'reference_number' => $this->research->reference_number,
             'title' => $this->research->title,
             'message' => 'Your research '
                 .$this->research->reference_number
-                .' has been rejected by '
-                .$rejectorLabel
-                .'. Remarks: '
-                .$this->remarks,
-            'remarks' => $this->remarks,
-            'rejected_by' => $this->rejectedBy,
+                .' has been submitted for dean review.',
             'action_url' => route('research.show', $this->research),
-            'type' => 'rejected',
+            'type' => 'submission_confirmed',
         ];
     }
 }

@@ -6,6 +6,7 @@ use App\Models\Research;
 use App\Models\User;
 use App\Notifications\ResearchApproved;
 use App\Notifications\ResearchApprovedDean;
+use App\Notifications\ResearchRejected;
 use App\Notifications\ResearchRejectedDean;
 use App\Services\ApprovalService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -154,6 +155,10 @@ class ApprovalController extends Controller
             $dean->notify(new ResearchRejectedDean($research));
         }
 
+        $research->primaryAuthor?->notify(
+            new ResearchRejected($research, $validated['remarks'], 'dean')
+        );
+
         $this->forgetResearchDashboardCaches($research);
 
         return redirect()
@@ -267,6 +272,10 @@ class ApprovalController extends Controller
         if ($dean) {
             $dean->notify(new ResearchRejectedDean($research));
         }
+
+        $research->primaryAuthor?->notify(
+            new ResearchRejected($research, $validated['remarks'], 'ovpri')
+        );
 
         $this->forgetResearchDashboardCaches($research);
 

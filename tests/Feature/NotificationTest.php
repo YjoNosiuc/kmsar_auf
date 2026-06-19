@@ -10,7 +10,9 @@ use App\Notifications\ResearchApprovedDean;
 use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
 use App\Notifications\ResearchProgressUpdated;
+use App\Notifications\ResearchRejected;
 use App\Notifications\ResearchRejectedDean;
+use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchReturned;
 use App\Notifications\ResearchReturnedToDean;
 use App\Notifications\ResearchSubmitted;
@@ -53,7 +55,7 @@ describe('ResearchSubmitted', function () {
         Notification::assertNotSentTo($ovpriB, ResearchSubmitted::class);
     });
 
-    it('is NOT sent to the faculty submitter themselves on submit', function () {
+    it('is sent to the faculty submitter as a submission confirmation', function () {
         Notification::fake();
         $college = makeCollege();
         $faculty = makeFaculty($college);
@@ -61,6 +63,7 @@ describe('ResearchSubmitted', function () {
 
         $this->actingAs($faculty)->post(route('research.submit', $research));
 
+        Notification::assertSentTo($faculty, ResearchSubmissionConfirmed::class);
         Notification::assertNotSentTo($faculty, ResearchSubmitted::class);
     });
 });
@@ -356,6 +359,39 @@ describe('ResearchRejectedDean', function () {
         $this->actingAs($ovpri)->post(route('ovpri.reject', $research), ['remarks' => 'Not aligned.']);
 
         Notification::assertNotSentTo($faculty, ResearchRejectedDean::class);
+    });
+});
+
+// ─────────────────────────────────────────────
+// ResearchRejected
+// ─────────────────────────────────────────────
+
+describe('ResearchRejected', function () {
+
+    it('is sent to the primary author when the dean rejects', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $dean = $college->headUser;
+
+        $this->actingAs($dean)->post(route('approval.reject', $research), ['remarks' => 'Out of scope.']);
+
+        Notification::assertSentTo($faculty, ResearchRejected::class);
+    });
+
+    it('is sent to the primary author when OVPRI rejects', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $ovpri = makeOvpri();
+
+        $this->actingAs($ovpri)->post(route('ovpri.reject', $research), ['remarks' => 'Not aligned.']);
+
+        Notification::assertSentTo($faculty, ResearchRejected::class);
     });
 });
 

@@ -47,7 +47,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
                 __('Co-Authors'),
                 __('Registration Type'),
                 __('Title of Research'),
-                __('Journal/Conference Presentation'),
+                __('Research Progress'),
             ];
         }
 
@@ -59,8 +59,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
             __('Title of Research'),
             __('Registration Type'),
             __('Classification'),
-            __('Journal/Conference Presentation'),
-            __('Progress Status'),
+            __('Research Progress'),
         ];
     }
 
@@ -99,7 +98,6 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
             $r->title,
             $this->service->registrationTypeLabel($r->registration_type),
             $this->service->classificationLabel($r->research_classification),
-            $this->service->journalConferencePresentation($r),
             $this->service->statusLabel($r->status),
         ];
     }

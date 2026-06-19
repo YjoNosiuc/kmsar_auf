@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\College;
+use App\Models\Research;
 use App\Models\User;
 use App\Services\ReportGeneratorService;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
@@ -32,8 +34,17 @@ class ReportController extends Controller
         'internally_funded',
         'externally_funded',
         'thesis',
+        'thesis_dissertation',
         'collaboration',
         'other',
+    ];
+
+    private const APPROVAL_STAGE_VALUES = [
+        'draft',
+        'dean_review',
+        'ovpri_review',
+        'approved',
+        'rejected',
     ];
 
     public function __construct(
@@ -43,6 +54,8 @@ class ReportController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
+        $perPage = min(50, max(10, $request->integer('per_page', 10)));
+        $page = max(1, $request->integer('page', 1));
 
         if ($user->hasRole(['ovpri_admin', 'cdaic_admin', 'super_admin'])) {
             $colleges = College::query()
@@ -56,9 +69,13 @@ class ReportController extends Controller
                 ->get();
 
             $filters = $this->extractFiltersFromRequest($request, false);
-
-            $preview = $this->reportGenerator->ovpriReport($filters, 10);
-            $totalCount = $this->reportGenerator->ovpriReportCount($filters);
+            $query = $this->reportQuery($filters, false, null);
+            $totalCount = (clone $query)->count();
+            $preview = (clone $query)
+                ->orderByDesc('created_at')
+                ->offset(($page - 1) * $perPage)
+                ->limit($perPage)
+                ->get();
 
             return view('reports.index', [
                 'reportScope' => 'ovpri',
@@ -68,12 +85,14 @@ class ReportController extends Controller
                 'preview' => $preview,
                 'totalCount' => $totalCount,
                 'filters' => $filters,
+                'page' => $page,
+                'perPage' => $perPage,
                 'reportGenerator' => $this->reportGenerator,
                 'collegeName' => null,
                 'reportStats' => [
                     'matching' => $totalCount,
-                    'scopus' => $this->reportGenerator->ovpriScopusCount($filters),
-                    'colleges_or_faculty' => $this->reportGenerator->ovpriDistinctCollegeCount($filters),
+                    'scopus' => $this->countWithExtraWhere($filters, false, null, fn (Builder $q) => $q->where('status', 'published_scopus')),
+                    'colleges_or_faculty' => $this->distinctCollegeCount($filters),
                 ],
             ]);
         }
@@ -93,9 +112,13 @@ class ReportController extends Controller
                 ->get();
 
             $filters = $this->extractFiltersFromRequest($request, true);
-
-            $preview = $this->reportGenerator->collegeReport($collegeId, $filters, 10);
-            $totalCount = $this->reportGenerator->collegeReportCount($collegeId, $filters);
+            $query = $this->reportQuery($filters, true, $collegeId);
+            $totalCount = (clone $query)->count();
+            $preview = (clone $query)
+                ->orderByDesc('created_at')
+                ->offset(($page - 1) * $perPage)
+                ->limit($perPage)
+                ->get();
 
             return view('reports.index', [
                 'reportScope' => 'college',
@@ -105,13 +128,15 @@ class ReportController extends Controller
                 'preview' => $preview,
                 'totalCount' => $totalCount,
                 'filters' => $filters,
+                'page' => $page,
+                'perPage' => $perPage,
                 'reportGenerator' => $this->reportGenerator,
                 'collegeName' => $collegeName,
                 'collegeId' => $collegeId,
                 'reportStats' => [
                     'matching' => $totalCount,
-                    'published' => $this->reportGenerator->collegePublishedCount($collegeId, $filters),
-                    'presented' => $this->reportGenerator->collegePresentedCount($collegeId, $filters),
+                    'published' => $this->countWithExtraWhere($filters, true, $collegeId, fn (Builder $q) => $q->whereIn('status', ['published_scopus', 'published_non_indexed'])),
+                    'presented' => $this->countWithExtraWhere($filters, true, $collegeId, fn (Builder $q) => $q->whereIn('status', ['presented_internal', 'presented_external'])),
                 ],
             ]);
         }
@@ -132,27 +157,15 @@ class ReportController extends Controller
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'research_classification' => ['nullable', Rule::in(self::CLASSIFICATION_VALUES)],
             'status' => ['nullable', Rule::in(self::STATUS_VALUES)],
+            'approval_stage' => ['nullable', Rule::in(self::APPROVAL_STAGE_VALUES)],
             'faculty' => ['nullable', 'integer', 'exists:users,id'],
+            'sdg' => ['nullable', 'integer', 'between:1,17'],
+            'funding_agency' => ['nullable', 'string', 'max:100'],
+            'academic_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'include_rejected' => ['nullable', Rule::in(['0', '1'])],
         ]);
 
-        $filters = [
-            'college_id' => $validated['college_id'] ?? null,
-            'registration_type' => $validated['registration_type'] ?? null,
-            'date_from' => $validated['date_from'] ?? null,
-            'date_to' => $validated['date_to'] ?? null,
-            'research_classification' => $validated['research_classification'] ?? null,
-            'status' => $validated['status'] ?? null,
-            'faculty' => $validated['faculty'] ?? null,
-        ];
-
-        if (($validated['report_type'] ?? '') === 'college') {
-            unset($filters['registration_type']);
-        }
-
-        $filters = array_filter(
-            $filters,
-            static fn ($v) => $v !== null && $v !== ''
-        );
+        $filters = $this->normalizeFilters($validated);
 
         $filtersForPdfSummary = $filters;
 
@@ -161,7 +174,9 @@ class ReportController extends Controller
                 abort(403);
             }
 
-            $researches = $this->reportGenerator->ovpriReport($filters);
+            $researches = $this->reportQuery($filters, false, null)
+                ->orderByDesc('created_at')
+                ->get();
             $collegeReport = false;
             $title = __('University research report (OVPRI)');
             $collegeId = null;
@@ -186,7 +201,9 @@ class ReportController extends Controller
 
             unset($filters['college_id']);
 
-            $researches = $this->reportGenerator->collegeReport($collegeId, $filters);
+            $researches = $this->reportQuery($filters, true, $collegeId)
+                ->orderByDesc('created_at')
+                ->get();
             $collegeReport = true;
             $title = __('College research report');
         }
@@ -208,6 +225,7 @@ class ReportController extends Controller
             'records' => $researches,
             'reportTitle' => $title,
             'filters' => $appliedFilters,
+            'recordCount' => $researches->count(),
             'generatedAt' => now()->format('F d, Y h:i A'),
             'role' => auth()->user()->getRoleNames()->first(),
             'report_type' => $validated['report_type'],
@@ -259,15 +277,33 @@ class ReportController extends Controller
         }
 
         if (! empty($filters['research_classification'])) {
-            $raw = (string) $filters['research_classification'];
-            $label = ucwords(str_replace('_', ' ', $raw));
-            $lines[] = __('Classification: :c', ['c' => $label]);
+            $lines[] = __('Classification: :c', [
+                'c' => $service->classificationLabel((string) $filters['research_classification']),
+            ]);
         }
 
         if (! empty($filters['status'])) {
-            $lines[] = __('Progress status: :s', [
+            $lines[] = __('Research progress: :s', [
                 's' => $service->statusLabel((string) $filters['status']),
             ]);
+        }
+
+        if (! empty($filters['approval_stage'])) {
+            $lines[] = __('Approval status: :s', [
+                's' => $this->approvalStageLabel((string) $filters['approval_stage']),
+            ]);
+        }
+
+        if (! empty($filters['sdg'])) {
+            $lines[] = __('SDG :n', ['n' => (int) $filters['sdg']]);
+        }
+
+        if (! empty($filters['funding_agency'])) {
+            $lines[] = __('Funding agency: :a', ['a' => $filters['funding_agency']]);
+        }
+
+        if (! empty($filters['academic_year'])) {
+            $lines[] = __('Academic year: :y', ['y' => (int) $filters['academic_year']]);
         }
 
         if (! empty($filters['faculty'])) {
@@ -275,6 +311,12 @@ class ReportController extends Controller
             $lines[] = __('Primary author: :name', [
                 'name' => $facultyUser?->name ?? (string) $filters['faculty'],
             ]);
+        }
+
+        if (($filters['include_rejected'] ?? '0') !== '1') {
+            $lines[] = __('Rejected records: excluded');
+        } else {
+            $lines[] = __('Rejected records: included');
         }
 
         return $lines;
@@ -290,6 +332,12 @@ class ReportController extends Controller
             'date_to',
             'research_classification',
             'status',
+            'approval_stage',
+            'sdg',
+            'funding_agency',
+            'academic_year',
+            'include_rejected',
+            'registration_type',
         ];
 
         if (! $collegeContext) {
@@ -298,7 +346,123 @@ class ReportController extends Controller
             $keys[] = 'faculty';
         }
 
-        return $request->only($keys);
+        return $this->normalizeFilters($request->only($keys));
+    }
+
+    /**
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    protected function normalizeFilters(array $input): array
+    {
+        $filters = array_filter(
+            $input,
+            static fn ($v) => $v !== null && $v !== ''
+        );
+
+        if (! isset($filters['include_rejected'])) {
+            $filters['include_rejected'] = '0';
+        }
+
+        return $filters;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    protected function reportQuery(array $filters, bool $collegeScoped, ?int $scopedCollegeId): Builder
+    {
+        $query = Research::query()->with([
+            'primaryAuthor',
+            'motherCollege',
+            'researchAuthors',
+        ]);
+
+        if ($collegeScoped && $scopedCollegeId !== null) {
+            $query->where('mother_college_id', $scopedCollegeId);
+        } elseif (! empty($filters['college_id'])) {
+            $query->where('mother_college_id', (int) $filters['college_id']);
+        }
+
+        if (! empty($filters['faculty'])) {
+            $query->where('primary_author_id', (int) $filters['faculty']);
+        }
+
+        if (! empty($filters['registration_type'])) {
+            $query->where('registration_type', $filters['registration_type']);
+        }
+
+        if (! empty($filters['date_from'])) {
+            $query->whereDate('created_at', '>=', $filters['date_from']);
+        }
+
+        if (! empty($filters['date_to'])) {
+            $query->whereDate('created_at', '<=', $filters['date_to']);
+        }
+
+        if (! empty($filters['research_classification'])) {
+            $query->where('research_classification', $filters['research_classification']);
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        if (! empty($filters['approval_stage'])) {
+            $query->where('approval_stage', $filters['approval_stage']);
+        }
+
+        if (! empty($filters['sdg'])) {
+            $query->whereJsonContains('sdg_tags', (int) $filters['sdg']);
+        }
+
+        if (! empty($filters['funding_agency'])) {
+            $query->where('funding_agency', 'like', '%'.$filters['funding_agency'].'%');
+        }
+
+        if (! empty($filters['academic_year'])) {
+            $query->whereYear('start_date', (int) $filters['academic_year']);
+        }
+
+        if (($filters['include_rejected'] ?? '0') !== '1') {
+            $query->where('approval_stage', '!=', 'rejected');
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    protected function countWithExtraWhere(array $filters, bool $collegeScoped, ?int $scopedCollegeId, callable $callback): int
+    {
+        $query = $this->reportQuery($filters, $collegeScoped, $scopedCollegeId);
+        $callback($query);
+
+        return $query->count();
+    }
+
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    protected function distinctCollegeCount(array $filters): int
+    {
+        return (int) $this->reportQuery($filters, false, null)
+            ->whereNotNull('mother_college_id')
+            ->distinct('mother_college_id')
+            ->count('mother_college_id');
+    }
+
+    protected function approvalStageLabel(string $stage): string
+    {
+        return match ($stage) {
+            'draft' => __('Draft'),
+            'dean_review' => __('Dean review'),
+            'ovpri_review' => __('OVPRI review'),
+            'approved' => __('Approved'),
+            'rejected' => __('Rejected'),
+            default => ucwords(str_replace('_', ' ', $stage)),
+        };
     }
 
     public function download(Request $request, string $token): BinaryFileResponse

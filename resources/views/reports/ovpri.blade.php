@@ -9,7 +9,7 @@
 @section('content')
     <x-page-header
         :title="__('University research reports')"
-        :subtitle="__('Filter by college, registration type, dates created, classification, and progress status. Export to PDF or Excel.')"
+        :subtitle="__('Filter by college, SDG, classification, funding, academic year, research progress, and approval status. Export to PDF or Excel.')"
         :breadcrumb="[
             ['label' => __('Reports')],
         ]"
@@ -30,7 +30,9 @@
     @endif
 
     @php
-        $filterHidden = collect($filters ?? [])->filter(fn ($v) => $v !== null && $v !== '')->all();
+        $previewRows = $preview ?? $previewRows ?? collect();
+        $exportFilters = array_merge(['include_rejected' => '0'], $filters ?? []);
+        $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
         $statusOpts = [
             'proposal' => __('Proposal / abstract'),
             'ongoing' => __('Ongoing'),
@@ -47,9 +49,25 @@
             'internally_funded' => __('Internally funded'),
             'externally_funded' => __('Externally funded'),
             'thesis' => __('Thesis / dissertation'),
+            'thesis_dissertation' => __('Thesis/Dissertation of Student/Advisee'),
             'collaboration' => __('Collaboration'),
             'other' => __('Other'),
         ];
+        $approvalStageOpts = [
+            'draft' => __('Draft'),
+            'dean_review' => __('Dean review'),
+            'ovpri_review' => __('OVPRI review'),
+            'approved' => __('Approved'),
+            'rejected' => __('Rejected'),
+        ];
+        $page = max(1, (int) ($page ?? 1));
+        $perPage = max(10, (int) ($perPage ?? 10));
+        $totalCount = (int) ($totalCount ?? $previewRows->count());
+        $totalPages = $totalCount > 0 ? (int) ceil($totalCount / $perPage) : 1;
+        $rangeStart = $totalCount > 0 ? (($page - 1) * $perPage) + 1 : 0;
+        $rangeEnd = min($page * $perPage, $totalCount);
+        $paginationQuery = collect(request()->query())->except('page')->all();
+        $academicYears = range((int) now()->year + 1, (int) now()->year - 14);
     @endphp
 
     <x-card :title="__('Filters')" accent="primary" class="mb-8">
@@ -59,41 +77,26 @@
                     name="college_id"
                     :label="__('Mother college')"
                     :placeholder="__('All colleges')"
-                    :options="$colleges->mapWithKeys(fn ($c) => [$c->id => $c->code.' — '.$c->name])->all()"
-                    :value="old('college_id', $filters['college_id'] ?? '')"
+                    :options="($colleges ?? collect())->mapWithKeys(fn ($c) => [$c->id => $c->code.' — '.$c->name])->all()"
+                    :value="$filters['college_id'] ?? ''"
                 />
-
-                <x-form.select
-                    name="research_classification"
-                    :label="__('Classification')"
-                    :placeholder="__('Any')"
-                    :options="$classOpts"
-                    :value="old('research_classification', $filters['research_classification'] ?? '')"
-                />
-
-                <x-form.select
-                    name="status"
-                    :label="__('Progress status')"
-                    :placeholder="__('Any')"
-                    :options="$statusOpts"
-                    :value="old('status', $filters['status'] ?? '')"
-                />
-
-                <x-form.input
-                    name="date_from"
-                    type="date"
-                    :label="__('Created from')"
-                    :value="old('date_from', $filters['date_from'] ?? '')"
-                />
-
-                <x-form.input
-                    name="date_to"
-                    type="date"
-                    :label="__('Created to')"
-                    :value="old('date_to', $filters['date_to'] ?? '')"
-                />
+                <x-form.select name="research_classification" :label="__('Classification')" :placeholder="__('Any')" :options="$classOpts" :value="$filters['research_classification'] ?? ''" />
+                <x-form.select name="status" :label="__('Research progress')" :placeholder="__('Any')" :options="$statusOpts" :value="$filters['status'] ?? ''" />
+                <x-form.select name="approval_stage" :label="__('Approval status')" :placeholder="__('Any')" :options="$approvalStageOpts" :value="$filters['approval_stage'] ?? ''" />
+                <x-form.select name="sdg" :label="__('SDG')" :placeholder="__('Any SDG')" :options="collect(range(1, 17))->mapWithKeys(fn ($n) => [$n => __('SDG :n', ['n' => $n])])->all()" :value="$filters['sdg'] ?? ''" />
+                <x-form.input name="funding_agency" :label="__('Funding agency')" :value="$filters['funding_agency'] ?? ''" :hint="__('Partial match')" />
+                <x-form.select name="academic_year" :label="__('Academic year')" :placeholder="__('Any year')" :options="collect($academicYears)->mapWithKeys(fn ($y) => [$y => (string) $y])->all()" :value="$filters['academic_year'] ?? ''" />
+                <x-form.input name="date_from" type="date" :label="__('Created from')" :value="$filters['date_from'] ?? ''" />
+                <x-form.input name="date_to" type="date" :label="__('Created to')" :value="$filters['date_to'] ?? ''" />
+                <x-form.select name="per_page" :label="__('Per page')" :options="['10' => '10', '25' => '25', '50' => '50']" :value="(string) $perPage" />
             </div>
-
+            <div>
+                <input type="hidden" name="include_rejected" value="0">
+                <label class="flex items-center gap-2 text-sm text-slate-600">
+                    <input type="checkbox" name="include_rejected" value="1" @checked(($filters['include_rejected'] ?? '0') === '1') class="rounded border-slate-300 text-[#1E3A8A]">
+                    {{ __('Include rejected records in preview and export') }}
+                </label>
+            </div>
             <div class="flex flex-wrap items-center gap-3">
                 <x-button type="submit" variant="primary">{{ __('Apply filters') }}</x-button>
                 <x-button variant="outline" href="{{ route('reports.index') }}">{{ __('Reset') }}</x-button>
@@ -102,36 +105,30 @@
     </x-card>
 
     <x-card :title="__('Export')" accent="gold" class="mb-8">
-        <p class="kmsar-body mb-4 text-sm text-[var(--color-text-secondary)]">
-            {{ __('Download the full result set for the filters above (not limited to the preview).') }}
-        </p>
+        <p class="kmsar-body mb-4 text-sm text-[var(--color-text-secondary)]">{{ __('Download the full result set for the filters above (not limited to the preview).') }}</p>
         <div class="flex flex-wrap gap-3">
-            <form method="post" action="{{ route('reports.export') }}" class="inline">
-                @csrf
-                <input type="hidden" name="report_type" value="ovpri">
-                <input type="hidden" name="format" value="pdf">
-                @foreach ($filterHidden as $name => $value)
-                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
-                @endforeach
-                <button type="submit" class="kmsar-btn kmsar-btn--primary kmsar-btn--sm">{{ __('PDF') }}</button>
-            </form>
-            <form method="post" action="{{ route('reports.export') }}" class="inline">
-                @csrf
-                <input type="hidden" name="report_type" value="ovpri">
-                <input type="hidden" name="format" value="excel">
-                @foreach ($filterHidden as $name => $value)
-                    <input type="hidden" name="{{ $name }}" value="{{ $value }}">
-                @endforeach
-                <button type="submit" class="kmsar-btn kmsar-btn--secondary kmsar-btn--sm">{{ __('Excel') }}</button>
-            </form>
+            @foreach (['pdf' => 'primary', 'excel' => 'secondary'] as $fmt => $variant)
+                <form method="post" action="{{ route('reports.export') }}" class="inline">
+                    @csrf
+                    <input type="hidden" name="report_type" value="ovpri">
+                    <input type="hidden" name="format" value="{{ $fmt }}">
+                    @foreach ($filterHidden as $name => $value)
+                        <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                    @endforeach
+                    <button type="submit" class="kmsar-btn kmsar-btn--{{ $variant }} kmsar-btn--sm">{{ strtoupper($fmt) }}</button>
+                </form>
+            @endforeach
         </div>
     </x-card>
 
-    <x-card :title="__('Data preview')" accent="primary" :count="$previewRows->count()">
+    <x-card :title="__('Data preview')" accent="primary">
         <p class="kmsar-body mb-4 text-sm text-[var(--color-text-secondary)]">
-            {{ __('Showing up to 25 records matching filters (created date range).') }}
+            @if ($totalCount > 0)
+                {{ __('Showing :start–:end of :total records', ['start' => number_format($rangeStart), 'end' => number_format($rangeEnd), 'total' => number_format($totalCount)]) }}
+            @else
+                {{ __('No records match the current filters.') }}
+            @endif
         </p>
-
         <div class="kmsar-table-wrap">
             <table class="kmsar-table">
                 <thead>
@@ -140,7 +137,8 @@
                         <th scope="col">{{ __('Title') }}</th>
                         <th scope="col">{{ __('College') }}</th>
                         <th scope="col">{{ __('Primary author') }}</th>
-                        <th scope="col">{{ __('Progress status') }}</th>
+                        <th scope="col">{{ __('Research Progress') }}</th>
+                        <th scope="col">{{ __('Approval') }}</th>
                         <th scope="col">{{ __('Created') }}</th>
                     </tr>
                 </thead>
@@ -152,17 +150,35 @@
                             <td>{{ $row->motherCollege?->code ?? '—' }}</td>
                             <td>{{ $row->primaryAuthor?->name ?? '—' }}</td>
                             <td class="kmsar-table-cell-sub">{{ $reportGenerator->statusLabel($row->status) }}</td>
+                            <td>
+                                @if ($row->approval_stage === 'rejected')
+                                    <span class="kmsar-badge kmsar-badge--rejected">{{ __('Rejected') }}</span>
+                                @else
+                                    <span class="kmsar-badge kmsar-badge--draft">{{ $approvalStageOpts[$row->approval_stage] ?? ucwords(str_replace('_', ' ', $row->approval_stage)) }}</span>
+                                @endif
+                            </td>
                             <td class="whitespace-nowrap kmsar-table-cell-sub">{{ $row->created_at->format('M j, Y') }}</td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center kmsar-body" style="padding: var(--space-6);">
-                                {{ __('No records match the current filters.') }}
-                            </td>
+                            <td colspan="7" class="text-center kmsar-body" style="padding: var(--space-6);">{{ __('No records match the current filters.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
+        @if ($totalCount > $perPage)
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <span class="text-sm text-slate-500">{{ __('Page :page of :pages', ['page' => $page, 'pages' => $totalPages]) }}</span>
+                <div class="flex gap-2">
+                    @if ($page > 1)
+                        <x-button variant="outline" size="sm" href="{{ route('reports.index', array_merge($paginationQuery, ['page' => $page - 1])) }}">{{ __('Previous') }}</x-button>
+                    @endif
+                    @if ($page < $totalPages)
+                        <x-button variant="primary" size="sm" href="{{ route('reports.index', array_merge($paginationQuery, ['page' => $page + 1])) }}">{{ __('Load more') }}</x-button>
+                    @endif
+                </div>
+            </div>
+        @endif
     </x-card>
 @endsection

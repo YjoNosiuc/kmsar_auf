@@ -24,14 +24,17 @@
         <div style="font-size: 8px; color: #64748b; margin-top: 4px;">OVPRI — Knowledge Management System for Academic Research</div>
         <div style="font-size: 12px; font-weight: 700; color: #0f172a; margin: 10px 0 6px 0;">{{ $reportTitle }}</div>
         <div style="font-size: 8px; color: #475569; margin-bottom: 3px;">{{ __('Generated') }}: {{ $generatedAtStr }}</div>
+        @php
+            $filterLines = is_array($filters ?? null) ? array_values(array_filter($filters)) : [];
+            $filterSummary = $filterLines !== [] ? implode(', ', $filterLines) : __('All matching records');
+        @endphp
         <div style="font-size: 8px; color: #334155; margin-top: 8px; padding: 8px 10px; background: #F1F5F9; border: 1px solid #E2E8F0;">
-            <strong style="color: #1e293b;">{{ __('Filters applied') }}</strong>
-            @if (! empty($filters) && is_array($filters))
-                @foreach ($filters as $line)
-                    <div style="margin-top: 2px;">{{ $line }}</div>
-                @endforeach
-            @else
-                <div style="margin-top: 2px;">{{ __('None (all matching records)') }}</div>
+            <strong style="color: #1e293b;">{{ __('Filtered by') }}:</strong>
+            <span style="margin-left: 4px;">{{ $filterSummary }}</span>
+            @if (! empty($recordCount))
+                <div style="margin-top: 6px; color: #475569;">
+                    {{ __('Total records in this export: :count', ['count' => number_format((int) $recordCount)]) }}
+                </div>
             @endif
         </div>
     </div>
@@ -49,14 +52,14 @@
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Title of Research') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Registration Type') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Classification') }}</th>
-                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Journal/Conference Presentation') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Research Progress') }}</th>
                 @else
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Faculty') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __("Author's Name") }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Co-Authors') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Registration Type') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Title of Research') }}</th>
-                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Journal/Conference Presentation') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Research Progress') }}</th>
                 @endif
             </tr>
         </thead>
@@ -86,7 +89,7 @@
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $research->title }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->registrationTypeLabel($research->registration_type) }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->classificationLabel($research->research_classification) }}</td>
-                        <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->journalConferencePresentation($research) }}</td>
+                        <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->statusLabel($research->status) }}</td>
                     @else
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $facultyLine }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $authorName }}</td>

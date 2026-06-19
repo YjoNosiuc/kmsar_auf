@@ -33,10 +33,54 @@
     @include('faculty.research.partials.registration-stepper', ['currentStep' => 1, 'research' => $research])
 
     <x-card :title="__('Research information')" accent="primary">
+        @php
+            $currentOutputs = old('expected_output')
+                ? (array) old('expected_output')
+                : ($research->expectedOutputKeys());
+            $sdgNames = [
+                1 => 'No Poverty',
+                2 => 'Zero Hunger',
+                3 => 'Good Health and Well-being',
+                4 => 'Quality Education',
+                5 => 'Gender Equality',
+                6 => 'Clean Water and Sanitation',
+                7 => 'Affordable and Clean Energy',
+                8 => 'Decent Work and Economic Growth',
+                9 => 'Industry, Innovation and Infrastructure',
+                10 => 'Reduced Inequalities',
+                11 => 'Sustainable Cities and Communities',
+                12 => 'Responsible Consumption and Production',
+                13 => 'Climate Action',
+                14 => 'Life Below Water',
+                15 => 'Life on Land',
+                16 => 'Peace, Justice and Strong Institutions',
+                17 => 'Partnerships for the Goals',
+            ];
+            $currentSdgs = old('sdg_tags')
+                ? array_values(array_map('intval', is_array(old('sdg_tags')) ? old('sdg_tags') : (json_decode(old('sdg_tags'), true) ?? [])))
+                : array_values(array_map('intval', is_array($research->sdg_tags) ? $research->sdg_tags : (json_decode($research->sdg_tags ?? '[]', true) ?? [])));
+            $selectedOtherColleges = old('other_college_id')
+                ? array_values(array_map('intval', (array) old('other_college_id')))
+                : $research->otherCollegeIds();
+        @endphp
+
         <form
             method="post"
             action="{{ route('research.wizard.details.save', $research) }}"
             class="space-y-6"
+            x-data="{
+                motherCollegeId: '{{ (string) old('mother_college_id', $research->mother_college_id ?? auth()->user()->college_id) }}',
+                otherCollegeSelected: @js($selectedOtherColleges),
+                toggleOtherCollege(id) {
+                    if (String(id) === this.motherCollegeId) return;
+                    const i = this.otherCollegeSelected.indexOf(id);
+                    if (i > -1) this.otherCollegeSelected.splice(i, 1);
+                    else this.otherCollegeSelected.push(id);
+                    this.otherCollegeSelected.sort((a, b) => a - b);
+                },
+                isOtherCollegeOn(id) { return this.otherCollegeSelected.includes(id); },
+            }"
+            x-effect="otherCollegeSelected = otherCollegeSelected.filter(id => String(id) !== motherCollegeId)"
         >
             @csrf
             @method('PUT')
@@ -47,34 +91,6 @@
                 <strong class="text-[var(--color-text-primary)]">{{ __('Reference') }}:</strong>
                 {{ $research->reference_number }}
             </div>
-
-            @php
-                $currentOutputs = old('expected_output')
-                    ? (array) old('expected_output')
-                    : ($research->expectedOutputKeys());
-                $sdgNames = [
-                    1 => 'No Poverty',
-                    2 => 'Zero Hunger',
-                    3 => 'Good Health and Well-being',
-                    4 => 'Quality Education',
-                    5 => 'Gender Equality',
-                    6 => 'Clean Water and Sanitation',
-                    7 => 'Affordable and Clean Energy',
-                    8 => 'Decent Work and Economic Growth',
-                    9 => 'Industry, Innovation and Infrastructure',
-                    10 => 'Reduced Inequalities',
-                    11 => 'Sustainable Cities and Communities',
-                    12 => 'Responsible Consumption and Production',
-                    13 => 'Climate Action',
-                    14 => 'Life Below Water',
-                    15 => 'Life on Land',
-                    16 => 'Peace, Justice and Strong Institutions',
-                    17 => 'Partnerships for the Goals',
-                ];
-                $currentSdgs = old('sdg_tags')
-                    ? array_values(array_map('intval', is_array(old('sdg_tags')) ? old('sdg_tags') : (json_decode(old('sdg_tags'), true) ?? [])))
-                    : array_values(array_map('intval', is_array($research->sdg_tags) ? $research->sdg_tags : (json_decode($research->sdg_tags ?? '[]', true) ?? [])));
-            @endphp
 
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                 <div style="grid-column:1/-1;">
@@ -100,7 +116,7 @@
                 <div style="grid-column:1/-1;">
                     <div class="kmsar-form-group">
                         <label class="kmsar-form-label">{{ __('Mother College / Unit') }} <span class="kmsar-form-required">*</span></label>
-                        <select name="mother_college_id" class="kmsar-select" required>
+                        <select name="mother_college_id" class="kmsar-select" required x-model="motherCollegeId">
                             @foreach ($colleges as $college)
                                 <option
                                     value="{{ $college->id }}"
@@ -119,19 +135,28 @@
                 <div style="grid-column:1/-1;">
                     <div class="kmsar-form-group">
                         <label class="kmsar-form-label">{{ __('Other College/Unit Affiliation') }} <span style="font-size:11px;color:#94A3B8;">({{ __('optional') }})</span></label>
-                        <select name="other_college_id" class="kmsar-select">
-                            <option value="">— {{ __('None') }} —</option>
+                        <div class="kmsar-sdg-grid" role="group" aria-label="{{ __('Other college affiliations') }}">
                             @foreach ($colleges as $college)
-                                <option
-                                    value="{{ $college->id }}"
-                                    {{ (string) old('other_college_id', $research->other_college_id) === (string) $college->id ? 'selected' : '' }}
+                                <button
+                                    type="button"
+                                    class="kmsar-sdg-chip"
+                                    :class="{ 'selected': isOtherCollegeOn({{ $college->id }}) }"
+                                    :aria-pressed="isOtherCollegeOn({{ $college->id }}) ? 'true' : 'false'"
+                                    :disabled="String({{ $college->id }}) === motherCollegeId"
+                                    @click="toggleOtherCollege({{ $college->id }})"
                                 >
                                     {{ $college->code }} — {{ $college->name }}
-                                </option>
+                                </button>
                             @endforeach
-                        </select>
-                        <p class="kmsar-form-hint">{{ __('Select if this research involves another AUF college or unit.') }}</p>
+                        </div>
+                        <template x-for="collegeId in otherCollegeSelected" :key="collegeId">
+                            <input type="hidden" name="other_college_id[]" :value="collegeId">
+                        </template>
+                        <p class="kmsar-form-hint">{{ __('Select all other AUF colleges or units involved in this research.') }}</p>
                         @error('other_college_id')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                        @error('other_college_id.*')
                             <p class="kmsar-form-error">{{ $message }}</p>
                         @enderror
                     </div>
@@ -146,6 +171,7 @@
                         'internally_funded' => __('Internally funded'),
                         'externally_funded' => __('Externally funded'),
                         'thesis' => __('Thesis / dissertation'),
+                        'thesis_dissertation' => __('Thesis/Dissertation of Student/Advisee'),
                         'collaboration' => __('Collaboration'),
                         'other' => __('Other'),
                     ]"
@@ -261,6 +287,7 @@
                         name="sdg_tags"
                         :selected="$currentSdgs"
                         :error="$errors->first('sdg_tags')"
+                        :required="true"
                     />
                 </div>
             </div>

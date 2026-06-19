@@ -72,8 +72,15 @@
                 <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ $research->motherCollege?->name ?? '—' }}</div>
             </div>
             <div>
-                <div class="kmsar-label">{{ __('Other affiliated college') }}</div>
-                <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ $research->otherCollege?->name ?? '—' }}</div>
+                <div class="kmsar-label">{{ __('Other affiliated college(s)') }}</div>
+                @php $affiliatedColleges = $research->otherColleges(); @endphp
+                @if ($affiliatedColleges->count() > 0)
+                    <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">
+                        {{ $affiliatedColleges->pluck('name')->implode(', ') }}
+                    </div>
+                @else
+                    <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">—</div>
+                @endif
             </div>
             <div>
                 <div class="kmsar-label">{{ __('Registration type') }}</div>

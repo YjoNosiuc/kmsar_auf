@@ -41,6 +41,19 @@
             method="post"
             action="{{ route('research.update', $research) }}"
             class="space-y-6"
+            x-data="{
+                motherCollegeId: '{{ (string) old('mother_college_id', $research->mother_college_id ?? auth()->user()->college_id) }}',
+                otherCollegeSelected: @js($selectedOtherColleges),
+                toggleOtherCollege(id) {
+                    if (String(id) === this.motherCollegeId) return;
+                    const i = this.otherCollegeSelected.indexOf(id);
+                    if (i > -1) this.otherCollegeSelected.splice(i, 1);
+                    else this.otherCollegeSelected.push(id);
+                    this.otherCollegeSelected.sort((a, b) => a - b);
+                },
+                isOtherCollegeOn(id) { return this.otherCollegeSelected.includes(id); },
+            }"
+            x-effect="otherCollegeSelected = otherCollegeSelected.filter(id => String(id) !== motherCollegeId)"
         >
             @csrf
             @method('PUT')
@@ -59,6 +72,9 @@
                 $currentSdgs = old('sdg_tags')
                     ? array_values(array_map('intval', is_array(old('sdg_tags')) ? old('sdg_tags') : (json_decode(old('sdg_tags'), true) ?? [])))
                     : array_values(array_map('intval', is_array($research->sdg_tags) ? $research->sdg_tags : (json_decode($research->sdg_tags ?? '[]', true) ?? [])));
+                $selectedOtherColleges = old('other_college_id')
+                    ? array_values(array_map('intval', (array) old('other_college_id')))
+                    : $research->otherCollegeIds();
             @endphp
 
             <x-form.textarea
@@ -72,7 +88,7 @@
 
             <div class="kmsar-form-group">
                 <label class="kmsar-form-label">{{ __('Mother College / Unit') }} <span class="kmsar-form-required">*</span></label>
-                <select name="mother_college_id" class="kmsar-select" required>
+                <select name="mother_college_id" class="kmsar-select" required x-model="motherCollegeId">
                     @foreach ($colleges as $college)
                         <option
                             value="{{ $college->id }}"
@@ -89,19 +105,28 @@
 
             <div class="kmsar-form-group">
                 <label class="kmsar-form-label">{{ __('Other College/Unit Affiliation') }} <span style="font-size:11px;color:#94A3B8;">({{ __('optional') }})</span></label>
-                <select name="other_college_id" class="kmsar-select">
-                    <option value="">— {{ __('None') }} —</option>
+                <div class="kmsar-sdg-grid" role="group" aria-label="{{ __('Other college affiliations') }}">
                     @foreach ($colleges as $college)
-                        <option
-                            value="{{ $college->id }}"
-                            {{ (string) old('other_college_id', $research->other_college_id) === (string) $college->id ? 'selected' : '' }}
+                        <button
+                            type="button"
+                            class="kmsar-sdg-chip"
+                            :class="{ 'selected': isOtherCollegeOn({{ $college->id }}) }"
+                            :aria-pressed="isOtherCollegeOn({{ $college->id }}) ? 'true' : 'false'"
+                            :disabled="String({{ $college->id }}) === motherCollegeId"
+                            @click="toggleOtherCollege({{ $college->id }})"
                         >
                             {{ $college->code }} — {{ $college->name }}
-                        </option>
+                        </button>
                     @endforeach
-                </select>
-                <p class="kmsar-form-hint">{{ __('Select if this research involves another AUF college or unit.') }}</p>
+                </div>
+                <template x-for="collegeId in otherCollegeSelected" :key="collegeId">
+                    <input type="hidden" name="other_college_id[]" :value="collegeId">
+                </template>
+                <p class="kmsar-form-hint">{{ __('Select all other AUF colleges or units involved in this research.') }}</p>
                 @error('other_college_id')
+                    <p class="kmsar-form-error">{{ $message }}</p>
+                @enderror
+                @error('other_college_id.*')
                     <p class="kmsar-form-error">{{ $message }}</p>
                 @enderror
             </div>

@@ -63,7 +63,7 @@
 
 @section('content')
     <div
-        x-data="{ tab: 'info', showEndorse: false, showReturn: false, showReject: false }"
+        x-data="{ tab: 'info', showEndorse: {{ ($errors->has('remarks') && old('_form') === 'endorse') ? 'true' : 'false' }}, showReturn: false, showReject: false }"
         @keydown.escape.window="showEndorse = false; showReturn = false; showReject = false"
     >
         {{-- PAGE HEADER --}}
@@ -367,6 +367,7 @@
                 <div class="kmsar-modal kmsar-modal--sm" @click.stop role="dialog" aria-modal="true" aria-labelledby="kmsar-endorse-title">
                     <form method="post" action="{{ route('approval.endorse', $research) }}">
                         @csrf
+                        <input type="hidden" name="_form" value="endorse">
                         <div class="kmsar-modal-header">
                             <h2 id="kmsar-endorse-title" class="kmsar-modal-title">{{ __('Endorse Submission') }}</h2>
                             <button type="button" class="kmsar-modal-close" @click="showEndorse = false" aria-label="{{ __('Close') }}">&times;</button>
@@ -376,16 +377,21 @@
                                 {{ __('This research will be forwarded to OVPRI for final approval.') }}
                             </div>
                             <div>
-                                <label for="endorse-remarks" class="kmsar-label" style="display:block;margin-bottom:0.35rem;">{{ __('Remarks (optional)') }}</label>
+                                <label for="endorse-remarks" class="kmsar-label" style="display:block;margin-bottom:0.35rem;">{{ __('Remarks (required)') }}</label>
                                 <textarea
                                     id="endorse-remarks"
                                     name="remarks"
                                     rows="4"
-                                    class="kmsar-input w-full"
+                                    class="kmsar-input w-full @error('remarks') kmsar-input--error @enderror"
+                                    required
+                                    minlength="10"
                                     maxlength="5000"
                                     placeholder="{{ __('Add any notes for OVPRI before endorsing…') }}"
                                     style="text-transform: uppercase"
-                                ></textarea>
+                                >{{ old('remarks') }}</textarea>
+                                @error('remarks')
+                                    <p class="kmsar-form-error" role="alert">{{ $message }}</p>
+                                @enderror
                             </div>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">

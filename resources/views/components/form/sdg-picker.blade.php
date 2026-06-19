@@ -5,7 +5,7 @@
 @props([
     'name' => 'sdg_tags',
     'label' => 'SDG alignment',
-    'hint' => 'Select one or more Sustainable Development Goals that apply.',
+    'hint' => 'Select one or more Sustainable Development Goals that apply. At least one SDG is required.',
     'error' => null,
     'required' => false,
     'selected' => [],

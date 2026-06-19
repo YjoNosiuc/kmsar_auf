@@ -97,10 +97,10 @@ class ApprovalController extends Controller
         abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
 
         $validated = $request->validate([
-            'remarks' => ['nullable', 'string', 'max:5000'],
+            'remarks' => ['required', 'string', 'min:10', 'max:5000'],
         ]);
 
-        $this->approvalService->endorse($research, $request->user(), $validated['remarks'] ?? null);
+        $this->approvalService->endorse($research, $request->user(), $validated['remarks']);
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -187,6 +187,7 @@ class ApprovalController extends Controller
 
         $returned = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
+            ->whereNotIn('approval_stage', ['ovpri_review', 'approved', 'dean_review'])
             ->whereHas('approvals', function ($q) use ($request) {
                 $q->where('approver_id', $request->user()->id)
                     ->where('stage', 'ovpri')

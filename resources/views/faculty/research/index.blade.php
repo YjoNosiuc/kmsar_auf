@@ -74,6 +74,9 @@
             <div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
                     <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;color:#D4AF37;letter-spacing:.06em;">{{ $item->reference_number }}</span>
+                    @if ((int) $item->primary_author_id !== (int) auth()->id())
+                        <x-badge status="info">{{ __('Co-author') }}</x-badge>
+                    @endif
                     <x-badge :status="$researchProgressBadgeStatus($item->status)">{{ ucwords($statusLabel) }}</x-badge>
                     <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">{{ ucwords($stageLabel) }}</x-badge>
                 </div>

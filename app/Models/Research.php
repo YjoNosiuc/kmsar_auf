@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable as AuditableTrait;
 use OwenIt\Auditing\Contracts\Auditable as AuditableContract;
@@ -54,6 +55,7 @@ class Research extends Model implements AuditableContract
         return [
             'sdg_tags' => 'array',
             'expected_output' => 'array',
+            'other_college_id' => 'array',
             'start_date' => 'date',
             'estimated_completion_date' => 'date',
             'submitted_at' => 'datetime',
@@ -88,9 +90,43 @@ class Research extends Model implements AuditableContract
         return $this->belongsTo(College::class, 'mother_college_id');
     }
 
-    public function otherCollege(): BelongsTo
+    /**
+     * @return list<int>
+     */
+    public function otherCollegeIds(): array
     {
-        return $this->belongsTo(College::class, 'other_college_id');
+        $value = $this->other_college_id;
+
+        if (! is_array($value)) {
+            return $value !== null && $value !== '' ? [(int) $value] : [];
+        }
+
+        return array_values(array_map('intval', $value));
+    }
+
+    public function getOtherCollegeAttribute(): ?College
+    {
+        $ids = $this->otherCollegeIds();
+
+        if ($ids === []) {
+            return null;
+        }
+
+        return College::query()->find($ids[0]);
+    }
+
+    /**
+     * @return Collection<int, College>
+     */
+    public function otherColleges(): Collection
+    {
+        $ids = $this->otherCollegeIds();
+
+        if ($ids === []) {
+            return collect();
+        }
+
+        return College::query()->whereIn('id', $ids)->orderBy('code')->get();
     }
 
     public function primaryAuthor(): BelongsTo

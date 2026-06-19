@@ -83,8 +83,15 @@ class ResearchPolicy
             return false;
         }
 
-        return (int) $research->primary_author_id === (int) $user->id
-            && $research->approval_stage === 'draft';
+        if ($research->approval_stage !== 'draft') {
+            return false;
+        }
+
+        if ((int) $research->primary_author_id === (int) $user->id) {
+            return true;
+        }
+
+        return $this->coAuthorCanEdit($user, $research);
     }
 
     public function revise(User $user, Research $research): bool
@@ -93,8 +100,15 @@ class ResearchPolicy
             return false;
         }
 
-        return (int) $research->primary_author_id === (int) $user->id
-            && $research->approval_stage === 'rejected';
+        if ($research->approval_stage !== 'rejected') {
+            return false;
+        }
+
+        if ((int) $research->primary_author_id === (int) $user->id) {
+            return true;
+        }
+
+        return $this->coAuthorCanEdit($user, $research);
     }
 
     private function isPrimaryOrCoAuthor(User $user, Research $research): bool
@@ -103,14 +117,16 @@ class ResearchPolicy
             return true;
         }
 
-        return $research->researchAuthors()->where('user_id', $user->id)->exists();
+        return $research->researchAuthors()->matchingUser($user)->exists();
     }
 
     private function coAuthorCanEdit(User $user, Research $research): bool
     {
-        return $research->researchAuthors()
-            ->where('user_id', $user->id)
-            ->where('can_edit', true)
-            ->exists();
+        if ($research->researchAuthors()->matchingUser($user)->where('can_edit', true)->exists()) {
+            return true;
+        }
+
+        return $user->can('research.update')
+            && $research->researchAuthors()->matchingUser($user)->exists();
     }
 }

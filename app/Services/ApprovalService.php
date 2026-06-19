@@ -20,6 +20,8 @@ use Illuminate\Validation\ValidationException;
 
 class ApprovalService
 {
+    public const DUPLICATE_TITLE_MESSAGE = 'There is already an existing research with a similar title. Please check your research list before registering a new one.';
+
     /**
      * @return Collection<int, College>
      */
@@ -46,7 +48,7 @@ class ApprovalService
         } elseif ($user->can('research.view_own')) {
             $query->where(function ($q) use ($user) {
                 $q->where('primary_author_id', $user->id)
-                    ->orWhereHas('researchAuthors', fn ($qq) => $qq->where('user_id', $user->id));
+                    ->orWhereHas('researchAuthors', fn ($qq) => $qq->matchingUser($user));
             });
         } else {
             $query->whereRaw('1 = 0');
@@ -66,6 +68,27 @@ class ApprovalService
             ->when($stage, fn ($q) => $q->where('approval_stage', $stage))
             ->latest()
             ->paginate($perPage);
+    }
+
+    /**
+     * Case-insensitive title uniqueness across all research (excludes soft-deleted rows).
+     */
+    public function duplicateTitleExists(string $title, ?int $excludeResearchId = null): bool
+    {
+        $normalizedTitle = strtolower(trim($title));
+
+        if ($normalizedTitle === '') {
+            return false;
+        }
+
+        $query = Research::query()
+            ->whereRaw('LOWER(title) = ?', [$normalizedTitle]);
+
+        if ($excludeResearchId !== null) {
+            $query->where('id', '!=', $excludeResearchId);
+        }
+
+        return $query->exists();
     }
 
     public function createDraftAfterRegistrationType(User $user, string $registrationType): Research
@@ -139,14 +162,20 @@ class ApprovalService
             $research->researchAuthors()->where('is_primary', false)->delete();
 
             foreach ($rows as $row) {
+                $linkedUserId = ResearchAuthor::resolveLinkedUserId(
+                    $row['email'] ?? null,
+                    $row['employee_number'] ?? null,
+                );
+
                 ResearchAuthor::query()->create([
                     'research_id' => $research->id,
-                    'user_id' => null,
+                    'user_id' => $linkedUserId,
                     'employee_number' => $row['employee_number'] ?? null,
+                    'email' => $row['email'] ?? null,
                     'name' => $row['name'],
                     'college_id' => ! empty($row['college_id']) ? (int) $row['college_id'] : null,
                     'is_primary' => false,
-                    'can_edit' => false,
+                    'can_edit' => ResearchAuthor::canEditForUserId($linkedUserId),
                 ]);
             }
         });
@@ -157,6 +186,12 @@ class ApprovalService
      */
     public function createResearch(User $user, array $data): Research
     {
+        if ($this->duplicateTitleExists((string) $data['title'])) {
+            throw ValidationException::withMessages([
+                'title' => [self::DUPLICATE_TITLE_MESSAGE],
+            ]);
+        }
+
         return DB::transaction(function () use ($user, $data) {
             $referenceNumber = $this->allocateReferenceNumber((int) $data['mother_college_id']);
 
@@ -166,7 +201,10 @@ class ApprovalService
                 'title' => $data['title'],
                 'primary_author_id' => $user->id,
                 'mother_college_id' => $data['mother_college_id'],
-                'other_college_id' => $data['other_college_id'] ?? null,
+                'other_college_id' => $this->normalizeOtherCollegeIds(
+                    $data['other_college_id'] ?? null,
+                    (int) $data['mother_college_id'],
+                ),
                 'research_classification' => $data['research_classification'],
                 'funding_agency' => $data['funding_agency'] ?? null,
                 'sdg_tags' => $data['sdg_tags'] ?? [],
@@ -187,11 +225,20 @@ class ApprovalService
      */
     public function updateResearch(Research $research, array $data): void
     {
+        if ($this->duplicateTitleExists((string) $data['title'], $research->id)) {
+            throw ValidationException::withMessages([
+                'title' => [self::DUPLICATE_TITLE_MESSAGE],
+            ]);
+        }
+
         $research->update([
             'registration_type' => $data['registration_type'],
             'title' => $data['title'],
             'mother_college_id' => $data['mother_college_id'],
-            'other_college_id' => $data['other_college_id'] ?? null,
+            'other_college_id' => $this->normalizeOtherCollegeIds(
+                $data['other_college_id'] ?? null,
+                (int) $data['mother_college_id'],
+            ),
             'research_classification' => $data['research_classification'],
             'funding_agency' => $data['funding_agency'] ?? null,
             'sdg_tags' => $data['sdg_tags'] ?? [],
@@ -565,6 +612,24 @@ class ApprovalService
         $trimmed = trim($remarks);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    /**
+     * @return list<int>|null
+     */
+    private function normalizeOtherCollegeIds(mixed $value, int $motherCollegeId): ?array
+    {
+        if ($value === null || $value === []) {
+            return null;
+        }
+
+        $ids = array_values(array_unique(array_map('intval', is_array($value) ? $value : [$value])));
+        $ids = array_values(array_filter(
+            $ids,
+            fn (int $id) => $id > 0 && $id !== $motherCollegeId,
+        ));
+
+        return $ids === [] ? null : $ids;
     }
 
     /**

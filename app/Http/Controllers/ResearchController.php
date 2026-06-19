@@ -253,9 +253,14 @@ class ResearchController extends Controller
             }
 
             foreach ($coauthorRows as $row) {
+                $linkedUserId = ResearchAuthor::resolveLinkedUserId(
+                    $row['email'] ?? null,
+                    $row['employee_number'] ?? null,
+                );
+
                 ResearchAuthor::query()->create([
                     'research_id' => $research->id,
-                    'user_id' => null,
+                    'user_id' => $linkedUserId,
                     'author_type' => $row['author_type'] ?? 'student',
                     'name' => $row['name'],
                     'employee_number' => $row['employee_number'] ?? null,
@@ -267,7 +272,7 @@ class ResearchController extends Controller
                     'college_text' => null,
                     'program' => null,
                     'is_primary' => false,
-                    'can_edit' => false,
+                    'can_edit' => ResearchAuthor::canEditForUserId($linkedUserId),
                 ]);
             }
         });
@@ -299,6 +304,13 @@ class ResearchController extends Controller
         $data = $request->validate($this->researchValidationRules());
         $data = $this->finalizeResearchPayload($data, $request);
 
+        if ($this->approvalService->duplicateTitleExists((string) $data['title'])) {
+            return redirect()
+                ->back()
+                ->withInput()
+                ->with('warning', ApprovalService::DUPLICATE_TITLE_MESSAGE);
+        }
+
         $research = $this->approvalService->createResearch($request->user(), $data);
 
         $this->forgetResearchDashboardCaches($research);
@@ -315,7 +327,6 @@ class ResearchController extends Controller
         $research->load([
             'primaryAuthor.college',
             'motherCollege',
-            'otherCollege',
             'documents',
             'approvals' => fn ($q) => $q->orderBy('created_at'),
             'approvals.approver',
@@ -616,8 +627,11 @@ class ResearchController extends Controller
     {
         $this->normalizeSdgTags($request);
 
-        if ($request->input('other_college_id') === '') {
-            $request->merge(['other_college_id' => null]);
+        $otherColleges = $request->input('other_college_id');
+        if (! is_array($otherColleges)) {
+            $request->merge([
+                'other_college_id' => $otherColleges === '' || $otherColleges === null ? [] : [(int) $otherColleges],
+            ]);
         }
 
         $expected = $request->input('expected_output');
@@ -637,6 +651,14 @@ class ResearchController extends Controller
         $data['expected_output_other'] = in_array('other', $data['expected_output'], true)
             ? ($data['expected_output_other'] ?? null)
             : null;
+
+        $motherCollegeId = (int) ($data['mother_college_id'] ?? 0);
+        $otherCollegeIds = array_values(array_unique(array_map('intval', $data['other_college_id'] ?? [])));
+        $otherCollegeIds = array_values(array_filter(
+            $otherCollegeIds,
+            fn (int $id) => $id > 0 && $id !== $motherCollegeId,
+        ));
+        $data['other_college_id'] = $otherCollegeIds === [] ? null : $otherCollegeIds;
 
         return $data;
     }
@@ -680,10 +702,24 @@ class ResearchController extends Controller
             'registration_type' => ['required', 'in:new,update'],
             'title' => ['required', 'string'],
             'mother_college_id' => ['required', 'exists:colleges,id'],
-            'other_college_id' => ['nullable', 'integer', 'exists:colleges,id', 'different:mother_college_id'],
-            'research_classification' => ['required', 'string', 'max:60'],
+            'other_college_id' => ['nullable', 'array'],
+            'other_college_id.*' => ['integer', 'exists:colleges,id'],
+            'research_classification' => [
+                'required',
+                'string',
+                'max:60',
+                Rule::in([
+                    'self_funded',
+                    'internally_funded',
+                    'externally_funded',
+                    'thesis',
+                    'thesis_dissertation',
+                    'collaboration',
+                    'other',
+                ]),
+            ],
             'funding_agency' => ['nullable', 'string', 'max:100'],
-            'sdg_tags' => ['nullable', 'array'],
+            'sdg_tags' => ['required', 'array', 'min:1'],
             'sdg_tags.*' => ['integer', 'between:1,17'],
             'expected_output' => ['required', 'array', 'min:1'],
             'expected_output.*' => ['in:publication,patent,policy_brief,other'],

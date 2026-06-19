@@ -61,7 +61,7 @@ class DocumentController extends Controller
             $this->persistUploadedFile($research, $request->user(), $file, $fileKey.'.'.$index);
         }
 
-        return back()->with('success', __('Document saved successfully.'));
+        return back()->with('success', __('Document uploaded successfully.'));
     }
 
     public function destroy(Document $document): RedirectResponse

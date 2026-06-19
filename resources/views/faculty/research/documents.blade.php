@@ -7,7 +7,7 @@
 @endsection
 
 @section('content')
-    <div x-data="{ tab: 'upload' }">
+    <div x-data="{ tab: 'upload' }" x-init="@if (session('success')) $nextTick(() => document.getElementById('upload-success-alert')?.scrollIntoView({ behavior: 'smooth', block: 'start' })) @endif">
         <x-page-header
             :title="$research->reference_number"
             :subtitle="__('Step 3 of 3 · Upload documents and finish registration') . ' · ' . str($research->title)->limit(100)"
@@ -22,7 +22,7 @@
         </x-page-header>
 
         @if (session('success'))
-            <x-alert type="success" :message="session('success')" class="mb-6" />
+            <x-alert type="success" :message="session('success')" class="mb-6" id="upload-success-alert" />
         @endif
 
         @if ($errors->any())
@@ -71,6 +71,10 @@
                     <h2 class="kmsar-card-title">{{ __('Upload documents') }}</h2>
                 </div>
                 <div class="kmsar-card-body space-y-6">
+                    @if (session('success'))
+                        <x-alert type="success" :message="session('success')" role="status" />
+                    @endif
+
                     <div class="kmsar-alert kmsar-alert--info" role="status">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />

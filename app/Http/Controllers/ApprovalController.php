@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
 use App\Notifications\ResearchApproved;
@@ -167,14 +168,32 @@ class ApprovalController extends Controller
 
     public function ovpriQueue(Request $request): View
     {
-        $pending = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
-            ->where('approval_stage', 'ovpri_review')
-            ->orderBy('submitted_at', 'asc')
+        $selectedCollege = $request->filled('college_id') ? (int) $request->integer('college_id') : null;
+        $activeTab = in_array($request->query('tab'), ['pending', 'approved', 'returned'], true)
+            ? $request->query('tab')
+            : 'pending';
+
+        $colleges = College::query()
+            ->where('is_active', true)
+            ->orderBy('name')
             ->get();
 
-        $approved = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
+        $baseQuery = function () use ($selectedCollege) {
+            $query = Research::query()->with(['motherCollege', 'primaryAuthor']);
+
+            if ($selectedCollege !== null) {
+                $query->where('mother_college_id', $selectedCollege);
+            }
+
+            return $query;
+        };
+
+        $pending = $baseQuery()
+            ->where('approval_stage', 'ovpri_review')
+            ->orderByDesc('submitted_at')
+            ->get();
+
+        $approved = $baseQuery()
             ->where('approval_stage', 'approved')
             ->whereHas('approvals', function ($q) {
                 $q->where('stage', 'ovpri')
@@ -183,8 +202,7 @@ class ApprovalController extends Controller
             ->orderByDesc('updated_at')
             ->get();
 
-        $returned = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
+        $returned = $baseQuery()
             ->whereNotIn('approval_stage', ['ovpri_review', 'approved', 'dean_review'])
             ->whereHas('approvals', function ($q) {
                 $q->where('stage', 'ovpri')
@@ -193,7 +211,14 @@ class ApprovalController extends Controller
             ->orderByDesc('updated_at')
             ->get();
 
-        return view('ovpri.queue', compact('pending', 'approved', 'returned'));
+        return view('ovpri.queue', compact(
+            'pending',
+            'approved',
+            'returned',
+            'colleges',
+            'selectedCollege',
+            'activeTab'
+        ));
     }
 
     public function approve(Request $request, Research $research): RedirectResponse

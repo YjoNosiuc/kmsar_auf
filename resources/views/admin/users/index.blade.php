@@ -497,6 +497,7 @@
                 x-ref="editFormEl"
                 method="post"
                 class="kmsar-modal-body"
+                style="overflow-y: auto; max-height: 80vh;"
                 x-bind:action="editUser && editUser.id ? `${adminUsersBase}/${editUser.id}` : '#'"
                 x-on:submit.prevent="$refs.editFormEl.submit()"
             >

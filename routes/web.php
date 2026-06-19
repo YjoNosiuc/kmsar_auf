@@ -173,7 +173,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
     ->group(function () {
         Route::get('dashboard', function () {
             $totalUsers = User::count();
-            $totalColleges = College::count();
+            $totalColleges = College::where('is_active', true)->count();
 
             if (! Schema::hasTable('research')) {
                 $emptyMonthly = ['labels' => [], 'counts' => []];

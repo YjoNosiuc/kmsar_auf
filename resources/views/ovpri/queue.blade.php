@@ -179,6 +179,27 @@
 <div class="kmsar-card" style="border-top:3px solid #D4AF37;">
     <div class="kmsar-card-body">
 
+        <form method="get" action="{{ route('ovpri.queue') }}" id="queueCollegeFilter" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-bottom:20px;">
+            <input type="hidden" name="tab" id="queueActiveTab" value="{{ $activeTab }}">
+            <div style="min-width:220px;flex:1;">
+                <label for="college_id" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('College') }}</label>
+                <select id="college_id" name="college_id" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
+                    <option value="">{{ __('All colleges') }}</option>
+                    @foreach ($colleges as $college)
+                        <option value="{{ $college->id }}" @selected($selectedCollege === $college->id)>{{ $college->code }} — {{ $college->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            @if ($selectedCollege)
+                @php
+                    $selectedCollegeName = $colleges->firstWhere('id', $selectedCollege)?->name;
+                @endphp
+                <p style="margin:0;font-size:13px;color:#475569;align-self:center;">
+                    {{ __('Filtered by :college', ['college' => $selectedCollegeName ?? $selectedCollege]) }}
+                </p>
+            @endif
+        </form>
+
         {{-- Tab bar --}}
         <div class="kmsar-tab-bar" role="tablist">
             <button type="button" role="tab" aria-selected="true"
@@ -315,7 +336,24 @@ function switchTab(name) {
         panel.classList.remove('active');
     });
     document.getElementById('panel-' + name).classList.add('active');
+
+    const tabInput = document.getElementById('queueActiveTab');
+    if (tabInput) {
+        tabInput.value = name;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    params.set('tab', name);
+    const nextUrl = window.location.pathname + '?' + params.toString();
+    window.history.replaceState({}, '', nextUrl);
 }
+
+document.addEventListener('DOMContentLoaded', function () {
+    const initialTab = @json($activeTab);
+    if (initialTab && initialTab !== 'pending') {
+        switchTab(initialTab);
+    }
+});
 </script>
 @endpush
 

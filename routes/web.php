@@ -82,7 +82,7 @@ Route::middleware(['auth', 'nocache'])->group(function () {
 | Faculty & co-author — research module
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'nocache', 'role:faculty|co_author'])
+Route::middleware(['auth', 'nocache', 'role:faculty|co_author|super_admin'])
     ->prefix('research')
     ->group(function () {
         Route::get('/', [ResearchController::class, 'index'])->name('research.index');
@@ -105,7 +105,7 @@ Route::middleware(['auth', 'nocache', 'role:faculty|co_author'])
         Route::get('/{research}/documents/{document}/preview', [FileController::class, 'preview'])->name('documents.preview');
     });
 
-Route::middleware(['auth', 'nocache', 'role:faculty|co_author'])
+Route::middleware(['auth', 'nocache', 'role:faculty|co_author|super_admin'])
     ->delete('/documents/{document}', [DocumentController::class, 'destroy'])
     ->name('documents.destroy');
 
@@ -114,12 +114,12 @@ Route::middleware(['auth', 'nocache', 'role:faculty|co_author'])
 | College dean / unit head — dashboard & approval queue
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head'])
+Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head|super_admin'])
     ->group(function () {
         Route::get('/dean/dashboard', [DeanController::class, 'dashboard'])->name('dean.dashboard');
     });
 
-Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head'])
+Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head|super_admin'])
     ->prefix('approval')
     ->group(function () {
         Route::get('/queue', [ApprovalController::class, 'queue'])->name('approval.queue');
@@ -136,7 +136,7 @@ Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head'])
 | OVPRI / CDAIC
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'nocache', 'role:ovpri_admin|cdaic_admin'])
+Route::middleware(['auth', 'nocache', 'role:ovpri_admin|cdaic_admin|super_admin'])
     ->prefix('ovpri')
     ->group(function () {
         Route::get('/dashboard', [OvpriController::class, 'dashboard'])->name('ovpri.dashboard');

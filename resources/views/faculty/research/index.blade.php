@@ -93,7 +93,7 @@
                     style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1E3A8A;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;"
                     aria-label="{{ __('View research') }}"
                 >{{ __('View') }} →</a>
-                @if ($item->approval_stage === 'draft')
+                @if ($item->approval_stage === 'draft' && (int) $item->primary_author_id === (int) auth()->id())
                     <form method="POST"
                           action="{{ route('research.destroy', $item) }}"
                           onsubmit="return confirm('Are you sure you want to delete this research? This cannot be undone.')">

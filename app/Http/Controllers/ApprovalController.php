@@ -306,12 +306,23 @@ class ApprovalController extends Controller
 
     private function forgetResearchDashboardCaches(Research $research): void
     {
-        Cache::forget('ovpri_stats_'.now()->format('Y-m-d-H'));
+        $hourKey = now()->format('Y-m-d-H');
+        Cache::forget('ovpri_stats_all_'.$hourKey);
+        for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+            Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
+        }
         Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
         Cache::forget('sdg_counts');
+        Cache::forget('sdg_counts_all');
+        for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+            Cache::forget('sdg_counts_'.$year);
+        }
 
         foreach ($this->deanUserIdsForCollege((int) $research->mother_college_id) as $id) {
-            Cache::forget('dean_stats_'.$id.'_'.now()->format('Y-m-d'));
+            Cache::forget('dean_stats_'.$id.'_all_'.now()->format('Y-m-d'));
+            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                Cache::forget('dean_stats_'.$id.'_'.$year.'_'.now()->format('Y-m-d'));
+            }
         }
     }
 

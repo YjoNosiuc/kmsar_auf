@@ -7,6 +7,7 @@ use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\OnEachRow;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -127,7 +128,7 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             $year = (int) Carbon::parse($startDate)->format('Y');
             $referenceNumber = $this->generateReferenceNumber($year, $motherCollege);
 
-            DB::transaction(function () use (
+            $research = DB::transaction(function () use (
                 $referenceNumber,
                 $registrationType,
                 $title,
@@ -180,7 +181,33 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                     'is_primary' => true,
                     'can_edit' => true,
                 ]);
+
+                return $research;
             });
+
+            // Clear OVPRI / admin caches
+            Cache::forget('ovpri_stats_all_'.now()->format('Y-m-d-H'));
+            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                Cache::forget('ovpri_stats_'.$year.'_'.now()->format('Y-m-d-H'));
+            }
+            Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
+            Cache::forget('sdg_counts');
+            Cache::forget('sdg_counts_all');
+            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                Cache::forget('sdg_counts_'.$year);
+            }
+
+            // Clear dean cache for the research college
+            $collegeId = $research->mother_college_id;
+            $deanUsers = User::whereHas('roles', fn ($q) => $q->where('name', 'college_dean'))
+                ->where('college_id', $collegeId)
+                ->pluck('id');
+            foreach ($deanUsers as $deanId) {
+                Cache::forget('dean_stats_'.$deanId.'_all_'.now()->format('Y-m-d'));
+                for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                    Cache::forget('dean_stats_'.$deanId.'_'.$year.'_'.now()->format('Y-m-d'));
+                }
+            }
 
             $this->imported++;
         } catch (\Throwable $e) {

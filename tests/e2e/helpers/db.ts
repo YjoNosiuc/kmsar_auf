@@ -10,9 +10,10 @@ export function resetDatabase() {
 }
 
 export function runArtisan(command: string) {
-  return execSync(`php artisan ${command} --force`, {
+  return execSync(`php artisan ${command}`, {
     cwd: PROJECT_ROOT,
     stdio: 'pipe',
+    shell: true,
   }).toString();
 }
 

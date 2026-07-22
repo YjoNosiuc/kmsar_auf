@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\CollegeController;
+use App\Http\Controllers\Admin\ImportController;
 use App\Http\Controllers\Admin\ProgramController;
 use App\Http\Controllers\Admin\UserController;
 use App\Models\College;
@@ -347,4 +348,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             ->only(['edit', 'update', 'store', 'destroy'])
             ->names('admin.programs');
         Route::get('audit-logs', [AuditLogController::class, 'index'])->name('audit.index');
+        Route::get('import/users', [ImportController::class, 'showUserImport'])->name('admin.import.users');
+        Route::post('import/users', [ImportController::class, 'importUsers'])->name('admin.import.users.store');
+        Route::get('import/research', [ImportController::class, 'showResearchImport'])->name('admin.import.research');
+        Route::post('import/research', [ImportController::class, 'importResearch'])->name('admin.import.research.store');
     });

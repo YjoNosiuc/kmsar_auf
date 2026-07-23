@@ -60,6 +60,8 @@ const RESEARCH_HEADERS = [
   'status',
   'approval_stage',
   'is_scopus_indexed',
+  'coauthor_emails',
+  'coauthor_can_edit',
 ];
 
 const RESEARCH_INSTRUCTIONS = [
@@ -78,10 +80,26 @@ const RESEARCH_INSTRUCTIONS = [
   'REQUIRED. status snake_case',
   'OPTIONAL. default approved',
   'OPTIONAL. 0|1',
+  'OPTIONAL. Pipe-separated co-author emails',
+  'OPTIONAL. Pipe-separated 0|1 matching coauthors (default 1)',
 ];
 
 const TITLE_1 = 'TEST RESEARCH MACHINE LEARNING FOR CROP DISEASE DETECTION';
 const TITLE_2 = 'TEST RESEARCH BLOCKCHAIN CREDENTIAL VERIFICATION SYSTEM';
+const TITLE_TWO_CO = 'TEST RESEARCH WITH TWO COAUTHORS MACHINE LEARNING';
+const TITLE_ONE_CO = 'TEST RESEARCH WITH ONE COAUTHOR VIEW ONLY';
+const TITLE_NO_CO = 'TEST RESEARCH WITH NO COAUTHORS';
+const TITLE_INVALID_CO = 'TEST RESEARCH INVALID COAUTHOR MACHINE LEARNING';
+
+function researchRow(
+  values: (string | number)[],
+): (string | number)[] {
+  // Pad to full header width when older fixtures omit coauthor columns
+  while (values.length < RESEARCH_HEADERS.length) {
+    values.push('');
+  }
+  return values;
+}
 
 // --- User fixtures ---
 
@@ -110,7 +128,7 @@ writeSheet('user_import_invalid_college.xlsx', [
 writeSheet('research_import_valid.xlsx', [
   RESEARCH_HEADERS,
   RESEARCH_INSTRUCTIONS,
-  [
+  researchRow([
     'new',
     TITLE_1,
     'testfaculty1@auf.edu.ph',
@@ -126,8 +144,8 @@ writeSheet('research_import_valid.xlsx', [
     'published_scopus',
     'approved',
     1,
-  ],
-  [
+  ]),
+  researchRow([
     'new',
     TITLE_2,
     'testfaculty2@auf.edu.ph',
@@ -143,13 +161,13 @@ writeSheet('research_import_valid.xlsx', [
     'ongoing',
     'approved',
     0,
-  ],
+  ]),
 ]);
 
 writeSheet('research_import_duplicate.xlsx', [
   RESEARCH_HEADERS,
   RESEARCH_INSTRUCTIONS,
-  [
+  researchRow([
     'new',
     TITLE_1,
     'testfaculty1@auf.edu.ph',
@@ -165,13 +183,13 @@ writeSheet('research_import_duplicate.xlsx', [
     'published_scopus',
     'approved',
     1,
-  ],
+  ]),
 ]);
 
 writeSheet('research_import_missing_user.xlsx', [
   RESEARCH_HEADERS,
   RESEARCH_INSTRUCTIONS,
-  [
+  researchRow([
     'new',
     'TEST RESEARCH MISSING AUTHOR RECORD',
     'nonexistent@auf.edu.ph',
@@ -187,12 +205,102 @@ writeSheet('research_import_missing_user.xlsx', [
     'proposal',
     'approved',
     0,
-  ],
+  ]),
+]);
+
+writeSheet('research_import_with_coauthors.xlsx', [
+  RESEARCH_HEADERS,
+  RESEARCH_INSTRUCTIONS,
+  researchRow([
+    'new',
+    TITLE_TWO_CO,
+    'testfaculty1@auf.edu.ph',
+    'CCS',
+    '',
+    'internally_funded',
+    '',
+    '3|9',
+    'publication',
+    '',
+    '2024-06-01',
+    '2025-06-30',
+    'published_scopus',
+    'approved',
+    1,
+    'testfaculty2@auf.edu.ph|testfaculty3@auf.edu.ph',
+    '1|1',
+  ]),
+  researchRow([
+    'new',
+    TITLE_ONE_CO,
+    'testfaculty2@auf.edu.ph',
+    'CCS',
+    '',
+    'self_funded',
+    '',
+    '4',
+    'publication',
+    '',
+    '2024-01-01',
+    '2025-01-01',
+    'ongoing',
+    'approved',
+    0,
+    'testfaculty1@auf.edu.ph',
+    '0',
+  ]),
+  researchRow([
+    'new',
+    TITLE_NO_CO,
+    'testfaculty3@auf.edu.ph',
+    'CCS',
+    '',
+    'externally_funded',
+    'DOST',
+    '9',
+    'publication',
+    '',
+    '2024-03-01',
+    '2025-03-01',
+    'ongoing',
+    'approved',
+    0,
+    '',
+    '',
+  ]),
+]);
+
+writeSheet('research_import_invalid_coauthor.xlsx', [
+  RESEARCH_HEADERS,
+  RESEARCH_INSTRUCTIONS,
+  researchRow([
+    'new',
+    TITLE_INVALID_CO,
+    'testfaculty1@auf.edu.ph',
+    'CCS',
+    '',
+    'internally_funded',
+    '',
+    '3|9',
+    'publication',
+    '',
+    '2024-06-01',
+    '2025-06-30',
+    'published_scopus',
+    'approved',
+    1,
+    'nonexistent@auf.edu.ph',
+    '1',
+  ]),
 ]);
 
 fs.writeFileSync(
   path.join(OUT, 'import-titles.json'),
-  JSON.stringify({ TITLE_1, TITLE_2 }, null, 2),
+  JSON.stringify(
+    { TITLE_1, TITLE_2, TITLE_TWO_CO, TITLE_ONE_CO, TITLE_NO_CO, TITLE_INVALID_CO },
+    null,
+    2,
+  ),
 );
 
 console.log('All import fixtures generated.');

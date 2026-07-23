@@ -128,6 +128,9 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             $year = (int) Carbon::parse($startDate)->format('Y');
             $referenceNumber = $this->generateReferenceNumber($year, $motherCollege);
 
+            $coauthorEmails = $this->parsePipeList($data['coauthor_emails'] ?? '');
+            $coauthorCanEdit = $this->parsePipeList($data['coauthor_can_edit'] ?? '');
+
             $research = DB::transaction(function () use (
                 $referenceNumber,
                 $registrationType,
@@ -144,7 +147,10 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                 $endDate,
                 $status,
                 $approvalStage,
-                $isScopus
+                $isScopus,
+                $coauthorEmails,
+                $coauthorCanEdit,
+                $rowNumber
             ) {
                 $research = Research::query()->create([
                     'reference_number' => $referenceNumber,
@@ -181,6 +187,40 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                     'is_primary' => true,
                     'can_edit' => true,
                 ]);
+
+                foreach ($coauthorEmails as $index => $rawEmail) {
+                    $email = strtolower(trim($rawEmail));
+                    if ($email === '') {
+                        continue;
+                    }
+
+                    $coAuthor = User::query()->where('email', $email)->first();
+                    if ($coAuthor === null) {
+                        $this->skip(
+                            $rowNumber,
+                            $email,
+                            'Co-author email not found: '.$email
+                        );
+
+                        continue;
+                    }
+
+                    ResearchAuthor::query()->create([
+                        'research_id' => $research->id,
+                        'user_id' => $coAuthor->id,
+                        'author_type' => 'internal',
+                        'employee_number' => $coAuthor->employee_number,
+                        'name' => $coAuthor->name,
+                        'first_name' => $coAuthor->first_name,
+                        'last_name' => $coAuthor->last_name,
+                        'middle_name' => $coAuthor->middle_name,
+                        'suffix' => $coAuthor->suffix,
+                        'college_id' => $coAuthor->college_id,
+                        'email' => $coAuthor->email,
+                        'is_primary' => false,
+                        'can_edit' => (bool) (int) ($coauthorCanEdit[$index] ?? 1),
+                    ]);
+                }
 
                 return $research;
             });

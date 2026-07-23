@@ -10,10 +10,16 @@ const USER_INVALID_COLLEGE = path.join(FIXTURES, 'user_import_invalid_college.xl
 const RESEARCH_VALID = path.join(FIXTURES, 'research_import_valid.xlsx');
 const RESEARCH_DUP = path.join(FIXTURES, 'research_import_duplicate.xlsx');
 const RESEARCH_MISSING_USER = path.join(FIXTURES, 'research_import_missing_user.xlsx');
+const RESEARCH_WITH_COAUTHORS = path.join(FIXTURES, 'research_import_with_coauthors.xlsx');
+const RESEARCH_INVALID_COAUTHOR = path.join(FIXTURES, 'research_import_invalid_coauthor.xlsx');
 const NON_XLSX = path.join(FIXTURES, 'sample.txt');
 
 const TITLE_1 = 'TEST RESEARCH MACHINE LEARNING FOR CROP DISEASE DETECTION';
 const TITLE_2 = 'TEST RESEARCH BLOCKCHAIN CREDENTIAL VERIFICATION SYSTEM';
+const TITLE_TWO_CO = 'TEST RESEARCH WITH TWO COAUTHORS MACHINE LEARNING';
+const TITLE_ONE_CO = 'TEST RESEARCH WITH ONE COAUTHOR VIEW ONLY';
+const TITLE_NO_CO = 'TEST RESEARCH WITH NO COAUTHORS';
+const TITLE_INVALID_CO = 'TEST RESEARCH INVALID COAUTHOR MACHINE LEARNING';
 
 const importedFaculty = {
   one: { email: 'testfaculty1@auf.edu.ph', password: 'password', name: 'TEST FACULTY ONE' },
@@ -52,6 +58,35 @@ function userExistsViaArtisan(email: string): boolean {
     `tinker --execute="echo \\App\\Models\\User::where('email','${email}')->exists() ? 'YES' : 'NO';"`,
   );
   return /YES/.test(out);
+}
+
+function countCoAuthorsForTitle(title: string): number {
+  const out = runTinker(
+    `echo \\App\\Models\\ResearchAuthor::where('is_primary', false)->whereIn('research_id', \\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->pluck('id'))->count();`,
+  );
+  const match = out.trim().match(/(\d+)\s*$/);
+  return match ? parseInt(match[1], 10) : -1;
+}
+
+function setResearchStageByTitle(title: string, stage: string): void {
+  runArtisan(
+    `tinker --execute="\\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->update(['approval_stage' => '${stage}']);"`,
+  );
+}
+
+function researchIdByTitle(title: string): number {
+  const out = runTinker(
+    `echo \\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->value('id') ?? 0;`,
+  );
+  const match = out.trim().match(/(\d+)\s*$/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+async function openResearchByTitle(page: Page, title: string): Promise<void> {
+  const id = researchIdByTitle(title);
+  expect(id).toBeGreaterThan(0);
+  await page.goto(`/research/${id}`);
+  await expect(page.getByRole('heading', { name: title, exact: false })).toBeVisible({ timeout: 15_000 });
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -242,5 +277,96 @@ test.describe('Import Data — UAT Test Suite', () => {
     await page.goto('/research');
     await expect(page.getByText(title, { exact: false })).toBeVisible();
     await context.close();
+  });
+
+  test('IMPORT-019: Upload research_import_with_coauthors.xlsx → 3 research records imported', async ({
+    page,
+  }) => {
+    await page.goto('/admin/import/research');
+    await uploadImport(page, RESEARCH_WITH_COAUTHORS);
+    await expect(page.locator('.kmsar-alert--success')).toContainText(
+      /3 research records imported successfully/i,
+    );
+    expect(countResearchByTitle(TITLE_TWO_CO)).toBe(1);
+    expect(countResearchByTitle(TITLE_ONE_CO)).toBe(1);
+    expect(countResearchByTitle(TITLE_NO_CO)).toBe(1);
+  });
+
+  test('IMPORT-020: Research with 2 co-authors — both see research with Co-author badge', async ({
+    page,
+  }) => {
+    await logout(page);
+    await login(page, importedFaculty.two.email, importedFaculty.two.password);
+    await page.goto('/research');
+    const card = page.locator('div').filter({ hasText: TITLE_TWO_CO }).first();
+    await expect(card.getByText(TITLE_TWO_CO, { exact: false })).toBeVisible();
+    await expect(card.getByText('Co-author', { exact: true })).toBeVisible();
+
+    await logout(page);
+    await login(page, importedFaculty.three.email, importedFaculty.three.password);
+    await page.goto('/research');
+    const card3 = page.locator('div').filter({ hasText: TITLE_TWO_CO }).first();
+    await expect(card3.getByText(TITLE_TWO_CO, { exact: false })).toBeVisible();
+    await expect(card3.getByText('Co-author', { exact: true })).toBeVisible();
+  });
+
+  test('IMPORT-021: Co-author with can_edit=1 — Edit button visible', async ({ page }) => {
+    // Edit is only rendered for draft stage
+    setResearchStageByTitle(TITLE_TWO_CO, 'draft');
+
+    await logout(page);
+    await login(page, importedFaculty.two.email, importedFaculty.two.password);
+    await openResearchByTitle(page, TITLE_TWO_CO);
+    await expect(
+      page.locator('.kmsar-page-header-actions').getByRole('link', { name: 'Edit', exact: true }),
+    ).toBeVisible();
+  });
+
+  test('IMPORT-022: Co-author with can_edit=0 — Edit button NOT visible', async ({ page }) => {
+    setResearchStageByTitle(TITLE_ONE_CO, 'draft');
+
+    await logout(page);
+    await login(page, importedFaculty.one.email, importedFaculty.one.password);
+    await openResearchByTitle(page, TITLE_ONE_CO);
+    await expect(page.getByText('Co-author', { exact: true }).first()).toBeVisible();
+    await expect(
+      page.locator('.kmsar-page-header-actions').getByRole('link', { name: 'Edit', exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test('IMPORT-023: Primary author sees research including ones with co-authors', async ({
+    page,
+  }) => {
+    await logout(page);
+    await login(page, importedFaculty.one.email, importedFaculty.one.password);
+    await page.goto('/research');
+    await expect(page.getByText(TITLE_TWO_CO, { exact: false })).toBeVisible();
+    await expect(page.getByText(TITLE_1, { exact: false })).toBeVisible();
+  });
+
+  test('IMPORT-024: Invalid co-author email — research imported, co-author skipped', async ({
+    page,
+  }) => {
+    await page.goto('/admin/import/research');
+    await uploadImport(page, RESEARCH_INVALID_COAUTHOR);
+    await expect(page.locator('.kmsar-alert--success')).toContainText(
+      /1 research records? imported successfully/i,
+    );
+    await expect(page.locator('table.kmsar-table')).toContainText(/Co-author email not found/i);
+    await expect(page.locator('table.kmsar-table')).toContainText('nonexistent@auf.edu.ph');
+    expect(countResearchByTitle(TITLE_INVALID_CO)).toBe(1);
+    expect(countCoAuthorsForTitle(TITLE_INVALID_CO)).toBe(0);
+  });
+
+  test('IMPORT-025: Research with no co-authors — no co-author records created', async ({
+    page,
+  }) => {
+    expect(countResearchByTitle(TITLE_NO_CO)).toBe(1);
+    expect(countCoAuthorsForTitle(TITLE_NO_CO)).toBe(0);
+
+    await logout(page);
+    await login(page, importedFaculty.three.email, importedFaculty.three.password);
+    await page.goto('/research');
+    await expect(page.getByText(TITLE_NO_CO, { exact: false })).toBeVisible();
   });
 });

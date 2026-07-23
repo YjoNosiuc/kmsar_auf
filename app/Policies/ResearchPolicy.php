@@ -122,11 +122,6 @@ class ResearchPolicy
 
     private function coAuthorCanEdit(User $user, Research $research): bool
     {
-        if ($research->researchAuthors()->matchingUser($user)->where('can_edit', true)->exists()) {
-            return true;
-        }
-
-        return $user->can('research.update')
-            && $research->researchAuthors()->matchingUser($user)->exists();
+        return $research->researchAuthors()->matchingUser($user)->where('can_edit', true)->exists();
     }
 }

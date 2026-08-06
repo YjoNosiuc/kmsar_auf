@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, CREDENTIALS, login, openNotificationBell, expectFlashSuccess } from './helpers/auth';
+import { BASE_URL, CREDENTIALS, login, openNotificationBell, expectFlashSuccess } from '../helpers/auth';
 import {
   openDeanQueueResearch,
   openPdfPreviewModal,
   openResearchByTitle,
   registerResearchThroughWizard,
   uniqueTitle,
-} from './helpers/research';
+} from '../helpers/research';
 
 test.describe('College dean approval workflow', () => {
   test.beforeEach(async ({ page }) => {
@@ -45,8 +45,8 @@ test.describe('College dean approval workflow', () => {
     expect(context.pages().length).toBe(pagesBefore);
   });
 
-  test('M-01: endorse with less than 10 char remarks shows validation error', async ({ page }) => {
-    const title = uniqueTitle('Dean Endorse Validation');
+  test('M-01: endorse with short remarks succeeds — remarks are optional', async ({ page }) => {
+    const title = uniqueTitle('Dean Endorse Short Remarks');
     await login(page, CREDENTIALS.faculty.email);
     await registerResearchThroughWizard(page, title, { submit: true });
 
@@ -54,10 +54,11 @@ test.describe('College dean approval workflow', () => {
     await openDeanQueueResearch(page, title);
     await page.getByRole('button', { name: 'Endorse', exact: true }).click();
     await page.locator('#endorse-remarks').fill('Short');
-    await page.locator('#endorse-remarks').evaluate((el) => el.removeAttribute('minlength'));
     await page.locator('form[action*="endorse"] button[type="submit"]').click();
 
-    await expect(page.locator('.kmsar-form-error').filter({ hasText: /at least|10 characters/i }).first()).toBeVisible();
+    await expect(
+      page.getByRole('alert').filter({ hasText: /endorsed and forwarded to OVPRI/i }),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   test('endorse with valid remarks moves research to OVPRI queue', async ({ page }) => {

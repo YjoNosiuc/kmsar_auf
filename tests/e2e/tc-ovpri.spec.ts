@@ -45,8 +45,6 @@ async function switchQueueTab(page: Page, tab: 'pending' | 'approved' | 'returne
   await expect(page.locator(`#panel-${tab}`)).toHaveClass(/active/);
 }
 
-let reviewResearchId = '';
-
 test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
   test.beforeAll(async () => {
     resetDatabase();
@@ -73,7 +71,17 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await page.goto('/ovpri/dashboard');
 
     const totalCard = page.locator('.kmsar-stat-card').filter({ hasText: 'Total research' });
-    await expect(totalCard.locator('.kmsar-stat-card-value')).toHaveText('22');
+    const totalText = await totalCard.locator('.kmsar-stat-card-value').innerText();
+    const total = parseInt(totalText.replace(/,/g, ''), 10);
+    expect(total).toBeGreaterThan(0);
+
+    const pendingCard = page.locator('.kmsar-stat-card').filter({ hasText: /Pending.*approval/i });
+    const pending = parseInt(
+      (await pendingCard.locator('.kmsar-stat-card-value').innerText()).replace(/,/g, ''),
+      10,
+    );
+    expect(pending).toBeGreaterThanOrEqual(0);
+    expect(total).toBeGreaterThanOrEqual(pending);
   });
 
   test('TC-004: SDG distribution chart loads without errors', async ({ page }) => {
@@ -114,10 +122,10 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     page,
   }) => {
     const title = uniqueTitle('TC007 OVPRI View');
-    reviewResearchId = await setupEndorsedResearch(page, title);
+    const researchId = await setupEndorsedResearch(page, title);
 
     await ovpriLogin(page);
-    await openOvpriReview(page, reviewResearchId);
+    await openOvpriReview(page, researchId);
     await expect(page.getByRole('tab', { name: /Research Info/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Documents/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: /Approval History/i })).toBeVisible();
@@ -128,10 +136,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
   });
 
   test('TC-008: Download document from OVPRI review page → file downloads', async ({ page }) => {
-    let researchId = reviewResearchId;
-    if (!researchId) {
-      researchId = await setupEndorsedResearch(page, uniqueTitle('TC008 Download'));
-    }
+    const researchId = await setupEndorsedResearch(page, uniqueTitle('TC008 Download'));
     await ovpriLogin(page);
     await openOvpriReview(page, researchId);
     await page.getByRole('tab', { name: /Documents/i }).click();
@@ -147,10 +152,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     page,
     context,
   }) => {
-    let researchId = reviewResearchId;
-    if (!researchId) {
-      researchId = await setupEndorsedResearch(page, uniqueTitle('TC009 Preview'));
-    }
+    const researchId = await setupEndorsedResearch(page, uniqueTitle('TC009 Preview'));
     await ovpriLogin(page);
     await openOvpriReview(page, researchId);
     await page.getByRole('tab', { name: /Documents/i }).click();

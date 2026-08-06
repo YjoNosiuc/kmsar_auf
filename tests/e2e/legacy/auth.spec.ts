@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, CREDENTIALS, login, logout, setUserInactive, shortEmployeeNumber } from './helpers/auth';
+import { BASE_URL, CREDENTIALS, login, logout, setUserInactive, shortEmployeeNumber } from '../helpers/auth';
 
 test.describe('Authentication', () => {
   test('login with valid credentials for faculty redirects to research index', async ({ page }) => {

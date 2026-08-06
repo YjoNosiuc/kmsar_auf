@@ -2,11 +2,30 @@ import { execSync } from 'child_process';
 
 const PROJECT_ROOT = 'C:/laragon/www/kmsar_auf';
 
-export function resetDatabase() {
-  execSync('php artisan migrate:fresh --seed --force', {
-    cwd: PROJECT_ROOT,
-    stdio: 'pipe',
-  });
+export function resetDatabase(retries = 3): void {
+  for (let i = 0; i < retries; i++) {
+    try {
+      execSync('php artisan migrate:fresh --seed --force', {
+        cwd: PROJECT_ROOT,
+        stdio: 'pipe',
+        timeout: 120_000,
+      });
+      // Warmup — give DB / app caches time to settle after fresh migrate
+      execSync('php artisan cache:clear', {
+        cwd: PROJECT_ROOT,
+        stdio: 'pipe',
+        timeout: 60_000,
+      });
+      return;
+    } catch (error) {
+      if (i === retries - 1) {
+        throw error;
+      }
+      console.warn(`resetDatabase attempt ${i + 1} failed, retrying...`);
+      // Windows ~3s pause before retry
+      execSync('ping -n 4 127.0.0.1 > nul', { stdio: 'pipe', shell: true });
+    }
+  }
 }
 
 export function runArtisan(command: string) {

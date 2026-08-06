@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, logout, credentials } from './helpers/auth';
-import { resetDatabase, runTinker } from './helpers/db';
+import { runTinker } from './helpers/db';
 
 const CO_AUTHOR_FACULTY_EMAIL = 'faculty.ccs2@auf.edu.ph';
 const CO_AUTHOR_FACULTY_PASSWORD = 'password';
@@ -43,10 +43,6 @@ function createCoAuthorRoleUser(stamp: number): string {
 }
 
 test.describe('Role Access — UAT Test Suite', () => {
-  test.beforeAll(async () => {
-    resetDatabase();
-  });
-
   test.describe('Faculty access control', () => {
     test.beforeEach(async ({ page }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);

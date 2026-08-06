@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, CREDENTIALS, login, openNotificationBell, expectFlashSuccess } from './helpers/auth';
+import { BASE_URL, CREDENTIALS, login, openNotificationBell, expectFlashSuccess } from '../helpers/auth';
 import {
   openDeanQueueResearch,
   openOvpriQueueResearch,
   openPdfPreviewModal,
   registerResearchThroughWizard,
   uniqueTitle,
-} from './helpers/research';
+} from '../helpers/research';
 
 async function endorseToOvpri(page: import('@playwright/test').Page, title: string): Promise<void> {
   await login(page, CREDENTIALS.faculty.email);

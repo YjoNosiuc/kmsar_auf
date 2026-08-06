@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, CREDENTIALS, login, openNotificationBell } from './helpers/auth';
-import { openDeanQueueResearch, registerResearchThroughWizard, uniqueTitle } from './helpers/research';
+import { BASE_URL, CREDENTIALS, login, openNotificationBell } from '../helpers/auth';
+import { openDeanQueueResearch, registerResearchThroughWizard, uniqueTitle } from '../helpers/research';
 
 test.describe('Notifications', () => {
   test('H-04: faculty submission confirmation in bell', async ({ page }) => {

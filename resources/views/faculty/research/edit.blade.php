@@ -91,8 +91,8 @@
             />
 
             <div class="kmsar-form-group">
-                <label class="kmsar-form-label">{{ __('Mother College / Unit') }} <span class="kmsar-form-required">*</span></label>
-                <select name="mother_college_id" class="kmsar-select" required x-model="motherCollegeId">
+                <label class="kmsar-form-label" for="field_mother_college_id">{{ __('Mother College / Unit') }} <span class="kmsar-form-required">*</span></label>
+                <select id="field_mother_college_id" name="mother_college_id" class="kmsar-select" required x-model="motherCollegeId">
                     @foreach ($colleges as $college)
                         <option
                             value="{{ $college->id }}"

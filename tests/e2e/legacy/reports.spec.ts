@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, CREDENTIALS, login } from './helpers/auth';
+import { BASE_URL, CREDENTIALS, login } from '../helpers/auth';
 
 test.describe('Research reports', () => {
   test('M-05: dean reports page has SDG, classification, academic year filters', async ({ page }) => {

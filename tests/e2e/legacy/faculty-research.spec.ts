@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { BASE_URL, CREDENTIALS, login, openNotificationBell, expectFlashSuccess } from './helpers/auth';
+import { BASE_URL, CREDENTIALS, login, openNotificationBell, expectFlashSuccess } from '../helpers/auth';
 import {
   fillResearchStep1,
   openPdfPreviewModal,
   registerResearchThroughWizard,
   startResearchRegistration,
   uniqueTitle,
-} from './helpers/research';
+} from '../helpers/research';
 
 test.describe('Faculty research registration', () => {
   test.beforeEach(async ({ page }) => {

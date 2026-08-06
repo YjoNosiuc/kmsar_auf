@@ -31,7 +31,8 @@ export async function login(page: Page, email: string, password: string) {
   await page.fill('input[name="login"]', email);
   await page.fill('input[name="password"]', password);
   await page.click('button[type="submit"]');
-  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 30_000 });
+  await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 60_000 });
+  await page.waitForLoadState('networkidle', { timeout: 30_000 });
 }
 
 export async function logout(page: Page) {

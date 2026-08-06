@@ -92,7 +92,7 @@
                 <div class="kmsar-chart-header">
                     <div>
                         <h2 class="kmsar-chart-title">{{ __('Research per faculty') }}</h2>
-                        <p class="kmsar-chart-subtitle">{{ __('Totals where the faculty member is primary author or listed author') }}</p>
+                        <p class="kmsar-chart-subtitle">{{ __('Totals where the faculty member is primary author or listed co-author') }}</p>
                     </div>
                     <div style="min-width:200px;">
                         <label for="facultySearch" class="sr-only">{{ __('Search faculty') }}</label>
@@ -228,7 +228,15 @@
                         @forelse ($recentResearch as $item)
                             <tr>
                                 <td>
-                                    <a href="{{ route('approval.review', $item) }}" class="kmsar-link font-medium">{{ $item->reference_number }}</a>
+                                    @if ($item->approval_stage === 'dean_review')
+                                        <a href="{{ route('approval.review', $item) }}" class="kmsar-link font-medium">{{ $item->reference_number }}</a>
+                                    @elseif ($item->approval_stage === 'draft')
+                                        <span class="font-medium" style="color: var(--color-text-muted);">{{ $item->reference_number }}</span>
+                                        <div class="kmsar-body" style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px;">{{ __('Not yet submitted') }}</div>
+                                    @else
+                                        {{-- ovpri_review, approved, rejected, etc. — read-only listing; do not link to approval.review --}}
+                                        <span class="font-medium">{{ $item->reference_number }}</span>
+                                    @endif
                                 </td>
                                 <td>
                                     <span class="kmsar-table-cell-title">{{ \Illuminate\Support\Str::limit($item->title, 80) }}</span>
@@ -387,4 +395,11 @@
             });
         </script>
     @endif
+
+    <script>
+        // Auto-refresh page every 2 minutes to keep counts current
+        setTimeout(function () {
+            window.location.reload();
+        }, 120000);
+    </script>
 @endpush

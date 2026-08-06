@@ -207,12 +207,21 @@ describe('Reports Excel export', function () {
 
         $user = reportMakeUser('ovpri_admin');
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->post(route('reports.export'), [
                 'report_type' => 'ovpri',
                 'format' => 'excel',
-            ])
-            ->assertOk();
+            ]);
+
+        $response->assertRedirect();
+
+        $this->actingAs($user)
+            ->get($response->headers->get('Location'))
+            ->assertOk()
+            ->assertHeader(
+                'content-type',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            );
     });
 
     it('exported Excel response has correct Content-Type header', function () {
@@ -221,11 +230,16 @@ describe('Reports Excel export', function () {
 
         $user = reportMakeUser('ovpri_admin');
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->post(route('reports.export'), [
                 'report_type' => 'ovpri',
                 'format' => 'excel',
-            ])
+            ]);
+
+        $response->assertRedirect();
+
+        $this->actingAs($user)
+            ->get($response->headers->get('Location'))
             ->assertOk()
             ->assertHeader(
                 'content-type',

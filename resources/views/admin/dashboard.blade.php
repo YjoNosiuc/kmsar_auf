@@ -322,4 +322,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+
+<script>
+    // Auto-refresh page every 2 minutes to keep counts current
+    setTimeout(function () {
+        window.location.reload();
+    }, 120000);
+</script>
 @endpush

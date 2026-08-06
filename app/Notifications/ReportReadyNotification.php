@@ -2,11 +2,11 @@
 
 namespace App\Notifications;
 
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class ReportReadyNotification extends Notification
 {
-
     public function __construct(
         public string $token,
         public string $reportType,
@@ -18,7 +18,20 @@ class ReportReadyNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $data = $this->toDatabase($notifiable);
+        $name = $notifiable->name ?? $notifiable->first_name ?? 'User';
+
+        return (new MailMessage)
+            ->subject(__('KMSAR — Report ready'))
+            ->greeting('Hello '.$name.',')
+            ->line($data['message'])
+            ->action(__('Download report'), $data['url'])
+            ->line(__('This is an automated message from KMSAR — Angeles University Foundation.'));
     }
 
     /**

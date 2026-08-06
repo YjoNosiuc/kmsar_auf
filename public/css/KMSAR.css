@@ -2272,8 +2272,53 @@ textarea {
    28. RESPONSIVE BREAKPOINTS
    ============================================================ */
 
-/* Tablet — hide sidebar labels, show only icons */
-@media (max-width: 1024px) {
+.kmsar-navbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.kmsar-navbar-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  background: none;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.kmsar-navbar-menu-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.kmsar-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 55;
+}
+
+.kmsar-sidebar-user-meta {
+  min-width: 0;
+}
+
+.kmsar-sidebar-user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 11rem;
+}
+
+/* Tablet — icon rail (labels hidden, including Sign Out span) */
+@media (max-width: 1024px) and (min-width: 768px) {
   .kmsar-sidebar { width: 3.5rem; }
   .kmsar-sidebar-brand-name,
   .kmsar-sidebar-brand-sub,
@@ -2295,8 +2340,82 @@ textarea {
   .kmsar-two-col { grid-template-columns: 1fr; }
 }
 
-/* Mobile */
-@media (max-width: 640px) {
+/* Mobile — off-canvas sidebar + hamburger */
+@media (max-width: 767px) {
+  .kmsar-navbar-menu-btn {
+    display: inline-flex;
+  }
+
+  .kmsar-navbar {
+    padding: 0 var(--space-3);
+    gap: 0.5rem;
+  }
+
+  .kmsar-navbar-context {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .kmsar-navbar-right {
+    flex-shrink: 0;
+  }
+
+  .kmsar-app.sidebar-open .kmsar-sidebar-backdrop {
+    display: block;
+  }
+
+  .kmsar-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(17.5rem, 86vw);
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    z-index: 60;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .kmsar-app.sidebar-open .kmsar-sidebar {
+    transform: translateX(0);
+  }
+
+  /* Full labels in the drawer (override tablet icon-only rules) */
+  .kmsar-sidebar-brand-name,
+  .kmsar-sidebar-brand-sub,
+  .kmsar-sidebar-brand-inst,
+  .kmsar-sidebar-user-name,
+  .kmsar-sidebar-user-role,
+  .kmsar-sidebar-section,
+  .kmsar-nav-item span,
+  .kmsar-sidebar-footer {
+    display: block;
+  }
+
+  .kmsar-nav-badge {
+    display: inline-flex;
+  }
+
+  .kmsar-sidebar-user {
+    justify-content: flex-start;
+    padding: 0.875rem 1rem;
+  }
+
+  .kmsar-sidebar-brand {
+    padding: 1.25rem 1.25rem 1rem;
+    text-align: left;
+  }
+
+  .kmsar-nav-item {
+    justify-content: flex-start;
+    padding: 0.625rem 1rem;
+  }
+
+  .kmsar-page-container {
+    padding: var(--space-4) var(--space-3);
+  }
+
   .kmsar-stats-grid { grid-template-columns: 1fr 1fr; }
   .kmsar-three-col  { grid-template-columns: 1fr; }
   .kmsar-form-row-2,
@@ -2306,4 +2425,25 @@ textarea {
   .kmsar-queue-card-actions { width: 100%; justify-content: flex-end; }
   .kmsar-modal { border-radius: var(--radius-lg) var(--radius-lg) 0 0; max-width: 100%; margin-top: auto; }
   .kmsar-modal-overlay { align-items: flex-end; padding: 0; }
+
+  /* Prevent horizontal scroll from wide content */
+  .kmsar-app,
+  .kmsar-main-wrapper,
+  .kmsar-main-content {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .kmsar-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Keep legacy 640px tweaks for very small phones (content only) */
+@media (max-width: 640px) {
+  .kmsar-stats-grid { grid-template-columns: 1fr 1fr; }
+  .kmsar-page-container {
+    padding: var(--space-3) var(--space-3);
+  }
 }

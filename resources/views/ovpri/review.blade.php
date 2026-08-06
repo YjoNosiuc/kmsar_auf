@@ -384,7 +384,6 @@
                                     class="kmsar-input w-full"
                                     maxlength="5000"
                                     placeholder="{{ __('Add any approval notes…') }}"
-                                    style="text-transform: uppercase"
                                 ></textarea>
                             </div>
                         </div>

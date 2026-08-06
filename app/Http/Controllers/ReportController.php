@@ -214,11 +214,32 @@ class ReportController extends Controller
             $collegeReport ? $collegeId : null
         );
 
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(120);
+
+        $downloadBase = 'KMSAR-Report-'.now()->format('Y-m-d');
+
         if ($validated['format'] === 'excel') {
-            return \Maatwebsite\Excel\Facades\Excel::download(
+            $excelName = $downloadBase.'.xlsx';
+
+            // Generate to disk, then stream via signed cache token so the browser
+            // receives a clean attachment (avoids truncated/corrupt POST bodies).
+            $token = bin2hex(random_bytes(16));
+            $storagePath = 'reports/'.$token.'.xlsx';
+
+            \Maatwebsite\Excel\Facades\Excel::store(
                 new \App\Exports\ResearchReportExport($researches, $this->reportGenerator, $collegeReport),
-                'KMSAR-Report-' . now()->format('Y-m-d') . '.xlsx'
+                $storagePath,
+                'local'
             );
+
+            Cache::put('report_download:'.$token, [
+                'user_id' => (int) $user->id,
+                'path' => $storagePath,
+                'download_name' => $excelName,
+            ], now()->addMinutes(15));
+
+            return redirect()->route('reports.download', $token);
         }
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.pdf', [
@@ -227,13 +248,14 @@ class ReportController extends Controller
             'filters' => $appliedFilters,
             'recordCount' => $researches->count(),
             'generatedAt' => now()->format('F d, Y h:i A'),
-            'role' => auth()->user()->getRoleNames()->first(),
+            'role' => $user->getRoleNames()->first(),
             'report_type' => $validated['report_type'],
         ])
             ->setOption('enable_php', true)
             ->setPaper('a4', 'landscape');
 
-        return $pdf->stream('KMSAR-Report-' . now()->format('Y-m-d') . '.pdf');
+        // Attachment download (not inline stream) — more reliable for desktop PDF readers.
+        return $pdf->download($downloadBase.'.pdf');
     }
 
     /**
@@ -474,12 +496,22 @@ class ReportController extends Controller
         }
 
         $path = $payload['path'] ?? null;
-        $downloadName = $payload['download_name'] ?? 'report';
+        $downloadName = $payload['download_name'] ?? 'report.xlsx';
 
         if (! is_string($path) || ! Storage::disk('local')->exists($path)) {
             abort(404);
         }
 
-        return Storage::disk('local')->download($path, $downloadName);
+        $absolutePath = Storage::disk('local')->path($path);
+        $contentType = str_ends_with(strtolower($downloadName), '.pdf')
+            ? 'application/pdf'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+        // One-time token — prevent reuse after a successful download starts.
+        Cache::forget('report_download:'.$token);
+
+        return response()->download($absolutePath, $downloadName, [
+            'Content-Type' => $contentType,
+        ])->deleteFileAfterSend(true);
     }
 }

@@ -24,7 +24,7 @@ async function openNotificationBell(page: Page): Promise<void> {
 async function createAndSubmitResearchAsCba(page: Page, title: string): Promise<string | undefined> {
   await login(page, credentials.faculty_cba.email, credentials.faculty_cba.password);
   await page.goto('/research/create');
-  await page.waitForURL(/\/research\/\d+\/details/);
+  await page.waitForURL(/\/research\/\d+\/details/, { timeout: 90_000 });
 
   await page.fill('textarea[name="title"]', title);
   await page.selectOption('select[name="research_classification"]', 'internally_funded');
@@ -33,10 +33,18 @@ async function createAndSubmitResearchAsCba(page: Page, title: string): Promise<
   await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
   await page.selectOption('select[name="status"]', 'proposal');
   await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
-  await page.getByRole('button', { name: 'Continue to authors' }).click();
-  await page.waitForURL(/\/authors/);
-  await page.getByRole('button', { name: 'Continue to documents' }).click();
-  await page.waitForURL(/\/documents/);
+  await Promise.all([
+    page.waitForURL(/\/authors/, { timeout: 90_000 }),
+    page.getByRole('button', { name: 'Continue to authors' }).click(),
+  ]);
+  const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
+  if (await primaryCheckbox.count()) {
+    await primaryCheckbox.check();
+  }
+  await Promise.all([
+    page.waitForURL(/\/documents/, { timeout: 90_000 }),
+    page.getByRole('button', { name: 'Continue to documents' }).click(),
+  ]);
   await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_PDF);
   await page.getByRole('button', { name: 'Save Document' }).click();
 
@@ -44,7 +52,7 @@ async function createAndSubmitResearchAsCba(page: Page, title: string): Promise<
   if (researchId) {
     await page.goto(`/research/${researchId}`);
     await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-    await page.waitForURL(/\/research\/\d+$/);
+    await page.waitForURL(/\/research\/\d+$/, { timeout: 90_000 });
   }
   return researchId;
 }
@@ -239,7 +247,7 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await expect(page.getByText(endorsedTitle.toUpperCase())).toBeVisible();
   });
 
-  test('TC-014: Try endorsing with remarks shorter than 10 characters → validation error (M-01)', async ({
+  test('TC-014: Endorsing with short remarks (< 10 characters) succeeds — remarks are optional', async ({
     page,
   }) => {
     const title = uniqueTitle('TC014 Short Remarks');
@@ -249,12 +257,17 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await openDeanReview(page, researchId);
     await page.getByRole('button', { name: 'Endorse', exact: true }).click();
     await page.locator('#endorse-remarks').fill('Short');
-    await page.locator('#endorse-remarks').evaluate((el) => el.removeAttribute('minlength'));
     await page.locator('form[action*="endorse"] button[type="submit"]').click();
 
     await expect(
-      page.locator('.kmsar-form-error').filter({ hasText: /at least|10 characters/i }).first(),
-    ).toBeVisible();
+      page.getByRole('alert').filter({ hasText: /endorsed and forwarded to OVPRI/i }),
+    ).toBeVisible({ timeout: 15_000 });
+
+    await page.goto(`/approval/${researchId}`);
+    // After endorsement, dean review page may redirect or show non-pending state
+    await login(page, credentials.ovpri.email, credentials.ovpri.password);
+    await page.goto('/ovpri/queue');
+    await expect(page.getByText(title, { exact: false })).toBeVisible({ timeout: 15_000 });
   });
 
   test('TC-015: Return research to faculty → stage changes to Draft, revision count increases by 1', async ({

@@ -9,15 +9,12 @@ use Illuminate\Notifications\Notification;
 class ResearchReturned extends Notification
 {
     use Queueable;
+    use SendsResearchNotificationMail;
 
     public function __construct(
         public Research $research
     ) {}
 
-    public function via(object $notifiable): array
-    {
-        return ['database'];
-    }
 
     public function toArray(object $notifiable): array
     {

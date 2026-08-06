@@ -17,6 +17,19 @@
             'rejected' => __('Rejected'),
         ];
 
+        $statusOptions = [
+            '' => __('All'),
+            'proposal' => __('Proposal / abstract'),
+            'ongoing' => __('Ongoing'),
+            'completed_unpublished' => __('Completed (unpublished)'),
+            'presented_internal' => __('Presented (internal)'),
+            'presented_external' => __('Presented (external)'),
+            'published_non_indexed' => __('Published (non-indexed)'),
+            'published_scopus' => __('Published (Scopus / ISI)'),
+            'patent_submitted' => __('Patent submitted'),
+            'patent_granted' => __('Patent granted'),
+        ];
+
         $approvalStageBadgeStatus = static function (string $stage): string {
             return match ($stage) {
                 'draft' => 'draft',
@@ -109,10 +122,10 @@
 
                 <div>
                     <label for="status" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">
-                        {{ __('Status') }}
+                        {{ __('Research Progress') }}
                     </label>
                     <select id="status" name="status" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
-                        @foreach ($stageOptions as $value => $label)
+                        @foreach ($statusOptions as $value => $label)
                             <option value="{{ $value }}" @selected($selectedStatus === $value)>{{ $label }}</option>
                         @endforeach
                     </select>

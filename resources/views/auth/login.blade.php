@@ -150,7 +150,6 @@
                         name="login"
                         value="{{ old('login') }}"
                         class="kmsar-input"
-                        style="text-transform: uppercase"
                         autocomplete="username"
                         required
                         autofocus
@@ -169,6 +168,9 @@
                         required
                         placeholder="••••••••"
                     >
+                    <div style="margin-top: 0.5rem; text-align: right;">
+                        <a href="{{ route('password.request') }}" style="font-size: 0.8125rem; color: #1E3A8A; font-weight: 600; text-decoration: underline;">Forgot password?</a>
+                    </div>
                 </div>
 
                 <div class="kmsar-form-group" style="margin-bottom: 0;">
@@ -197,4 +199,15 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+    // If the login page is restored from bfcache, reload so the CSRF token matches the session.
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
+</script>
+@endpush
 @endsection

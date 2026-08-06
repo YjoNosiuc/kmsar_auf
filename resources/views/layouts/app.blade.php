@@ -19,8 +19,25 @@
     @stack('styles')
 </head>
 <body>
-    <div class="kmsar-app">
-        <aside class="kmsar-sidebar" style="background-color: #1E3A8A;" aria-label="Main navigation">
+    <div
+        class="kmsar-app"
+        x-data="{ sidebarOpen: false }"
+        :class="{ 'sidebar-open': sidebarOpen }"
+        @keydown.escape.window="sidebarOpen = false"
+    >
+        {{-- Mobile sidebar backdrop --}}
+        <div
+            class="kmsar-sidebar-backdrop"
+            @click="sidebarOpen = false"
+            aria-hidden="true"
+        ></div>
+
+        <aside
+            id="kmsar-sidebar"
+            class="kmsar-sidebar"
+            style="background-color: #1E3A8A;"
+            aria-label="Main navigation"
+        >
             <div class="kmsar-sidebar-brand">
                 <div class="kmsar-sidebar-brand-inst">Angeles University Foundation</div>
                 <div class="kmsar-sidebar-brand-name">KMSAR</div>
@@ -37,7 +54,7 @@
                             {{ strtoupper(substr((string) auth()->user()->name, 0, 1)) }}
                         @endif
                     </span>
-                    <div>
+                    <div class="kmsar-sidebar-user-meta">
                         <div class="kmsar-sidebar-user-name">
                             @if(auth()->user()->first_name)
                                 {{ auth()->user()->first_name }} {{ auth()->user()->last_name }}
@@ -69,7 +86,7 @@
                 </div>
             @endauth
 
-            <nav class="kmsar-sidebar-nav">
+            <nav class="kmsar-sidebar-nav" @click="if (window.innerWidth < 768) sidebarOpen = false">
                 @hasSection('sidebar-nav')
                     @yield('sidebar-nav')
                 @else
@@ -84,8 +101,22 @@
 
         <div class="kmsar-main-wrapper">
             <header class="kmsar-navbar">
-                <div class="kmsar-navbar-context">
-                    @yield('navbar-context', 'Dashboard')
+                <div class="kmsar-navbar-left">
+                    <button
+                        type="button"
+                        class="kmsar-navbar-menu-btn"
+                        @click="sidebarOpen = !sidebarOpen"
+                        :aria-expanded="sidebarOpen.toString()"
+                        aria-controls="kmsar-sidebar"
+                        aria-label="{{ __('Toggle navigation menu') }}"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" style="width:1.35rem;height:1.35rem;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+                        </svg>
+                    </button>
+                    <div class="kmsar-navbar-context">
+                        @yield('navbar-context', 'Dashboard')
+                    </div>
                 </div>
                 <div class="kmsar-navbar-right">
                     @auth
@@ -133,11 +164,12 @@
                         {{-- Dropdown panel --}}
                         <div x-show="openNotif"
                              @click.outside="openNotif = false"
+                             class="kmsar-navbar-notif-panel"
                              style="display:none;
                                     position:absolute;
                                     top:calc(100% + 0.5rem);
                                     right:0;
-                                    width:22rem;
+                                    width:min(22rem, calc(100vw - 1.5rem));
                                     background:var(--color-card);
                                     border:1px solid var(--color-border);
                                     border-radius:var(--radius-lg);

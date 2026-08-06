@@ -97,10 +97,10 @@ class ApprovalController extends Controller
         abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
 
         $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:10', 'max:5000'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        $this->approvalService->endorse($research, $request->user(), $validated['remarks']);
+        $this->approvalService->endorse($research, $request->user(), $validated['remarks'] ?? null);
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -203,7 +203,9 @@ class ApprovalController extends Controller
             ->get();
 
         $returned = $baseQuery()
-            ->whereNotIn('approval_stage', ['ovpri_review', 'approved', 'dean_review'])
+            // OVPRI return sets approval_stage back to dean_review; reject sets rejected.
+            // Do not exclude dean_review or draft — otherwise returned papers never appear here.
+            ->whereNotIn('approval_stage', ['ovpri_review', 'approved'])
             ->whereHas('approvals', function ($q) {
                 $q->where('stage', 'ovpri')
                     ->whereIn('action', ['returned', 'rejected']);
@@ -306,10 +308,12 @@ class ApprovalController extends Controller
 
     private function forgetResearchDashboardCaches(Research $research): void
     {
-        $hourKey = now()->format('Y-m-d-H');
-        Cache::forget('ovpri_stats_all_'.$hourKey);
-        for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-            Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
+        foreach ([now(), now()->subHour()] as $moment) {
+            $hourKey = $moment->format('Y-m-d-H');
+            Cache::forget('ovpri_stats_all_'.$hourKey);
+            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
+            }
         }
         Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
         Cache::forget('sdg_counts');
@@ -319,9 +323,12 @@ class ApprovalController extends Controller
         }
 
         foreach ($this->deanUserIdsForCollege((int) $research->mother_college_id) as $id) {
-            Cache::forget('dean_stats_'.$id.'_all_'.now()->format('Y-m-d'));
-            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                Cache::forget('dean_stats_'.$id.'_'.$year.'_'.now()->format('Y-m-d'));
+            foreach ([now(), now()->subDay()] as $day) {
+                $dayKey = $day->format('Y-m-d');
+                Cache::forget('dean_stats_'.$id.'_all_'.$dayKey);
+                for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                    Cache::forget('dean_stats_'.$id.'_'.$year.'_'.$dayKey);
+                }
             }
         }
     }

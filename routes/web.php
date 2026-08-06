@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ImportController;
 use App\Http\Controllers\Admin\ProgramController;
 use App\Http\Controllers\Admin\UserController;
 use App\Models\College;
+use App\Models\Research;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\Schema;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\ApprovalFileController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\DeanController;
 use App\Http\Controllers\DocumentController;
@@ -39,7 +41,8 @@ return redirect()->route('login');
 });
 /*
 |--------------------------------------------------------------------------
-| Auth (guest)
+| Auth (guest) — intentionally WITHOUT nocache middleware.
+| no-store on the login page causes browsers to drop the CSRF token → 419 Page Expired.
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
@@ -49,6 +52,11 @@ Route::middleware('guest')->group(function () {
         ->name('register');
     Route::post('/register', [RegisterController::class, 'store'])
         ->name('register.store');
+
+    Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->name('password.update');
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])
@@ -214,35 +222,38 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 ]);
             }
 
-            $totalResearch = (int) DB::table('research')->count();
+            // Match reports default scope: Eloquent (excludes soft-deletes) and exclude rejected.
+            $activeResearch = fn () => Research::query()->where('approval_stage', '!=', 'rejected');
+
+            $totalResearch = (int) $activeResearch()->count();
 
             $researchByStatus = [
-                'draft' => (int) DB::table('research')->where('approval_stage', 'draft')->count(),
-                'dean_review' => (int) DB::table('research')->where('approval_stage', 'dean_review')->count(),
-                'ovpri_review' => (int) DB::table('research')->where('approval_stage', 'ovpri_review')->count(),
-                'approved' => (int) DB::table('research')->where('approval_stage', 'approved')->count(),
-                'rejected' => (int) DB::table('research')->where('approval_stage', 'rejected')->count(),
+                'draft' => (int) Research::query()->where('approval_stage', 'draft')->count(),
+                'dean_review' => (int) Research::query()->where('approval_stage', 'dean_review')->count(),
+                'ovpri_review' => (int) Research::query()->where('approval_stage', 'ovpri_review')->count(),
+                'approved' => (int) Research::query()->where('approval_stage', 'approved')->count(),
+                'rejected' => (int) Research::query()->where('approval_stage', 'rejected')->count(),
             ];
 
-            $pendingApprovals = (int) DB::table('research')
+            $pendingApprovals = (int) Research::query()
                 ->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
                 ->count();
 
-            $researchByCollege = DB::table('colleges')
-                ->leftJoin('research', 'research.mother_college_id', '=', 'colleges.id')
-                ->select('colleges.code', DB::raw('count(research.id) as total'))
-                ->groupBy('colleges.id', 'colleges.code')
-                ->orderBy('colleges.code')
+            $researchByCollege = College::query()
+                ->orderBy('code')
                 ->get()
-                ->map(fn ($row) => [
-                    'label' => $row->code,
-                    'count' => (int) $row->total,
+                ->map(fn (College $college) => [
+                    'label' => $college->code,
+                    'count' => (int) Research::query()
+                        ->where('mother_college_id', $college->id)
+                        ->where('approval_stage', '!=', 'rejected')
+                        ->count(),
                 ])
                 ->values();
 
             $statusKeys = ['draft', 'dean_review', 'ovpri_review', 'approved', 'rejected'];
             $statusLabels = ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'];
-            $statusCounts = DB::table('research')
+            $statusCounts = Research::query()
                 ->select('approval_stage', DB::raw('count(*) as total'))
                 ->groupBy('approval_stage')
                 ->pluck('total', 'approval_stage');
@@ -271,7 +282,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'other' => 'Other',
             ];
 
-            $rawClass = DB::table('research')
+            $rawClass = $activeResearch()
                 ->select('research_classification', DB::raw('count(*) as total'))
                 ->groupBy('research_classification')
                 ->pluck('total', 'research_classification');
@@ -295,19 +306,20 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'colors' => array_map(fn (string $k) => $classificationColorsMap[$k], $classificationKeys),
             ];
 
-            $submissionsThisYear = (int) DB::table('research')
+            $submissionsThisYear = (int) $activeResearch()
                 ->whereYear('created_at', now()->year)
                 ->count();
 
             $monthlySubmissions = Cache::remember('admin_monthly_stats_'.now()->format('Y-m'), 3600, function () {
                 $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+                $base = Research::query()->where('approval_stage', '!=', 'rejected');
                 $byMonth = $isSqlite
-                    ? DB::table('research')
+                    ? (clone $base)
                         ->selectRaw('CAST(strftime(\'%m\', created_at) AS INTEGER) as month, count(*) as total')
                         ->whereYear('created_at', date('Y'))
                         ->groupByRaw('CAST(strftime(\'%m\', created_at) AS INTEGER)')
                         ->pluck('total', 'month')
-                    : DB::table('research')
+                    : (clone $base)
                         ->selectRaw('MONTH(created_at) as month, count(*) as total')
                         ->whereYear('created_at', date('Y'))
                         ->groupByRaw('MONTH(created_at)')

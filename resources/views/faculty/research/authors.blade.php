@@ -156,7 +156,7 @@
                         :class="{ 'authors-role-segment__tab--active': primaryType === 'employee' }"
                         :aria-selected="primaryType === 'employee'"
                         @click="primaryType = 'employee'"
-                    >{{ __('Employee / Researcher') }}</button>
+                    >{{ __('Employee') }}</button>
                 </div>
 
                 <input type="hidden" name="primary_author_type" x-bind:value="iAmPrimary ? 'self' : primaryType">
@@ -201,9 +201,11 @@
                     </div>
                     <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_number">{{ __('Student Number') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_student_number" type="text" name="student_number" class="kmsar-input" style="text-transform: uppercase"
+                            <label class="kmsar-form-label" for="primary_student_number">{{ __('ID Number') }} <span class="kmsar-form-required">*</span></label>
+                            <input id="primary_student_number" type="text" name="student_number" class="kmsar-input"
+                                inputmode="numeric" pattern="[0-9]*" autocomplete="off"
                                 x-model="primaryEmpNo"
+                                @input="primaryEmpNo = ($event.target.value || '').replace(/\D/g, '')"
                                 x-bind:disabled="iAmPrimary || primaryType !== 'student'"
                                 x-bind:required="!iAmPrimary && primaryType==='student'">
                             <input type="hidden" name="primary_author_employee_number" :value="primaryEmpNo" x-bind:disabled="iAmPrimary || primaryType !== 'student'">
@@ -403,7 +405,7 @@
                             :class="{ 'authors-role-segment__tab--active': author.authorType === 'employee' }"
                             :aria-selected="author.authorType === 'employee'"
                             @click="author.authorType = 'employee'"
-                        >{{ __('Employee / Researcher') }}</button>
+                        >{{ __('Employee') }}</button>
                     </div>
 
                     <input type="hidden" :name="'authors[' + index + '][author_type]'" :value="author.authorType">
@@ -439,9 +441,11 @@
                         </div>
                         <div class="kmsar-form-row-2">
                             <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_sn_' + index">{{ __('Student Number') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="text" :id="'coauthor_student_sn_' + index" :name="'authors[' + index + '][student_number]'" class="kmsar-input" style="text-transform: uppercase"
+                                <label class="kmsar-form-label" :for="'coauthor_student_sn_' + index">{{ __('ID Number') }} <span class="kmsar-form-required">*</span></label>
+                                <input type="text" :id="'coauthor_student_sn_' + index" :name="'authors[' + index + '][student_number]'" class="kmsar-input"
+                                    inputmode="numeric" pattern="[0-9]*" autocomplete="off"
                                     x-model="author.empNo"
+                                    @input="author.empNo = ($event.target.value || '').replace(/\D/g, '')"
                                     x-bind:disabled="author.authorType !== 'student'">
                                 <input type="hidden" :name="'authors[' + index + '][employee_number]'" :value="author.empNo" x-bind:disabled="author.authorType !== 'student'">
                             </div>

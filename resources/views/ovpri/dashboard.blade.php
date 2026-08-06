@@ -60,7 +60,7 @@
             <div class="kmsar-stat-card-value">{{ number_format($totalResearch) }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-pending">
-            <div class="kmsar-stat-card-label">{{ __('Pending approval') }}</div>
+            <div class="kmsar-stat-card-label">{{ __('Pending OVPRI approval') }}</div>
             <div class="kmsar-stat-card-value kmsar-stat-card-value--pending">{{ number_format($pendingApprovals) }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-success">
@@ -468,5 +468,12 @@
                 });
             }
         });
+    </script>
+
+    <script>
+        // Auto-refresh page every 2 minutes to keep counts current
+        setTimeout(function () {
+            window.location.reload();
+        }, 120000);
     </script>
 @endpush

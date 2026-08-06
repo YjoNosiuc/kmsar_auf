@@ -7,7 +7,13 @@
 @endsection
 
 @section('content')
-    <div x-data="{ tab: 'upload' }" x-init="@if (session('success')) $nextTick(() => document.getElementById('upload-success-alert')?.scrollIntoView({ behavior: 'smooth', block: 'start' })) @endif">
+    <div
+        x-data="{
+            tab: 'upload',
+            documentCount: {{ (int) $research->documents->count() }},
+        }"
+        x-init="@if (session('success')) $nextTick(() => document.getElementById('upload-success-alert')?.scrollIntoView({ behavior: 'smooth', block: 'start' })) @endif"
+    >
         <x-page-header
             :title="$research->reference_number"
             :subtitle="__('Step 3 of 3 · Upload documents and finish registration') . ' · ' . str($research->title)->limit(100)"
@@ -37,6 +43,66 @@
 
         @include('faculty.research.partials.registration-stepper', ['currentStep' => 3, 'research' => $research])
 
+        @php
+            $requirementMatrix = [
+                ['status' => 'proposal', 'status_label' => __('Proposal / abstract stage'), 'documents' => __('Abstract or Proposal Paper')],
+                ['status' => 'ongoing', 'status_label' => __('Research in progress'), 'documents' => __('Progress Report or Partial Data')],
+                ['status' => 'completed_unpublished', 'status_label' => __('Done, not presented/published'), 'documents' => __('Full Paper / Manuscript')],
+                ['status' => 'presented_internal', 'status_label' => __('Presented inside AUF'), 'documents' => __('Certificate + Conference Program')],
+                ['status' => 'presented_external', 'status_label' => __('Presented outside AUF'), 'documents' => __('Certificate + Conference Program')],
+                ['status' => 'published_non_indexed', 'status_label' => __('Published, not Scopus'), 'documents' => __('Full Published Article')],
+                ['status' => 'published_scopus', 'status_label' => __('Scopus/ISI indexed'), 'documents' => __('Published Article')],
+                ['status' => 'patent_submitted', 'status_label' => __('Submitted to IPOPHL'), 'documents' => __('Acknowledgement Receipt')],
+                ['status' => 'patent_granted', 'status_label' => __('Patent granted'), 'documents' => __('Patent Certificate')],
+            ];
+            $currentRequirement = collect($requirementMatrix)->firstWhere('status', $research->status);
+        @endphp
+
+        <div class="kmsar-alert kmsar-alert--info mb-6" role="status">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+            </svg>
+            <div>
+                <strong class="block mb-1">{{ __('Requirements') }}</strong>
+                @if ($currentRequirement)
+                    <p class="mb-0 text-sm">
+                        {{ __('Progress status') }}:
+                        <span class="font-semibold">{{ $currentRequirement['status_label'] }}</span>
+                        — {{ __('upload') }}: <span class="font-semibold">{{ $currentRequirement['documents'] }}</span>
+                    </p>
+                @else
+                    <p class="mb-0 text-sm">{{ __('Upload documents that match your declared progress status.') }}</p>
+                @endif
+                <details class="mt-3">
+                    <summary class="cursor-pointer text-sm font-semibold" style="color:#1E3A8A;">{{ __('View required documents by progress status') }}</summary>
+                    <div class="kmsar-table-wrap overflow-x-auto mt-3">
+                        <table class="kmsar-table w-full min-w-[36rem]">
+                            <thead>
+                                <tr>
+                                    <th scope="col">{{ __('Progress status') }}</th>
+                                    <th scope="col">{{ __('Required documents') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($requirementMatrix as $row)
+                                    @php $isCurrent = $research->status === $row['status']; @endphp
+                                    <tr @if($isCurrent) style="background:#E0F2FE;" @endif>
+                                        <td class="align-top">
+                                            <span style="font-weight: {{ $isCurrent ? '600' : '400' }}; color: #0F172A;">{{ $row['status_label'] }}</span>
+                                            @if ($isCurrent)
+                                                <span style="display:inline-block;margin-left:8px;font-size:11px;font-weight:600;color:#0369A1;white-space:nowrap;">← {{ __('Your current status') }}</span>
+                                            @endif
+                                        </td>
+                                        <td>{{ $row['documents'] }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </div>
+        </div>
+
         <div class="kmsar-tabs mb-6" role="tablist" aria-label="{{ __('Document registration') }}">
             <button
                 type="button"
@@ -46,14 +112,6 @@
                 :aria-selected="tab === 'upload'"
                 @click="tab = 'upload'"
             >{{ __('Upload documents') }}</button>
-            <button
-                type="button"
-                role="tab"
-                class="kmsar-tab"
-                :class="{ 'active': tab === 'requirements' }"
-                :aria-selected="tab === 'requirements'"
-                @click="tab = 'requirements'"
-            >{{ __('Requirements') }}</button>
             <button
                 type="button"
                 role="tab"
@@ -110,7 +168,7 @@
                                     {{ __('Your patent has been granted. Upload the patent certificate.') }}
                                     @break
                                 @default
-                                    {{ __('Upload documents that match your declared progress status. See the Requirements tab for the full matrix.') }}
+                                    {{ __('Upload documents that match your declared progress status. See the Requirements notice above for the full matrix.') }}
                             @endswitch
                         </div>
                     </div>
@@ -312,57 +370,7 @@
             </div>
         </div>
 
-        {{-- Tab 2: Requirements matrix --}}
-        <div x-show="tab === 'requirements'" x-cloak class="space-y-6" style="display: none;" role="tabpanel">
-            @php
-                $requirementMatrix = [
-                    ['status' => 'proposal', 'status_label' => __('Proposal / abstract stage'), 'documents' => __('Abstract or Proposal Paper')],
-                    ['status' => 'ongoing', 'status_label' => __('Research in progress'), 'documents' => __('Progress Report or Partial Data')],
-                    ['status' => 'completed_unpublished', 'status_label' => __('Done, not presented/published'), 'documents' => __('Full Paper / Manuscript')],
-                    ['status' => 'presented_internal', 'status_label' => __('Presented inside AUF'), 'documents' => __('Certificate + Conference Program')],
-                    ['status' => 'presented_external', 'status_label' => __('Presented outside AUF'), 'documents' => __('Certificate + Conference Program')],
-                    ['status' => 'published_non_indexed', 'status_label' => __('Published, not Scopus'), 'documents' => __('Full Published Article')],
-                    ['status' => 'published_scopus', 'status_label' => __('Scopus/ISI indexed'), 'documents' => __('Published Article')],
-                    ['status' => 'patent_submitted', 'status_label' => __('Submitted to IPOPHL'), 'documents' => __('Acknowledgement Receipt')],
-                    ['status' => 'patent_granted', 'status_label' => __('Patent granted'), 'documents' => __('Patent Certificate')],
-                ];
-            @endphp
-            <div class="kmsar-card kmsar-card--accent-primary">
-                <div class="kmsar-card-header">
-                    <h2 class="kmsar-card-title">{{ __('Required documents by progress status') }}</h2>
-                </div>
-                <div class="kmsar-card-body">
-                    <div class="kmsar-table-wrap overflow-x-auto">
-                        <table class="kmsar-table w-full min-w-[36rem]">
-                            <thead>
-                                <tr>
-                                    <th scope="col">{{ __('Progress status') }}</th>
-                                    <th scope="col">{{ __('Required documents') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($requirementMatrix as $row)
-                                    @php
-                                        $isCurrent = $research->status === $row['status'];
-                                    @endphp
-                                    <tr @if($isCurrent) style="background:#E0F2FE;" @endif>
-                                        <td class="align-top">
-                                            <span style="font-weight: {{ $isCurrent ? '600' : '400' }}; color: #0F172A;">{{ $row['status_label'] }}</span>
-                                            @if ($isCurrent)
-                                                <span style="display:inline-block;margin-left:8px;font-size:11px;font-weight:600;color:#0369A1;white-space:nowrap;">← {{ __('Your current status') }}</span>
-                                            @endif
-                                        </td>
-                                        <td>{{ $row['documents'] }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- Tab 3: Finish registration --}}
+        {{-- Tab 2: Finish registration --}}
         <div x-show="tab === 'finish'" x-cloak class="space-y-6" style="display: none;" role="tabpanel">
             <div class="kmsar-card kmsar-card--accent-primary">
                 <div class="kmsar-card-header">
@@ -403,10 +411,21 @@
                                         {{ __('Research details completed') }}
                                     </div>
                                     <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
-                                        <span style="width:20px;height:20px;border-radius:50%;background:{{ $docCount > 0 ? '#059669' : '#E2E8F0' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;">{{ $docCount > 0 ? '✓' : '!' }}</span>
-                                        {{ __('Required document uploaded') }} ({{ $docCount }} {{ $docCount === 1 ? __('file') : __('files') }})
+                                        <span
+                                            style="width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;"
+                                            :style="documentCount > 0 ? 'background:#059669' : 'background:#E2E8F0'"
+                                            x-text="documentCount > 0 ? '✓' : '!'"
+                                        ></span>
+                                        <span>
+                                            {{ __('Required document uploaded') }}
+                                            (<span x-text="documentCount"></span>
+                                            <span x-text="documentCount === 1 ? '{{ __('file') }}' : '{{ __('files') }}'"></span>)
+                                        </span>
                                     </div>
                                 </div>
+                                <p x-show="documentCount === 0" x-cloak class="kmsar-body" style="margin:12px 0 0;font-size:12px;color:#D97706;">
+                                    {{ __('Upload at least one document before submitting for dean review.') }}
+                                </p>
                             </div>
                         @endif
 
@@ -419,7 +438,14 @@
                             @else
                                 <form method="POST" action="{{ route('research.submit', $research) }}">
                                     @csrf
-                                    <button type="submit" style="padding:10px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">
+                                    <button
+                                        type="submit"
+                                        class="kmsar-btn kmsar-btn--primary"
+                                        :disabled="documentCount === 0"
+                                        :style="documentCount === 0
+                                            ? 'padding:10px 24px;background:#94A3B8;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:not-allowed;opacity:0.7;'
+                                            : 'padding:10px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;'"
+                                    >
                                         {{ __('Submit for Dean Review') }} →
                                     </button>
                                 </form>

@@ -150,6 +150,18 @@ class DeanController extends Controller
 
         if ($academicYear !== null) {
             $q->whereYear('start_date', $academicYear);
+        } else {
+            // Match the dashboard filter label "All years (last 5)" and the chart year list.
+            $years = $this->lastNYears(5);
+            $isSqlite = $q->getConnection()->getDriverName() === 'sqlite';
+            if ($isSqlite) {
+                $q->whereRaw(
+                    "CAST(strftime('%Y', start_date) AS INTEGER) BETWEEN ? AND ?",
+                    [min($years), max($years)]
+                );
+            } else {
+                $q->whereRaw('YEAR(start_date) BETWEEN ? AND ?', [min($years), max($years)]);
+            }
         }
 
         return $q;
@@ -202,6 +214,17 @@ class DeanController extends Controller
 
         if ($academicYear !== null) {
             $researchQuery->whereYear('start_date', $academicYear);
+        } else {
+            $years = $this->lastNYears(5);
+            $isSqlite = $researchQuery->getConnection()->getDriverName() === 'sqlite';
+            if ($isSqlite) {
+                $researchQuery->whereRaw(
+                    "CAST(strftime('%Y', start_date) AS INTEGER) BETWEEN ? AND ?",
+                    [min($years), max($years)]
+                );
+            } else {
+                $researchQuery->whereRaw('YEAR(start_date) BETWEEN ? AND ?', [min($years), max($years)]);
+            }
         }
 
         $allResearch = $researchQuery

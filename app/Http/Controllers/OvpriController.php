@@ -81,7 +81,7 @@ class OvpriController extends Controller
         $totalResearch = (clone $base)->count();
 
         $pendingApprovals = (clone $base)
-            ->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
+            ->where('approval_stage', 'ovpri_review')
             ->count();
 
         $publishedCount = (clone $base)

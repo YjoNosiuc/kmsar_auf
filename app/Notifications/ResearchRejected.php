@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notification;
 class ResearchRejected extends Notification
 {
     use Queueable;
+    use SendsResearchNotificationMail;
 
     public function __construct(
         public Research $research,
@@ -16,10 +17,6 @@ class ResearchRejected extends Notification
         public string $rejectedBy = 'dean',
     ) {}
 
-    public function via(object $notifiable): array
-    {
-        return ['database'];
-    }
 
     public function toArray(object $notifiable): array
     {

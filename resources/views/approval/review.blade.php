@@ -377,17 +377,14 @@
                                 {{ __('This research will be forwarded to OVPRI for final approval.') }}
                             </div>
                             <div>
-                                <label for="endorse-remarks" class="kmsar-label" style="display:block;margin-bottom:0.35rem;">{{ __('Remarks (required)') }}</label>
+                                <label for="endorse-remarks" class="kmsar-label" style="display:block;margin-bottom:0.35rem;">{{ __('Remarks (optional)') }}</label>
                                 <textarea
                                     id="endorse-remarks"
                                     name="remarks"
                                     rows="4"
                                     class="kmsar-input w-full @error('remarks') kmsar-input--error @enderror"
-                                    required
-                                    minlength="10"
                                     maxlength="5000"
                                     placeholder="{{ __('Add any notes for OVPRI before endorsing…') }}"
-                                    style="text-transform: uppercase"
                                 >{{ old('remarks') }}</textarea>
                                 @error('remarks')
                                     <p class="kmsar-form-error" role="alert">{{ $message }}</p>

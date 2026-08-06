@@ -55,70 +55,161 @@
                 default => 'info',
             };
         };
+
+        $statusOptions = [
+            'proposal' => __('Proposal / abstract'),
+            'ongoing' => __('Ongoing'),
+            'completed_unpublished' => __('Completed (unpublished)'),
+            'presented_internal' => __('Presented (internal)'),
+            'presented_external' => __('Presented (external)'),
+            'published_non_indexed' => __('Published (non-indexed)'),
+            'published_scopus' => __('Published (Scopus)'),
+            'patent_submitted' => __('Patent submitted'),
+            'patent_granted' => __('Patent granted'),
+        ];
+
+        $stageOptions = [
+            'draft' => __('Draft'),
+            'dean_review' => __('Dean Review'),
+            'ovpri_review' => __('OVPRI Review'),
+            'approved' => __('Approved'),
+            'rejected' => __('Rejected'),
+        ];
+
+        $filterItems = $research->map(static fn ($item) => [
+            'id' => $item->id,
+            'title' => (string) $item->title,
+            'approval_stage' => (string) $item->approval_stage,
+            'status' => (string) $item->status,
+        ])->values()->all();
     @endphp
 
-    <div class="mb-2">
-        <h2 class="kmsar-h3" style="margin:0 0 4px 0;">{{ __('Submissions') }}</h2>
-        <p class="kmsar-body" style="margin:0;font-size:13px;color:var(--color-text-muted);">{{ __('Click a card to open the full record.') }}</p>
-    </div>
+    <div
+        x-data="{
+            search: '',
+            stage: '',
+            status: '',
+            items: {{ \Illuminate\Support\Js::from($filterItems) }},
+            matches(title, approvalStage, progressStatus) {
+                const q = (this.search || '').trim().toLowerCase();
+                const titleOk = !q || (title || '').toLowerCase().includes(q);
+                const stageOk = !this.stage || approvalStage === this.stage;
+                const statusOk = !this.status || progressStatus === this.status;
+                return titleOk && stageOk && statusOk;
+            },
+            get visibleCount() {
+                return this.items.filter((item) => this.matches(item.title, item.approval_stage, item.status)).length;
+            },
+        }"
+    >
+        @if ($research->isNotEmpty())
+            <div class="mb-4" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+                <div class="kmsar-form-group" style="margin:0;flex:1 1 220px;min-width:200px;">
+                    <label class="kmsar-form-label" for="faculty-research-search">{{ __('Search') }}</label>
+                    <input
+                        id="faculty-research-search"
+                        type="search"
+                        class="kmsar-input"
+                        placeholder="{{ __('Search by title…') }}"
+                        x-model="search"
+                        autocomplete="off"
+                    >
+                </div>
+                <div class="kmsar-form-group" style="margin:0;flex:0 1 200px;min-width:160px;">
+                    <label class="kmsar-form-label" for="faculty-research-stage">{{ __('Approval stage') }}</label>
+                    <select id="faculty-research-stage" class="kmsar-select" x-model="stage">
+                        <option value="">{{ __('All stages') }}</option>
+                        @foreach ($stageOptions as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="kmsar-form-group" style="margin:0;flex:0 1 220px;min-width:180px;">
+                    <label class="kmsar-form-label" for="faculty-research-status">{{ __('Progress status') }}</label>
+                    <select id="faculty-research-status" class="kmsar-select" x-model="status">
+                        <option value="">{{ __('All statuses') }}</option>
+                        @foreach ($statusOptions as $value => $label)
+                            <option value="{{ $value }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+        @endif
 
-    @forelse ($research as $item)
-        @php
-            $statusLabel = str_replace('_', ' ', $item->status);
-            $stageLabel = str_replace('_', ' ', $item->approval_stage);
-            $leftBorder = $borderByStage($item->approval_stage);
-        @endphp
-        <div
-            style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-left:4px solid {{ $leftBorder }};"
-        >
-            <div style="flex:1;min-width:0;">
-                <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
-                    <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;color:#D4AF37;letter-spacing:.06em;">{{ $item->reference_number }}</span>
-                    @if ((int) $item->primary_author_id !== (int) auth()->id())
-                        <x-badge status="info">{{ __('Co-author') }}</x-badge>
+        <div class="mb-2">
+            <h2 class="kmsar-h3" style="margin:0 0 4px 0;">{{ __('Submissions') }}</h2>
+            <p class="kmsar-body" style="margin:0;font-size:13px;color:var(--color-text-muted);">{{ __('Click a card to open the full record.') }}</p>
+        </div>
+
+        @forelse ($research as $item)
+            @php
+                $statusLabel = str_replace('_', ' ', $item->status);
+                $stageLabel = str_replace('_', ' ', $item->approval_stage);
+                $leftBorder = $borderByStage($item->approval_stage);
+            @endphp
+            <div
+                x-show='matches(@js($item->title), @js($item->approval_stage), @js($item->status))'
+                style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-left:4px solid {{ $leftBorder }};"
+            >
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+                        <span style="font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:11px;font-weight:600;color:#D4AF37;letter-spacing:.06em;">{{ $item->reference_number }}</span>
+                        @if ((int) $item->primary_author_id !== (int) auth()->id())
+                            <x-badge status="info">{{ __('Co-author') }}</x-badge>
+                        @endif
+                        <x-badge :status="$researchProgressBadgeStatus($item->status)">{{ ucwords($statusLabel) }}</x-badge>
+                        <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">{{ ucwords($stageLabel) }}</x-badge>
+                    </div>
+                    <div style="font-size:15px;font-weight:600;color:#0F172A;line-height:1.4;margin-bottom:6px;">{{ $item->title }}</div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#475569;">
+                        <span>{{ ucwords(str_replace('_', ' ', $item->research_classification)) }}</span>
+                        <span>{{ $item->start_date?->format('M Y') ?? '—' }}</span>
+                        <span>{{ collect($item->expectedOutputKeys())->map(fn ($o) => $expectedLabels[$o] ?? ucwords(str_replace('_', ' ', (string) $o)))->implode(', ') ?: '—' }}</span>
+                    </div>
+                </div>
+                <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <a
+                        href="{{ route('research.show', $item) }}"
+                        style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1E3A8A;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;"
+                        aria-label="{{ __('View research') }}"
+                    >{{ __('View') }} →</a>
+                    @if ($item->approval_stage === 'draft' && (int) $item->primary_author_id === (int) auth()->id())
+                        <form method="POST"
+                              action="{{ route('research.destroy', $item) }}"
+                              onsubmit="return confirm('Are you sure you want to delete this research? This cannot be undone.')">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit"
+                                    class="kmsar-btn kmsar-btn--danger-outline kmsar-btn--sm">
+                                Delete
+                            </button>
+                        </form>
                     @endif
-                    <x-badge :status="$researchProgressBadgeStatus($item->status)">{{ ucwords($statusLabel) }}</x-badge>
-                    <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">{{ ucwords($stageLabel) }}</x-badge>
-                </div>
-                <div style="font-size:15px;font-weight:600;color:#0F172A;line-height:1.4;margin-bottom:6px;">{{ $item->title }}</div>
-                <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#475569;">
-                    <span>{{ ucwords(str_replace('_', ' ', $item->research_classification)) }}</span>
-                    <span>{{ $item->start_date?->format('M Y') ?? '—' }}</span>
-                    <span>{{ collect($item->expectedOutputKeys())->map(fn ($o) => $expectedLabels[$o] ?? ucwords(str_replace('_', ' ', (string) $o)))->implode(', ') ?: '—' }}</span>
                 </div>
             </div>
-            <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <a
-                    href="{{ route('research.show', $item) }}"
-                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1E3A8A;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;"
-                    aria-label="{{ __('View research') }}"
-                >{{ __('View') }} →</a>
-                @if ($item->approval_stage === 'draft' && (int) $item->primary_author_id === (int) auth()->id())
-                    <form method="POST"
-                          action="{{ route('research.destroy', $item) }}"
-                          onsubmit="return confirm('Are you sure you want to delete this research? This cannot be undone.')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit"
-                                class="kmsar-btn kmsar-btn--danger-outline kmsar-btn--sm">
-                            Delete
-                        </button>
-                    </form>
-                @endif
+        @empty
+            <div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:48px 24px;text-align:center;max-width:520px;margin:0 auto;">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:48px;height:48px;margin:0 auto;color:#94A3B8;" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                </svg>
+                <p style="margin:16px 0 0;font-size:15px;font-weight:600;color:#0F172A;">{{ __('No research records yet') }}</p>
+                <p style="margin:8px 0 0;font-size:13px;color:#64748B;line-height:1.5;">{{ __('Start the registration wizard to create your first submission.') }}</p>
+                <div style="margin-top:20px;">
+                    <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
+                </div>
             </div>
-        </div>
-    @empty
-        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:48px 24px;text-align:center;max-width:520px;margin:0 auto;">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:48px;height:48px;margin:0 auto;color:#94A3B8;" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-            </svg>
-            <p style="margin:16px 0 0;font-size:15px;font-weight:600;color:#0F172A;">{{ __('No research records yet') }}</p>
-            <p style="margin:8px 0 0;font-size:13px;color:#64748B;line-height:1.5;">{{ __('Start the registration wizard to create your first submission.') }}</p>
-            <div style="margin-top:20px;">
-                <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
+        @endforelse
+
+        @if ($research->isNotEmpty())
+            <div
+                x-show="visibleCount === 0"
+                x-cloak
+                style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:24px;text-align:center;color:#64748B;font-size:13px;"
+            >
+                {{ __('No research matches your search or filters.') }}
             </div>
-        </div>
-    @endforelse
+        @endif
+    </div>
 
     @if ($research instanceof \Illuminate\Contracts\Pagination\Paginator && $research->hasPages())
         <div class="mt-6 flex justify-end">

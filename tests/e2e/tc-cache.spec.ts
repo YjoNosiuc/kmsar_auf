@@ -38,10 +38,18 @@ async function submitAsFaculty(
   await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
   await page.selectOption('select[name="status"]', 'proposal');
   await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
-  await page.getByRole('button', { name: 'Continue to authors' }).click();
-  await page.waitForURL(/\/authors/);
-  await page.getByRole('button', { name: 'Continue to documents' }).click();
-  await page.waitForURL(/\/documents/);
+  await Promise.all([
+    page.waitForURL(/\/authors/, { timeout: 90_000 }),
+    page.getByRole('button', { name: 'Continue to authors' }).click(),
+  ]);
+  const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
+  if (await primaryCheckbox.count()) {
+    await primaryCheckbox.check();
+  }
+  await Promise.all([
+    page.waitForURL(/\/documents/, { timeout: 90_000 }),
+    page.getByRole('button', { name: 'Continue to documents' }).click(),
+  ]);
   await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_PDF);
   await page.getByRole('button', { name: 'Save Document' }).click();
 
@@ -111,24 +119,25 @@ test.describe('Dashboard cache invalidation — UAT', () => {
   }) => {
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/dashboard');
-    const before = await getStatCardValue(page, /Pending approval/i);
+    // Card label is "Pending OVPRI approval" (ovpri_review only)
+    const before = await getStatCardValue(page, /Pending.*approval/i);
 
     const title = `CACHE-003 ${Date.now()}`;
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
 
-    // Warm/submit path should bump OVPRI pending (dean_review counts as pending)
+    // Submit puts research in dean_review — must NOT bump OVPRI pending
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/dashboard');
-    const afterSubmit = await getStatCardValue(page, /Pending approval/i);
-    expect(afterSubmit).toBe(before + 1);
+    const afterSubmit = await getStatCardValue(page, /Pending.*approval/i);
+    expect(afterSubmit).toBe(before);
 
     await endorseResearch(page, researchId!);
 
+    // Endorse moves to ovpri_review — pending must increase by 1
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/dashboard');
-    const afterEndorse = await getStatCardValue(page, /Pending approval/i);
-    // Still pending (now ovpri_review) — must not drop back to stale pre-submit cache
+    const afterEndorse = await getStatCardValue(page, /Pending.*approval/i);
     expect(afterEndorse).toBe(before + 1);
 
     await page.goto('/ovpri/queue');

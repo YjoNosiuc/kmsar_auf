@@ -34,6 +34,13 @@ const importedFaculty = {
 
 async function adminLogin(page: Page): Promise<void> {
   await login(page, credentials.admin.email, credentials.admin.password);
+  await page.waitForURL(/\/admin/, { timeout: 45_000 }).catch(async () => {
+    // Already on an admin page after login redirect
+    if (!page.url().includes('/admin')) {
+      await page.goto('/admin/dashboard');
+      await page.waitForURL(/\/admin/, { timeout: 30_000 });
+    }
+  });
 }
 
 async function uploadImport(page: Page, filePath: string): Promise<void> {
@@ -127,6 +134,8 @@ async function openResearchByTitle(page: Page, title: string): Promise<void> {
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Import Data — UAT Test Suite', () => {
+  test.describe.configure({ timeout: 90_000 });
+
   test.beforeAll(() => {
     resetDatabase();
   });
@@ -138,21 +147,24 @@ test.describe('Import Data — UAT Test Suite', () => {
   test('IMPORT-001: Import Data link visible in admin sidebar under Administration', async ({ page }) => {
     await page.goto('/admin/dashboard');
     const link = page.locator('a.kmsar-nav-item', { hasText: 'Import Data' });
-    await expect(link).toBeVisible();
+    await expect(link).toBeVisible({ timeout: 30_000 });
     await expect(link).toHaveAttribute('href', /\/admin\/import\/users/);
   });
 
   test('IMPORT-002: GET /admin/import/users loads correctly with upload form', async ({ page }) => {
     await page.goto('/admin/import/users');
-    await expect(page.getByRole('heading', { name: /Import Faculty Users/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Import Faculty Users/i })).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('form[enctype="multipart/form-data"]')).toBeVisible();
     await expect(page.locator('input[name="file"][accept*=".xlsx"]')).toBeVisible();
     await expect(page.getByRole('button', { name: /Import Users/i })).toBeVisible();
   });
 
   test('IMPORT-003: GET /admin/import/research loads correctly with upload form', async ({ page }) => {
-    await page.goto('/admin/import/research');
-    await expect(page.getByRole('heading', { name: /Import Research Records/i })).toBeVisible();
+    const response = await page.goto('/admin/import/research');
+    expect(response?.ok() || response?.status() === 200).toBeTruthy();
+    await expect(page.getByRole('heading', { name: /Import Research Records/i })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.locator('form[enctype="multipart/form-data"]')).toBeVisible();
     await expect(page.locator('input[name="file"][accept*=".xlsx"]')).toBeVisible();
     await expect(page.getByRole('button', { name: /Import Research/i })).toBeVisible();

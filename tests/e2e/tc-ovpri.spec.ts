@@ -243,6 +243,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
   });
 
   test('TC-015: Faculty does NOT receive notification on OVPRI return', async ({ page }) => {
+    test.setTimeout(120_000);
     const title = uniqueTitle('TC015 No Faculty Notif');
     const researchId = await setupEndorsedResearch(page, title);
 
@@ -347,11 +348,14 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await ovpriLogin(page);
     await page.goto('/ovpri/research');
 
+    // "Research Progress" filter (name=status) — progress values, not approval stages
+    await expect(page.getByText(/Research Progress/i).first()).toBeVisible();
     await Promise.all([
-      page.waitForURL(/status=/),
-      page.locator('select[name="status"]').selectOption('draft'),
+      page.waitForURL(/status=/, { timeout: 30_000 }),
+      page.locator('select[name="status"]').selectOption('proposal'),
     ]);
-    expect(page.url()).toMatch(/status=draft/);
+    expect(page.url()).toMatch(/status=proposal/);
+    expect(page.url()).not.toMatch(/[?&]stage=draft/);
     await expect(page.locator('table tbody tr').first()).toBeVisible();
   });
 

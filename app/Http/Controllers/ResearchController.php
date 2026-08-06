@@ -602,6 +602,7 @@ class ResearchController extends Controller
             perPage: 20,
             college: $request->input('college'),
             stage: $request->input('stage'),
+            status: $request->input('status'),
         );
 
         $colleges = \App\Models\College::where('is_active', true)->orderBy('code')->get();
@@ -672,9 +673,12 @@ class ResearchController extends Controller
 
     private function forgetResearchDashboardCaches(Research $research, ?int $previousMotherCollegeId = null): void
     {
-        Cache::forget('ovpri_stats_all_'.now()->format('Y-m-d-H'));
-        for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-            Cache::forget('ovpri_stats_'.$year.'_'.now()->format('Y-m-d-H'));
+        foreach ([now(), now()->subHour()] as $moment) {
+            $hourKey = $moment->format('Y-m-d-H');
+            Cache::forget('ovpri_stats_all_'.$hourKey);
+            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
+            }
         }
         Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
         Cache::forget('sdg_counts');
@@ -690,11 +694,12 @@ class ResearchController extends Controller
 
         foreach ($collegeIds as $collegeId) {
             foreach ($this->deanUserIdsForCollege((int) $collegeId) as $id) {
-                // Clear all possible academic year cache keys for today
-                Cache::forget('dean_stats_'.$id.'_all_'.now()->format('Y-m-d'));
-                // Also clear the last 10 years in case they had a year filter active
-                for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                    Cache::forget('dean_stats_'.$id.'_'.$year.'_'.now()->format('Y-m-d'));
+                foreach ([now(), now()->subDay()] as $day) {
+                    $dayKey = $day->format('Y-m-d');
+                    Cache::forget('dean_stats_'.$id.'_all_'.$dayKey);
+                    for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
+                        Cache::forget('dean_stats_'.$id.'_'.$year.'_'.$dayKey);
+                    }
                 }
             }
         }

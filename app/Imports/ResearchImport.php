@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\College;
+use App\Models\Document;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
@@ -130,6 +131,8 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
 
             $coauthorEmails = $this->parsePipeList($data['coauthor_emails'] ?? '');
             $coauthorCanEdit = $this->parsePipeList($data['coauthor_can_edit'] ?? '');
+            $documentUrls = $this->parsePipeLabels($data['document_url'] ?? '');
+            $documentLabels = $this->parsePipeLabels($data['document_label'] ?? '');
 
             $research = DB::transaction(function () use (
                 $referenceNumber,
@@ -150,6 +153,8 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                 $isScopus,
                 $coauthorEmails,
                 $coauthorCanEdit,
+                $documentUrls,
+                $documentLabels,
                 $rowNumber
             ) {
                 $research = Research::query()->create([
@@ -219,6 +224,35 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                         'email' => $coAuthor->email,
                         'is_primary' => false,
                         'can_edit' => (bool) (int) ($coauthorCanEdit[$index] ?? 1),
+                    ]);
+                }
+
+                foreach ($documentUrls as $index => $url) {
+                    $url = trim($url);
+                    if ($url === '') {
+                        continue;
+                    }
+
+                    if (! str_starts_with($url, 'http://') && ! str_starts_with($url, 'https://')) {
+                        continue;
+                    }
+
+                    $label = trim((string) ($documentLabels[$index] ?? ''));
+                    if ($label === '') {
+                        $label = 'Document '.($index + 1);
+                    }
+
+                    Document::query()->create([
+                        'research_id' => $research->id,
+                        'uploaded_by' => $author->id,
+                        'original_filename' => $label,
+                        'stored_filename' => null,
+                        'disk_path' => null,
+                        'external_link' => $url,
+                        'mime_type' => 'text/uri-list',
+                        'file_size_bytes' => 0,
+                        'research_status_at_upload' => $research->status,
+                        'version' => 1,
                     ]);
                 }
 
@@ -327,6 +361,24 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             static fn (string $part): string => trim($part),
             explode('|', $raw)
         ), static fn (string $part): bool => $part !== ''));
+    }
+
+    /**
+     * Split labels by pipe while preserving empty slots for index alignment with URLs.
+     *
+     * @return list<string>
+     */
+    private function parsePipeLabels(mixed $value): array
+    {
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return [];
+        }
+
+        return array_map(
+            static fn (string $part): string => trim($part),
+            explode('|', $raw)
+        );
     }
 
     /**

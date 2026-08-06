@@ -12,6 +12,8 @@ const RESEARCH_DUP = path.join(FIXTURES, 'research_import_duplicate.xlsx');
 const RESEARCH_MISSING_USER = path.join(FIXTURES, 'research_import_missing_user.xlsx');
 const RESEARCH_WITH_COAUTHORS = path.join(FIXTURES, 'research_import_with_coauthors.xlsx');
 const RESEARCH_INVALID_COAUTHOR = path.join(FIXTURES, 'research_import_invalid_coauthor.xlsx');
+const RESEARCH_WITH_DOCUMENTS = path.join(FIXTURES, 'research_import_with_documents.xlsx');
+const USER_INVALID_PROGRAM = path.join(FIXTURES, 'user_import_invalid_program.xlsx');
 const NON_XLSX = path.join(FIXTURES, 'sample.txt');
 
 const TITLE_1 = 'TEST RESEARCH MACHINE LEARNING FOR CROP DISEASE DETECTION';
@@ -20,6 +22,9 @@ const TITLE_TWO_CO = 'TEST RESEARCH WITH TWO COAUTHORS MACHINE LEARNING';
 const TITLE_ONE_CO = 'TEST RESEARCH WITH ONE COAUTHOR VIEW ONLY';
 const TITLE_NO_CO = 'TEST RESEARCH WITH NO COAUTHORS';
 const TITLE_INVALID_CO = 'TEST RESEARCH INVALID COAUTHOR MACHINE LEARNING';
+const TITLE_MULTI_DOCS = 'TEST RESEARCH WITH MULTIPLE DOCUMENT LINKS';
+const TITLE_INVALID_DOC = 'TEST RESEARCH WITH INVALID DOCUMENT URL';
+const TITLE_NO_DOCS = 'TEST RESEARCH WITH NO DOCUMENTS';
 
 const importedFaculty = {
   one: { email: 'testfaculty1@auf.edu.ph', password: 'password', name: 'TEST FACULTY ONE' },
@@ -66,6 +71,36 @@ function countCoAuthorsForTitle(title: string): number {
   );
   const match = out.trim().match(/(\d+)\s*$/);
   return match ? parseInt(match[1], 10) : -1;
+}
+
+function userProgramCode(email: string): string {
+  const out = runTinker(
+    `$u = \\App\\Models\\User::where('email','${email}')->first(); echo $u && $u->program_id ? (\\App\\Models\\Program::find($u->program_id)->code ?? 'NONE') : 'NULL';`,
+  );
+  const match = out.trim().match(/(BSIT|BSA|NULL|NONE|[A-Z0-9_-]+)\s*$/);
+  return match ? match[1] : 'UNKNOWN';
+}
+
+function countDocumentsForTitle(title: string): number {
+  const out = runTinker(
+    `echo \\App\\Models\\Document::whereIn('research_id', \\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->pluck('id'))->count();`,
+  );
+  const match = out.trim().match(/(\d+)\s*$/);
+  return match ? parseInt(match[1], 10) : -1;
+}
+
+function documentLabelsForTitle(title: string): string {
+  const out = runTinker(
+    `echo \\App\\Models\\Document::whereIn('research_id', \\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->pluck('id'))->orderBy('id')->pluck('original_filename')->implode('|');`,
+  );
+  return out.trim().split(/\r?\n/).pop()?.trim() ?? '';
+}
+
+function documentLinksForTitle(title: string): string {
+  const out = runTinker(
+    `echo \\App\\Models\\Document::whereIn('research_id', \\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->pluck('id'))->orderBy('id')->pluck('external_link')->implode('|');`,
+  );
+  return out.trim().split(/\r?\n/).pop()?.trim() ?? '';
 }
 
 function setResearchStageByTitle(title: string, stage: string): void {
@@ -298,15 +333,19 @@ test.describe('Import Data — UAT Test Suite', () => {
     await logout(page);
     await login(page, importedFaculty.two.email, importedFaculty.two.password);
     await page.goto('/research');
-    const card = page.locator('div').filter({ hasText: TITLE_TWO_CO }).first();
-    await expect(card.getByText(TITLE_TWO_CO, { exact: false })).toBeVisible();
+    const card = page
+      .getByText(TITLE_TWO_CO, { exact: true })
+      .locator('xpath=ancestor::div[contains(@style,"border-left")][1]');
+    await expect(card.getByText(TITLE_TWO_CO, { exact: true })).toBeVisible();
     await expect(card.getByText('Co-author', { exact: true })).toBeVisible();
 
     await logout(page);
     await login(page, importedFaculty.three.email, importedFaculty.three.password);
     await page.goto('/research');
-    const card3 = page.locator('div').filter({ hasText: TITLE_TWO_CO }).first();
-    await expect(card3.getByText(TITLE_TWO_CO, { exact: false })).toBeVisible();
+    const card3 = page
+      .getByText(TITLE_TWO_CO, { exact: true })
+      .locator('xpath=ancestor::div[contains(@style,"border-left")][1]');
+    await expect(card3.getByText(TITLE_TWO_CO, { exact: true })).toBeVisible();
     await expect(card3.getByText('Co-author', { exact: true })).toBeVisible();
   });
 
@@ -368,5 +407,86 @@ test.describe('Import Data — UAT Test Suite', () => {
     await login(page, importedFaculty.three.email, importedFaculty.three.password);
     await page.goto('/research');
     await expect(page.getByText(TITLE_NO_CO, { exact: false })).toBeVisible();
+  });
+
+  test('IMPORT-026: User import with program_code — correct program assigned', async ({ page }) => {
+    await page.goto('/admin/users');
+    await expect(page.getByText(importedFaculty.one.email)).toBeVisible();
+    expect(userProgramCode(importedFaculty.one.email)).toBe('BSIT');
+    expect(userProgramCode(importedFaculty.two.email)).toBe('BSA');
+  });
+
+  test('IMPORT-027: User import with invalid program_code — user imported, program_id null', async ({
+    page,
+  }) => {
+    await page.goto('/admin/import/users');
+    await uploadImport(page, USER_INVALID_PROGRAM);
+    await expect(page.locator('.kmsar-alert--success')).toContainText(
+      /1 users? imported successfully/i,
+    );
+
+    await page.goto('/admin/users');
+    await expect(page.getByText('testinvalidprogram@auf.edu.ph')).toBeVisible();
+    expect(userExistsViaArtisan('testinvalidprogram@auf.edu.ph')).toBe(true);
+    expect(userProgramCode('testinvalidprogram@auf.edu.ph')).toBe('NULL');
+  });
+
+  test('IMPORT-028: User import with blank program_code — program_id null', async () => {
+    expect(userProgramCode(importedFaculty.three.email)).toBe('NULL');
+  });
+
+  test('IMPORT-029: Research import with document_url — links appear in Documents tab', async ({
+    page,
+  }) => {
+    await page.goto('/admin/import/research');
+    await uploadImport(page, RESEARCH_WITH_DOCUMENTS);
+    await expect(page.locator('.kmsar-alert--success')).toContainText(
+      /3 research records imported successfully/i,
+    );
+
+    await logout(page);
+    await login(page, importedFaculty.one.email, importedFaculty.one.password);
+    await openResearchByTitle(page, TITLE_MULTI_DOCS);
+    await page.getByRole('tab', { name: /Documents/i }).click();
+    await expect(page.getByText('Research Proposal', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Open Link/i }).first()).toBeVisible();
+  });
+
+  test('IMPORT-030: Research import with 2 document URLs — both documents created', async () => {
+    expect(countDocumentsForTitle(TITLE_MULTI_DOCS)).toBe(2);
+    const links = documentLinksForTitle(TITLE_MULTI_DOCS);
+    expect(links).toContain('https://drive.google.com/file/d/doc1');
+    expect(links).toContain('https://drive.google.com/file/d/doc2');
+  });
+
+  test('IMPORT-031: Research import with invalid URL — document skipped, research imported', async ({
+    page,
+  }) => {
+    expect(countResearchByTitle(TITLE_INVALID_DOC)).toBe(1);
+    expect(countDocumentsForTitle(TITLE_INVALID_DOC)).toBe(0);
+
+    // Re-upload is not needed — already imported in IMPORT-029. Confirm via DB + list.
+    await logout(page);
+    await login(page, importedFaculty.one.email, importedFaculty.one.password);
+    await page.goto('/research');
+    await expect(page.getByText(TITLE_INVALID_DOC, { exact: false })).toBeVisible();
+  });
+
+  test('IMPORT-032: Research import with blank document_url — no documents created', async () => {
+    expect(countResearchByTitle(TITLE_NO_DOCS)).toBe(1);
+    expect(countDocumentsForTitle(TITLE_NO_DOCS)).toBe(0);
+  });
+
+  test('IMPORT-033: Document labels assigned correctly matching document_url order', async ({
+    page,
+  }) => {
+    expect(documentLabelsForTitle(TITLE_MULTI_DOCS)).toBe('Research Proposal|Full Paper');
+
+    await logout(page);
+    await login(page, importedFaculty.one.email, importedFaculty.one.password);
+    await openResearchByTitle(page, TITLE_MULTI_DOCS);
+    await page.getByRole('tab', { name: /Documents/i }).click();
+    await expect(page.getByText('Research Proposal', { exact: true })).toBeVisible();
+    await expect(page.getByText('Full Paper', { exact: true })).toBeVisible();
   });
 });

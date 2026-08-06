@@ -3,6 +3,7 @@
 namespace App\Imports;
 
 use App\Models\College;
+use App\Models\Program;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\OnEachRow;
@@ -83,16 +84,28 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
                 return;
             }
 
+            $programId = null;
+            if (! empty($data['program_code'])) {
+                $program = Program::query()
+                    ->where('code', strtoupper(trim((string) $data['program_code'])))
+                    ->where('college_id', $college->id)
+                    ->first();
+                if ($program) {
+                    $programId = $program->id;
+                }
+            }
+
             $role = in_array($roleRaw, self::VALID_ROLES, true) ? $roleRaw : 'faculty';
             $office = $officeRaw !== '' ? $officeRaw : null;
             $password = $passwordRaw !== '' ? $passwordRaw : 'password';
 
-            DB::transaction(function () use ($name, $email, $employeeNumber, $college, $office, $password, $role) {
+            DB::transaction(function () use ($name, $email, $employeeNumber, $college, $programId, $office, $password, $role) {
                 $user = User::query()->create([
                     'name' => strtoupper($name),
                     'email' => $email,
                     'employee_number' => $employeeNumber !== '' ? $employeeNumber : null,
                     'college_id' => $college->id,
+                    'program_id' => $programId,
                     'office' => $office,
                     'password' => bcrypt($password),
                     'is_active' => true,

@@ -29,6 +29,7 @@ const USER_HEADERS = [
   'email',
   'employee_number',
   'college_code',
+  'program_code',
   'office',
   'role',
   'password',
@@ -39,6 +40,7 @@ const USER_INSTRUCTIONS = [
   'REQUIRED. Unique email',
   'REQUIRED. Unique employee number',
   'REQUIRED. Active college code e.g. CCS',
+  'OPTIONAL. Program code belonging to college e.g. BSIT',
   'OPTIONAL. Office name',
   'OPTIONAL. Role (default faculty)',
   'OPTIONAL. Blank = password',
@@ -62,6 +64,8 @@ const RESEARCH_HEADERS = [
   'is_scopus_indexed',
   'coauthor_emails',
   'coauthor_can_edit',
+  'document_url',
+  'document_label',
 ];
 
 const RESEARCH_INSTRUCTIONS = [
@@ -82,6 +86,8 @@ const RESEARCH_INSTRUCTIONS = [
   'OPTIONAL. 0|1',
   'OPTIONAL. Pipe-separated co-author emails',
   'OPTIONAL. Pipe-separated 0|1 matching coauthors (default 1)',
+  'OPTIONAL. Pipe-separated https:// URLs',
+  'OPTIONAL. Pipe-separated labels matching document_url',
 ];
 
 const TITLE_1 = 'TEST RESEARCH MACHINE LEARNING FOR CROP DISEASE DETECTION';
@@ -90,11 +96,11 @@ const TITLE_TWO_CO = 'TEST RESEARCH WITH TWO COAUTHORS MACHINE LEARNING';
 const TITLE_ONE_CO = 'TEST RESEARCH WITH ONE COAUTHOR VIEW ONLY';
 const TITLE_NO_CO = 'TEST RESEARCH WITH NO COAUTHORS';
 const TITLE_INVALID_CO = 'TEST RESEARCH INVALID COAUTHOR MACHINE LEARNING';
+const TITLE_MULTI_DOCS = 'TEST RESEARCH WITH MULTIPLE DOCUMENT LINKS';
+const TITLE_INVALID_DOC = 'TEST RESEARCH WITH INVALID DOCUMENT URL';
+const TITLE_NO_DOCS = 'TEST RESEARCH WITH NO DOCUMENTS';
 
-function researchRow(
-  values: (string | number)[],
-): (string | number)[] {
-  // Pad to full header width when older fixtures omit coauthor columns
+function researchRow(values: (string | number)[]): (string | number)[] {
   while (values.length < RESEARCH_HEADERS.length) {
     values.push('');
   }
@@ -106,21 +112,36 @@ function researchRow(
 writeSheet('user_import_valid.xlsx', [
   USER_HEADERS,
   USER_INSTRUCTIONS,
-  ['TEST FACULTY ONE', 'testfaculty1@auf.edu.ph', 'TEST-001', 'CCS', '', 'faculty', ''],
-  ['TEST FACULTY TWO', 'testfaculty2@auf.edu.ph', 'TEST-002', 'CBA', 'OVPRI', 'faculty', ''],
-  ['TEST FACULTY THREE', 'testfaculty3@auf.edu.ph', 'TEST-003', 'CEA', '', 'co_author', ''],
+  ['TEST FACULTY ONE', 'testfaculty1@auf.edu.ph', 'TEST-001', 'CCS', 'BSIT', '', 'faculty', ''],
+  ['TEST FACULTY TWO', 'testfaculty2@auf.edu.ph', 'TEST-002', 'CBA', 'BSA', '', 'faculty', ''],
+  ['TEST FACULTY THREE', 'testfaculty3@auf.edu.ph', 'TEST-003', 'CEA', '', 'OVPRI', 'faculty', ''],
 ]);
 
 writeSheet('user_import_duplicate.xlsx', [
   USER_HEADERS,
   USER_INSTRUCTIONS,
-  ['TEST FACULTY DUPLICATE', 'testfaculty1@auf.edu.ph', 'TEST-099', 'CCS', '', 'faculty', ''],
+  ['TEST FACULTY DUPLICATE', 'testfaculty1@auf.edu.ph', 'TEST-099', 'CCS', 'BSIT', '', 'faculty', ''],
 ]);
 
 writeSheet('user_import_invalid_college.xlsx', [
   USER_HEADERS,
   USER_INSTRUCTIONS,
-  ['TEST INVALID COLLEGE', 'testinvalidcollege@auf.edu.ph', 'TEST-INV', 'INVALID', '', 'faculty', ''],
+  ['TEST INVALID COLLEGE', 'testinvalidcollege@auf.edu.ph', 'TEST-INV', 'INVALID', '', '', 'faculty', ''],
+]);
+
+writeSheet('user_import_invalid_program.xlsx', [
+  USER_HEADERS,
+  USER_INSTRUCTIONS,
+  [
+    'TEST INVALID PROGRAM',
+    'testinvalidprogram@auf.edu.ph',
+    'TEST-IPROG',
+    'CCS',
+    'INVALID_PROGRAM',
+    '',
+    'faculty',
+    '',
+  ],
 ]);
 
 // --- Research fixtures ---
@@ -144,6 +165,10 @@ writeSheet('research_import_valid.xlsx', [
     'published_scopus',
     'approved',
     1,
+    'testfaculty2@auf.edu.ph',
+    '1',
+    'https://drive.google.com/file/d/test1',
+    'Research Proposal',
   ]),
   researchRow([
     'new',
@@ -161,6 +186,10 @@ writeSheet('research_import_valid.xlsx', [
     'ongoing',
     'approved',
     0,
+    '',
+    '',
+    '',
+    '',
   ]),
 ]);
 
@@ -294,10 +323,88 @@ writeSheet('research_import_invalid_coauthor.xlsx', [
   ]),
 ]);
 
+writeSheet('research_import_with_documents.xlsx', [
+  RESEARCH_HEADERS,
+  RESEARCH_INSTRUCTIONS,
+  researchRow([
+    'new',
+    TITLE_MULTI_DOCS,
+    'testfaculty1@auf.edu.ph',
+    'CCS',
+    '',
+    'internally_funded',
+    '',
+    '4|9',
+    'publication',
+    '',
+    '2024-06-01',
+    '2025-06-30',
+    'ongoing',
+    'approved',
+    0,
+    '',
+    '',
+    'https://drive.google.com/file/d/doc1|https://drive.google.com/file/d/doc2',
+    'Research Proposal|Full Paper',
+  ]),
+  researchRow([
+    'new',
+    TITLE_INVALID_DOC,
+    'testfaculty1@auf.edu.ph',
+    'CCS',
+    '',
+    'internally_funded',
+    '',
+    '4|9',
+    'publication',
+    '',
+    '2024-06-01',
+    '2025-06-30',
+    'ongoing',
+    'approved',
+    0,
+    '',
+    '',
+    'not-a-valid-url',
+    'Invalid',
+  ]),
+  researchRow([
+    'new',
+    TITLE_NO_DOCS,
+    'testfaculty1@auf.edu.ph',
+    'CCS',
+    '',
+    'internally_funded',
+    '',
+    '4|9',
+    'publication',
+    '',
+    '2024-06-01',
+    '2025-06-30',
+    'ongoing',
+    'approved',
+    0,
+    '',
+    '',
+    '',
+    '',
+  ]),
+]);
+
 fs.writeFileSync(
   path.join(OUT, 'import-titles.json'),
   JSON.stringify(
-    { TITLE_1, TITLE_2, TITLE_TWO_CO, TITLE_ONE_CO, TITLE_NO_CO, TITLE_INVALID_CO },
+    {
+      TITLE_1,
+      TITLE_2,
+      TITLE_TWO_CO,
+      TITLE_ONE_CO,
+      TITLE_NO_CO,
+      TITLE_INVALID_CO,
+      TITLE_MULTI_DOCS,
+      TITLE_INVALID_DOC,
+      TITLE_NO_DOCS,
+    },
     null,
     2,
   ),

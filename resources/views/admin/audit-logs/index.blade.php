@@ -25,7 +25,7 @@
 
     <form method="GET" action="{{ route('audit.index') }}" style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <input type="text" name="user" placeholder="{{ __('Search user...') }}" value="{{ request('user') }}"
-            style="flex:1;min-width:180px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;text-transform: uppercase"
+            style="flex:1;min-width:180px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
             autocomplete="off"
             aria-label="{{ __('Search user') }}"
         >

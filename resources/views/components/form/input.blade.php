@@ -13,7 +13,6 @@
     $fieldId = $id ?? 'field_' . preg_replace('/[\[\]]+/', '_', trim($name, '[]'));
     $hasError = filled($error);
     $displayValue = $value !== null ? $value : old($name);
-    $uppercaseDisplay = in_array($type, ['text', 'email'], true);
 @endphp
 
 <div class="kmsar-form-group">
@@ -32,9 +31,6 @@
         id="{{ $fieldId }}"
         value="{{ $displayValue }}"
         @if ($required) required @endif
-        @if ($uppercaseDisplay)
-            style="text-transform: uppercase"
-        @endif
         {{ $attributes->class(['kmsar-input', $hasError ? 'kmsar-input--error' : '']) }}
     />
 

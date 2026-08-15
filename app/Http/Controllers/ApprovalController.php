@@ -119,7 +119,7 @@ class ApprovalController extends Controller
         abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
 
         $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:10', 'max:5000'],
+            'remarks' => ['required', 'string', 'min:4', 'max:5000'],
         ]);
 
         $this->approvalService->return($research, $request->user(), $validated['remarks']);
@@ -261,7 +261,7 @@ class ApprovalController extends Controller
         $this->authorizeOvpriStageAction($request, $research);
 
         $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:10', 'max:5000'],
+            'remarks' => ['required', 'string', 'min:4', 'max:5000'],
         ]);
 
         $this->approvalService->return($research, $request->user(), $validated['remarks']);

@@ -148,6 +148,7 @@
                 $leftBorder = $borderByStage($item->approval_stage);
             @endphp
             <div
+                class="kmsar-research-card"
                 x-show='matches(@js($item->title), @js($item->approval_stage), @js($item->status))'
                 style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-left:4px solid {{ $leftBorder }};"
             >
@@ -167,7 +168,7 @@
                         <span>{{ collect($item->expectedOutputKeys())->map(fn ($o) => $expectedLabels[$o] ?? ucwords(str_replace('_', ' ', (string) $o)))->implode(', ') ?: '—' }}</span>
                     </div>
                 </div>
-                <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div class="kmsar-research-card-actions" style="flex-shrink:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <a
                         href="{{ route('research.show', $item) }}"
                         style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1E3A8A;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;"

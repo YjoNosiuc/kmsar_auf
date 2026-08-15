@@ -118,6 +118,44 @@
         outline: 2px solid var(--color-primary);
         outline-offset: 2px;
     }
+
+    /* Compact modal: fits every field plus footer buttons without scrolling */
+    .kmsar-modal--compact { border-radius: 12px; }
+    .kmsar-modal--compact .kmsar-modal-header {
+        padding: 12px 16px;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+    }
+    .kmsar-modal--compact .kmsar-modal-body { padding: 16px; }
+    .kmsar-modal--compact .kmsar-modal-footer {
+        padding: 10px 16px;
+        border-top: 1px solid #E2E8F0;
+        border-bottom-left-radius: 12px;
+        border-bottom-right-radius: 12px;
+    }
+    .kmsar-modal--compact .kmsar-form-stack { display: flex; flex-direction: column; gap: 12px; }
+    .kmsar-modal--compact .kmsar-form-row-2,
+    .kmsar-modal--compact .kmsar-form-row-3 { gap: 12px; }
+    .kmsar-modal--compact .kmsar-form-group {
+        margin-bottom: 0;
+        padding: 0;
+        border: 0;
+        background: none;
+    }
+    .kmsar-modal--compact .kmsar-form-label { font-size: 12px; margin-bottom: 4px; }
+    .kmsar-modal--compact .kmsar-input,
+    .kmsar-modal--compact .kmsar-select { padding: 8px 12px; }
+    .kmsar-modal--compact .kmsar-select { padding-right: 36px; }
+    .kmsar-modal--compact .kmsar-form-hint { margin-top: 2px; }
+    .kmsar-modal--compact .kmsar-form-error { margin-top: 2px; }
+    .kmsar-modal--compact .kmsar-inline-toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .kmsar-modal--compact .kmsar-inline-toggle .kmsar-form-label,
+    .kmsar-modal--compact .kmsar-inline-toggle .kmsar-form-hint { margin: 0; }
 </style>
 @endpush
 
@@ -169,7 +207,7 @@
             x-model="search"
             autocomplete="off"
             aria-label="{{ __('Search users') }}"
-            style="flex:2;min-width:220px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;text-transform: uppercase"
+            style="flex:2;min-width:220px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
         >
         <select x-model="filterRole" aria-label="{{ __('Filter by role') }}" style="flex:1;min-width:140px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;background:#fff;">
             <option value="">{{ __('All Roles') }}</option>
@@ -208,7 +246,7 @@
                             <th scope="col">{{ __('Role') }}</th>
                             <th scope="col">{{ __('College / Office') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
-                            <th scope="col">{{ __('Last login') }}</th>
+                            <th scope="col" class="kmsar-col-hide-mobile">{{ __('Last login') }}</th>
                             <th scope="col"><span class="sr-only">{{ __('Actions') }}</span></th>
                         </tr>
                     </thead>
@@ -266,7 +304,7 @@
                                         <x-badge status="rejected">{{ __('Inactive') }}</x-badge>
                                     @endif
                                 </td>
-                                <td class="whitespace-nowrap kmsar-table-cell-sub px-4 py-3 align-middle text-sm">
+                                <td class="kmsar-col-hide-mobile whitespace-nowrap kmsar-table-cell-sub px-4 py-3 align-middle text-sm">
                                     {{ $user->last_login_at?->format('M j, Y g:i a') ?? '—' }}
                                 </td>
                                 <td class="px-4 py-3 whitespace-nowrap align-middle text-sm">
@@ -311,7 +349,7 @@
         aria-modal="true"
         aria-labelledby="modal-add-user-title"
     >
-        <div class="kmsar-modal kmsar-modal--lg" style="max-width:56rem; max-height: none; overflow-y: visible;" x-on:click.stop>
+        <div class="kmsar-modal kmsar-modal--compact" style="max-width:560px; max-height: none; overflow-y: visible;" x-on:click.stop>
             <div class="kmsar-modal-header">
                 <h2 id="modal-add-user-title" class="kmsar-modal-title">{{ __('Add user') }}</h2>
                 <button type="button" class="kmsar-modal-close" aria-label="{{ __('Close') }}" x-on:click="showAdd = false">&times;</button>
@@ -330,7 +368,7 @@
                     </div>
                 @endif
 
-                <div style="display:flex;flex-direction:column;gap:16px;">
+                <div class="kmsar-form-stack">
                     <div class="kmsar-form-row-3">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="add-first_name">
@@ -343,6 +381,7 @@
                                 name="first_name"
                                 class="kmsar-input @error('first_name') kmsar-input--error @enderror"
                                 value="{{ old('first_name') }}"
+                                style="text-transform: uppercase"
                                 required
                             >
                             @error('first_name')
@@ -360,6 +399,7 @@
                                 name="last_name"
                                 class="kmsar-input @error('last_name') kmsar-input--error @enderror"
                                 value="{{ old('last_name') }}"
+                                style="text-transform: uppercase"
                                 required
                             >
                             @error('last_name')
@@ -374,6 +414,7 @@
                                 name="middle_name"
                                 class="kmsar-input @error('middle_name') kmsar-input--error @enderror"
                                 value="{{ old('middle_name') }}"
+                                style="text-transform: uppercase"
                             >
                             @error('middle_name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
@@ -399,7 +440,7 @@
                         </div>
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="add-employee_number">{{ __('Employee number') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <input id="add-employee_number" type="text" name="employee_number" class="kmsar-input @error('employee_number') kmsar-input--error @enderror" value="{{ old('employee_number') }}" required autocomplete="off" placeholder="{{ __('e.g. AUF-2024-0001') }}" style="text-transform: uppercase">
+                            <input id="add-employee_number" type="text" name="employee_number" class="kmsar-input @error('employee_number') kmsar-input--error @enderror" value="{{ old('employee_number') }}" required autocomplete="off" placeholder="{{ __('e.g. AUF-2024-0001') }}">
                             @error('employee_number')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -408,7 +449,7 @@
 
                     <div class="kmsar-form-group">
                         <label class="kmsar-form-label" for="add-email">{{ __('Email') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                        <input id="add-email" type="email" name="email" class="kmsar-input @error('email') kmsar-input--error @enderror" value="{{ old('email') }}" required autocomplete="email" style="text-transform: uppercase">
+                        <input id="add-email" type="email" name="email" class="kmsar-input @error('email') kmsar-input--error @enderror" value="{{ old('email') }}" required autocomplete="email">
                         @error('email')
                             <p class="kmsar-form-error">{{ $message }}</p>
                         @enderror
@@ -428,7 +469,7 @@
                         </div>
                     </div>
 
-                    <div class="kmsar-form-row-3">
+                    <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="add-college_id">{{ __('College') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
                             <select id="add-college_id" name="college_id" class="kmsar-select">
@@ -438,24 +479,6 @@
                                 @endforeach
                             </select>
                             @error('college_id')
-                                <p class="kmsar-form-error">{{ $message }}</p>
-                            @enderror
-                        </div>
-
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="add-office">{{ __('Office / department') }}</label>
-                            <input
-                                id="add-office"
-                                type="text"
-                                name="office"
-                                class="kmsar-input @error('office') kmsar-input--error @enderror"
-                                value="{{ old('office') }}"
-                                maxlength="100"
-                                placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
-                                style="text-transform: uppercase"
-                            >
-                            <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
-                            @error('office')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
@@ -472,22 +495,37 @@
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
+                    </div>
 
-                        <div class="kmsar-form-group">
+                    <div class="kmsar-form-group">
+                        <label class="kmsar-form-label" for="add-office">{{ __('Office / department') }}</label>
+                        <input
+                            id="add-office"
+                            type="text"
+                            name="office"
+                            class="kmsar-input @error('office') kmsar-input--error @enderror"
+                            value="{{ old('office') }}"
+                            maxlength="100"
+                            placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
+                        >
+                        <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
+                        @error('office')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="kmsar-form-group">
+                        <div class="kmsar-inline-toggle" role="group" aria-labelledby="add-is-active-label">
                             <span class="kmsar-form-label" id="add-is-active-label">{{ __('Account status') }}</span>
-                            <div class="kmsar-switch-row" role="group" aria-labelledby="add-is-active-label">
-                                <div>
-                                    <div style="font-size:13px;font-weight:600;color:var(--color-text-primary);">{{ __('Active') }}</div>
-                                    <div class="kmsar-form-hint" style="margin-top:2px;">{{ __('Inactive users cannot sign in.') }}</div>
-                                </div>
-                                <label class="kmsar-switch">
-                                    <input type="hidden" name="is_active" value="0">
-                                    <input type="checkbox" name="is_active" value="1" class="sr-only-check" @checked(old('is_active', '1') === '1' || old('is_active', '1') === true) aria-label="{{ __('User account active') }}">
-                                    <span class="kmsar-switch-track" aria-hidden="true">
-                                        <span class="kmsar-switch-thumb"></span>
-                                    </span>
-                                </label>
-                            </div>
+                            <span style="font-size:12px;font-weight:600;color:var(--color-text-primary);">{{ __('Active') }}</span>
+                            <label class="kmsar-switch">
+                                <input type="hidden" name="is_active" value="0">
+                                <input type="checkbox" name="is_active" value="1" class="sr-only-check" @checked(old('is_active', '1') === '1' || old('is_active', '1') === true) aria-label="{{ __('User account active') }}">
+                                <span class="kmsar-switch-track" aria-hidden="true">
+                                    <span class="kmsar-switch-thumb"></span>
+                                </span>
+                            </label>
+                            <span class="kmsar-form-hint">{{ __('Inactive users cannot sign in.') }}</span>
                         </div>
                     </div>
                 </div>
@@ -552,6 +590,7 @@
                                 name="first_name"
                                 class="kmsar-input @error('first_name') kmsar-input--error @enderror"
                                 x-model="editUser.first_name"
+                                style="text-transform: uppercase"
                                 required
                             >
                             @error('first_name')
@@ -569,6 +608,7 @@
                                 name="last_name"
                                 class="kmsar-input @error('last_name') kmsar-input--error @enderror"
                                 x-model="editUser.last_name"
+                                style="text-transform: uppercase"
                                 required
                             >
                             @error('last_name')
@@ -583,6 +623,7 @@
                                 name="middle_name"
                                 class="kmsar-input @error('middle_name') kmsar-input--error @enderror"
                                 x-model="editUser.middle_name"
+                                style="text-transform: uppercase"
                             >
                             @error('middle_name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
@@ -608,7 +649,7 @@
                         </div>
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="edit-employee_number">{{ __('Employee number') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <input id="edit-employee_number" type="text" name="employee_number" class="kmsar-input @error('employee_number') kmsar-input--error @enderror" required autocomplete="off" x-model="editUser.employee_number" style="text-transform: uppercase">
+                            <input id="edit-employee_number" type="text" name="employee_number" class="kmsar-input @error('employee_number') kmsar-input--error @enderror" required autocomplete="off" x-model="editUser.employee_number">
                             @error('employee_number')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -617,7 +658,7 @@
 
                     <div class="kmsar-form-group">
                         <label class="kmsar-form-label" for="edit-email">{{ __('Email') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                        <input id="edit-email" type="email" name="email" class="kmsar-input @error('email') kmsar-input--error @enderror" required autocomplete="email" x-model="editUser.email" style="text-transform: uppercase">
+                        <input id="edit-email" type="email" name="email" class="kmsar-input @error('email') kmsar-input--error @enderror" required autocomplete="email" x-model="editUser.email">
                         @error('email')
                             <p class="kmsar-form-error">{{ $message }}</p>
                         @enderror
@@ -661,7 +702,6 @@
                                 maxlength="100"
                                 placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
                                 x-model="editUser.office"
-                                style="text-transform: uppercase"
                             >
                             <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
                             @error('office')

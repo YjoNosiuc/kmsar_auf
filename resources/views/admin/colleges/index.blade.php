@@ -169,7 +169,7 @@
                     placeholder="{{ __('Search by college name or code...') }}"
                     autocomplete="off"
                     aria-label="{{ __('Search colleges') }}"
-                    style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;text-transform: uppercase"
+                    style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
                 >
             </div>
             <div class="kmsar-table-wrap">
@@ -277,7 +277,7 @@
                     placeholder="{{ __('Search by program name or code...') }}"
                     autocomplete="off"
                     aria-label="{{ __('Search programs') }}"
-                    style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;text-transform: uppercase"
+                    style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
                 >
             </div>
             <div class="kmsar-table-wrap">

@@ -28,7 +28,6 @@
     <textarea
         name="{{ $name }}"
         id="{{ $fieldId }}"
-        style="text-transform: uppercase"
         @if ($rows !== null) rows="{{ $rows }}" @endif
         @if ($required) required @endif
         {{ $attributes->class(['kmsar-textarea', $hasError ? 'kmsar-input--error' : '']) }}

@@ -1058,10 +1058,10 @@ button.kmsar-nav-item {
   background: var(--color-surface);
 }
 
-/* Display-only: uppercase in fields; does not change submitted values (browser value property). */
-input[type="text"],
-input[type="email"],
-textarea {
+/* Title fields only — display uppercase while typing.
+   Other inputs show what the user types; backend may still store uppercase. */
+textarea[name="title"],
+input[name="title"] {
   text-transform: uppercase;
 }
 
@@ -2446,4 +2446,218 @@ textarea {
   .kmsar-page-container {
     padding: var(--space-3) var(--space-3);
   }
+}
+
+
+/* ============================================================
+   29. MOBILE / TABLET RESPONSIVE OVERRIDES
+   Applies system-wide. Keep this section last so it can
+   override page-level inline styles where required.
+   ============================================================ */
+
+/* Responsive helpers for markup that opts in */
+.kmsar-col-hide-mobile { display: table-cell; }
+
+/* Tailwind-style responsive utilities used by the wizard stepper.
+   Tailwind itself is not compiled into the app, so the md: variants
+   are provided here. */
+@media (min-width: 768px) {
+  .md\:hidden { display: none !important; }
+  .md\:flex   { display: flex !important; }
+}
+
+/* ── Mobile base (< 768px) ─────────────────────────────── */
+@media (max-width: 767px) {
+
+  /* --- Layout --- */
+  .kmsar-main-content { margin-left: 0; }
+  .kmsar-page-container { padding: 12px; }
+  .kmsar-page-header { padding: 12px; margin-bottom: 12px; }
+  .kmsar-page-header .kmsar-body,
+  .kmsar-page-subtitle { font-size: 12px; }
+  .kmsar-breadcrumb { display: none; }
+  .kmsar-page-header-actions { flex-wrap: wrap; width: 100%; gap: 8px; }
+
+  /* --- Cards --- */
+  .kmsar-card { margin-bottom: 12px; }
+  .kmsar-card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .kmsar-stat-card { min-width: 140px; padding: var(--space-4); }
+  .kmsar-import-card { padding: 16px; }
+
+  /* --- Grids: stack every multi-column grid (class-based or inline) --- */
+  .kmsar-two-col,
+  .kmsar-three-col,
+  .kmsar-form-grid,
+  .kmsar-reports-filters,
+  .kmsar-reports-filter-grid,
+  .kmsar-review-layout,
+  .kmsar-review-grid,
+  .kmsar-page-container [style*="grid-template-columns"],
+  .kmsar-page-container [style*="display:grid"],
+  .kmsar-page-container [style*="display: grid"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Stat grids stay 2-up — must stay after the generic grid rule above */
+  .kmsar-stats-grid,
+  .kmsar-stats-grid--2,
+  .kmsar-stats-grid--3 {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* --- Tables: horizontal scroll instead of squeezed columns --- */
+  .kmsar-table-wrap,
+  .kmsar-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Tables without a scroll wrapper become their own scroll container */
+  .kmsar-page-container table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kmsar-table-wrap table,
+  .kmsar-table-wrapper table { display: table; }
+  .kmsar-table th,
+  .kmsar-table td { white-space: nowrap; }
+  .kmsar-col-hide-mobile { display: none !important; }
+  .kmsar-research-title {
+    display: inline-block;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
+  /* --- Touch targets --- */
+  .kmsar-btn { min-height: 44px; }
+  .kmsar-navbar-menu-btn,
+  .kmsar-navbar-icon-btn,
+  .kmsar-modal-close { min-width: 44px; min-height: 44px; }
+
+  /* --- Modals: near full-width sheet, always scrollable --- */
+  .kmsar-modal,
+  .kmsar-modal-box {
+    width: 95vw !important;
+    max-width: 95vw !important;
+    margin: 0 auto;
+    max-height: 92vh !important;
+    overflow-y: auto !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .kmsar-modal-overlay { padding: 0 0 8px; }
+
+  /* --- Tabs / tablists: scroll horizontally --- */
+  .kmsar-tabs,
+  .kmsar-tab-bar,
+  .kmsar-wizard-tabs,
+  [role="tablist"] {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  .kmsar-tab,
+  .kmsar-tab-btn { flex: 0 0 auto; }
+
+  /* --- Charts --- */
+  canvas { max-width: 100% !important; }
+  .kmsar-chart-card { max-width: 100%; overflow: hidden; }
+  .kmsar-chart-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .kmsar-chart-header > div { width: 100%; min-width: 0; }
+  .kmsar-chart-body { padding: var(--space-4); }
+
+  /* --- Filter bars (GET forms) stack full width --- */
+  .kmsar-page-container form[method="get" i] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .kmsar-page-container form[method="get" i] > [style*="display:flex"],
+  .kmsar-page-container form[method="get" i] > [style*="display: flex"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .kmsar-page-container form[method="get" i] select,
+  .kmsar-page-container form[method="get" i] input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="hidden"]),
+  .kmsar-reports-filters select,
+  .kmsar-reports-filters input:not([type="checkbox"]):not([type="radio"]) {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .kmsar-reports-filters { flex-direction: column !important; gap: 8px !important; }
+
+  /* --- Review pages: details first, action sidebar below --- */
+  .kmsar-review-layout,
+  .kmsar-review-grid { flex-direction: column !important; }
+  .kmsar-review-sidebar {
+    width: 100% !important;
+    position: static !important;
+    top: auto !important;
+  }
+
+  /* --- Research list cards (faculty index) --- */
+  .kmsar-research-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .kmsar-research-card-actions {
+    width: 100%;
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .kmsar-research-card-actions > a,
+  .kmsar-research-card-actions form,
+  .kmsar-research-card-actions .kmsar-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  /* --- Queue cards (dean / OVPRI queues) --- */
+  .queue-card {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .queue-card-action,
+  .queue-card-actions { width: 100%; }
+  .queue-card-action-primary,
+  .queue-card-action-secondary {
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  /* --- Timeline --- */
+  .kmsar-timeline { padding-left: 16px; }
+
+  /* --- Navbar panels / dropdowns --- */
+  .kmsar-navbar-notif-panel,
+  .kmsar-notification-panel {
+    width: calc(100vw - 1.5rem) !important;
+    right: 0 !important;
+  }
+  .kmsar-dropdown,
+  .kmsar-profile-dropdown {
+    max-width: calc(100vw - 1.5rem) !important;
+    right: 0 !important;
+  }
+
+  /* --- Auth pages --- */
+  .kmsar-auth-card {
+    width: 100% !important;
+    max-width: 95vw !important;
+    padding: 20px !important;
+  }
+}
+
+/* ── Tablet (768px – 1024px) ───────────────────────────── */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .kmsar-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .kmsar-page-container { padding: 16px; }
+  .kmsar-table-wrap,
+  .kmsar-table-wrapper { overflow-x: auto; }
+  canvas { max-width: 100% !important; }
 }

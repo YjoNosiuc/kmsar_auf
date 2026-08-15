@@ -105,7 +105,6 @@
                             rows="4"
                             required
                             @class(['kmsar-textarea', 'kmsar-input--error' => $errors->has('title')])
-                            style="text-transform: none;"
                         >{{ old('title', $research->title) }}</textarea>
                         @if ($errors->has('title'))
                             <p class="kmsar-form-error" id="field_title-error" role="alert">{{ $errors->first('title') }}</p>
@@ -229,7 +228,7 @@
                                     x-show="otherChecked"
                                     value="{{ old('expected_output_other', $research->expected_output_other) }}"
                                     placeholder="{{ __('Please specify...') }}"
-                                    style="flex:1;min-width:160px;padding:6px 10px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;font-family:inherit;text-transform: uppercase"
+                                    style="flex:1;min-width:160px;padding:6px 10px;border:1px solid #E2E8F0;border-radius:6px;font-size:12px;font-family:inherit;"
                                 >
                             </label>
                         </div>

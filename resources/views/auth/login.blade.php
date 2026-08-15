@@ -102,6 +102,18 @@
         line-height: 1.5;
         color: var(--color-text-muted, #94A3B8);
     }
+    @media (max-width: 767px) {
+        .kmsar-login-brand {
+            padding: 1.5rem 1.25rem;
+        }
+        .kmsar-login-panel {
+            padding: 1.25rem 0.75rem 2rem;
+        }
+        .kmsar-login-card {
+            width: 100%;
+            max-width: 100%;
+        }
+    }
 </style>
 @endpush
 

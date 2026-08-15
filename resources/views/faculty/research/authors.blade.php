@@ -294,7 +294,7 @@
                     <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="primary_emp_number">{{ __('Employee Number') }}</label>
-                            <input id="primary_emp_number" type="text" name="employee_number" class="kmsar-input" style="text-transform: uppercase"
+                            <input id="primary_emp_number" type="text" name="employee_number" class="kmsar-input"
                                 x-model="primaryEmpNo"
                                 x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
                             <input type="hidden" name="primary_author_employee_number" :value="primaryEmpNo" x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
@@ -518,7 +518,7 @@
                         <div class="kmsar-form-row-2">
                             <div class="kmsar-form-group">
                                 <label class="kmsar-form-label" :for="'coauthor_emp_en_' + index">{{ __('Employee Number') }}</label>
-                                <input type="text" :id="'coauthor_emp_en_' + index" :name="'authors[' + index + '][employee_number]'" class="kmsar-input" style="text-transform: uppercase"
+                                <input type="text" :id="'coauthor_emp_en_' + index" :name="'authors[' + index + '][employee_number]'" class="kmsar-input"
                                     x-model="author.empNo"
                                     x-bind:disabled="author.authorType !== 'employee'">
                             </div>

@@ -299,7 +299,7 @@
             </div>
 
             {{-- RIGHT COLUMN: sticky sidebar --}}
-            <div class="min-w-0" style="position:sticky;top:80px;display:flex;flex-direction:column;gap:16px;">
+            <div class="min-w-0 kmsar-review-sidebar" style="position:sticky;top:80px;display:flex;flex-direction:column;gap:16px;">
                 <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;overflow:hidden;border-top:3px solid #D4AF37;padding:16px 20px;">
                     <h2 class="kmsar-card-title" style="margin:0 0 12px 0;">{{ __('Submission Summary') }}</h2>
                     <table style="width:100%;font-size:13px;border-collapse:collapse;">
@@ -411,10 +411,9 @@
                                 rows="4"
                                 class="kmsar-input w-full"
                                 required
-                                minlength="10"
+                                minlength="4"
                                 maxlength="5000"
                                 placeholder="{{ __('Provide feedback for the author…') }}"
-                                style="text-transform: uppercase"
                             ></textarea>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">
@@ -443,7 +442,6 @@
                                 required
                                 maxlength="5000"
                                 placeholder="{{ __('Reason for rejection…') }}"
-                                style="text-transform: uppercase"
                             ></textarea>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">

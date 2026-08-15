@@ -104,8 +104,7 @@
                        id="profile_suffix"
                        class="kmsar-input {{ $errors->profile->has('suffix') ? 'kmsar-input--error' : '' }}"
                        value="{{ old('suffix', $user->suffix) }}"
-                       placeholder="Jr., Sr., III, etc."
-                       style="text-transform: uppercase;">
+                       placeholder="Jr., Sr., III, etc.">
                 @error('suffix', 'profile')
                     <p class="kmsar-form-error">{{ $message }}</p>
                 @enderror
@@ -121,7 +120,6 @@
                        id="profile_email"
                        class="kmsar-input {{ $errors->profile->has('email') ? 'kmsar-input--error' : '' }}"
                        value="{{ old('email', $user->email) }}"
-                       style="text-transform: none;"
                        required>
                 @error('email', 'profile')
                     <p class="kmsar-form-error">{{ $message }}</p>

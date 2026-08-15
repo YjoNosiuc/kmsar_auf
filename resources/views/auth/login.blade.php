@@ -134,6 +134,10 @@
             <h2 class="kmsar-login-heading">Sign in</h2>
             <p class="kmsar-login-lead">Use your employee number and password.</p>
 
+            @if (request()->boolean('expired') || request()->get('expired') === '1')
+                <x-alert type="warning" class="kmsar-form-group" :message="__('Your session expired. Please log in again to continue.')" />
+            @endif
+
             @if ($errors->any())
                 <x-alert type="danger" class="kmsar-form-group">
                     <ul style="margin: 0; padding-left: 1.125rem; font-size: var(--text-sm); line-height: 1.5;">

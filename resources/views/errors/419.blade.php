@@ -1,26 +1,8 @@
 @php
-    $isLoggedIn = false;
-    $backUrl = url()->previous() !== url()->current() ? url()->previous() : url('/');
-    $dashboardUrl = url('/');
-    $loginUrl = url('/login');
-
     try {
-        $loginUrl = route('login');
-
-        if (auth()->check()) {
-            $isLoggedIn = true;
-            $user = auth()->user();
-            $dashboardUrl = match (true) {
-                $user->hasRole('super_admin') => route('admin.dashboard'),
-                $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => route('ovpri.dashboard'),
-                $user->hasAnyRole(['college_dean', 'unit_head']) => route('dean.dashboard'),
-                $user->hasAnyRole(['faculty', 'co_author']) => route('research.index'),
-                default => url('/'),
-            };
-        }
+        $loginUrl = route('login', ['expired' => 1]);
     } catch (\Throwable $e) {
-        $isLoggedIn = false;
-        $dashboardUrl = url('/');
+        $loginUrl = url('/login?expired=1');
     }
 @endphp
 <!DOCTYPE html>
@@ -28,7 +10,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Access Denied — KMSAR</title>
+    <title>Session Expired — KMSAR</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -87,7 +69,7 @@
             color: #1E3A8A;
         }
         .icon svg { width: 26px; height: 26px; }
-        .code { font-size: 56px; font-weight: 700; line-height: 1; color: #1E3A8A; }
+        .code { font-size: 56px; font-weight: 700; line-height: 1; color: #D97706; }
         h1 { font-size: 22px; font-weight: 600; margin: 14px 0 12px; }
         p { color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 auto 28px; max-width: 440px; }
         .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
@@ -105,10 +87,8 @@
             text-decoration: none;
             cursor: pointer;
         }
-        .btn-primary { background: #1E3A8A; color: #FFFFFF; }
-        .btn-primary:hover { background: #1E40AF; }
-        .btn-outline { background: #FFFFFF; color: #1E3A8A; border-color: #CBD5E1; }
-        .btn-outline:hover { background: #F8FAFC; }
+        .btn-gold { background: #D4AF37; color: #FFFFFF; }
+        .btn-gold:hover { background: #B8971F; }
         .foot {
             text-align: center;
             padding: 20px;
@@ -132,19 +112,14 @@
         <div class="card">
             <div class="icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
             </div>
-            <div class="code">403</div>
-            <h1>Access Denied</h1>
-            <p>You don't have permission to view this page. This may happen if your session has changed, the record moved to another approval stage, or you navigated to a restricted area.</p>
+            <div class="code">419</div>
+            <h1>Session Expired</h1>
+            <p>Your session has expired. This usually happens after leaving the page open for a long time. Please log in again to continue.</p>
             <div class="actions">
-                @if ($isLoggedIn)
-                    <a class="btn btn-outline" href="{{ $backUrl }}">&larr; Go Back</a>
-                    <a class="btn btn-primary" href="{{ $dashboardUrl }}">Go to Dashboard</a>
-                @else
-                    <a class="btn btn-primary" href="{{ $loginUrl }}">Login</a>
-                @endif
+                <a class="btn btn-gold" href="{{ $loginUrl }}">Login Again</a>
             </div>
         </div>
     </main>

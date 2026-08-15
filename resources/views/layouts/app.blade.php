@@ -283,5 +283,244 @@
 
     @stack('modals')
     @stack('scripts')
+
+    @auth
+    {{-- Idle Timeout Warning Modal --}}
+    <style>
+        #kmsar-idle-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: rgba(15, 23, 42, 0.6);
+            align-items: center;
+            justify-content: center;
+        }
+        #kmsar-idle-modal.is-open {
+            display: flex;
+        }
+        .kmsar-idle-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 36px 32px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        .kmsar-idle-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: #FEF3C7;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #D97706;
+        }
+        .kmsar-idle-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0F172A;
+            margin: 0 0 8px;
+        }
+        .kmsar-idle-message {
+            color: #64748B;
+            font-size: 14px;
+            margin: 0 0 8px;
+            line-height: 1.6;
+        }
+        #kmsar-idle-countdown {
+            font-size: 48px;
+            font-weight: 800;
+            color: #1E3A8A;
+            margin: 12px 0;
+            line-height: 1;
+        }
+        #kmsar-idle-countdown.is-urgent {
+            color: #DC2626;
+        }
+        .kmsar-idle-seconds {
+            color: #94A3B8;
+            font-size: 12px;
+            margin: 0 0 24px;
+        }
+        .kmsar-idle-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .kmsar-idle-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .kmsar-idle-btn--primary {
+            background: #1E3A8A;
+            color: #fff;
+        }
+        .kmsar-idle-btn--primary:hover {
+            background: #1E40AF;
+        }
+        .kmsar-idle-btn--muted {
+            background: #F1F5F9;
+            color: #64748B;
+        }
+        .kmsar-idle-btn--muted:hover {
+            background: #E2E8F0;
+        }
+        @media (max-width: 480px) {
+            .kmsar-idle-card { padding: 28px 20px; }
+            .kmsar-idle-actions { flex-direction: column; }
+        }
+    </style>
+
+    <div id="kmsar-idle-modal" role="dialog" aria-modal="true" aria-labelledby="kmsar-idle-title" aria-hidden="true">
+        <div class="kmsar-idle-card">
+            <div class="kmsar-idle-icon" aria-hidden="true">
+                <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+            </div>
+            <h2 id="kmsar-idle-title" class="kmsar-idle-title">Are you still there?</h2>
+            <p class="kmsar-idle-message">
+                You've been inactive for a while. For your security, you will be
+                automatically logged out in:
+            </p>
+            <div id="kmsar-idle-countdown">15</div>
+            <p class="kmsar-idle-seconds">seconds</p>
+            <div class="kmsar-idle-actions">
+                <button type="button" class="kmsar-idle-btn kmsar-idle-btn--primary" onclick="kmsarIdleReset()">
+                    Yes, I'm still here
+                </button>
+                <button type="button" class="kmsar-idle-btn kmsar-idle-btn--muted" onclick="kmsarIdleLogout()">
+                    Log out
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-redirect to login when the session / CSRF token has expired (419).
+        (function () {
+            const loginExpiredUrl = @json(route('login', ['expired' => 1]));
+
+            function redirectIfExpired(status) {
+                if (status === 419) {
+                    window.location.href = loginExpiredUrl;
+                    return true;
+                }
+                return false;
+            }
+
+            const originalFetch = window.fetch;
+            window.fetch = function (...args) {
+                return originalFetch.apply(this, args).then(function (response) {
+                    redirectIfExpired(response.status);
+                    return response;
+                });
+            };
+
+            const originalOpen = XMLHttpRequest.prototype.open;
+            XMLHttpRequest.prototype.open = function (...args) {
+                this.addEventListener('load', function () {
+                    redirectIfExpired(this.status);
+                });
+                return originalOpen.apply(this, args);
+            };
+        })();
+
+        // Idle timeout warning — 1 minute idle → 15s countdown → logout.
+        (function () {
+            const IDLE_MINUTES = 1;
+            const COUNTDOWN_SECS = 15;
+            const IDLE_MS = IDLE_MINUTES * 60 * 1000;
+            const logoutUrl = @json(route('logout'));
+            const loginExpiredUrl = @json(route('login', ['expired' => 1]));
+            const csrfToken = @json(csrf_token());
+
+            let idleTimer = null;
+            let countdownTimer = null;
+            let countdown = COUNTDOWN_SECS;
+            let isWarningShown = false;
+
+            const modal = document.getElementById('kmsar-idle-modal');
+            const countEl = document.getElementById('kmsar-idle-countdown');
+
+            function showWarning() {
+                if (isWarningShown) return;
+                isWarningShown = true;
+                countdown = COUNTDOWN_SECS;
+                countEl.textContent = countdown;
+                countEl.classList.remove('is-urgent');
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+
+                countdownTimer = setInterval(function () {
+                    countdown--;
+                    countEl.textContent = countdown;
+                    if (countdown <= 5) {
+                        countEl.classList.add('is-urgent');
+                    }
+                    if (countdown <= 0) {
+                        clearInterval(countdownTimer);
+                        kmsarIdleLogout();
+                    }
+                }, 1000);
+            }
+
+            function resetIdle() {
+                if (isWarningShown) return;
+                clearTimeout(idleTimer);
+                idleTimer = setTimeout(showWarning, IDLE_MS);
+            }
+
+            window.kmsarIdleReset = function () {
+                clearInterval(countdownTimer);
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                isWarningShown = false;
+                countEl.classList.remove('is-urgent');
+                resetIdle();
+            };
+
+            window.kmsarIdleLogout = function () {
+                clearInterval(countdownTimer);
+                clearTimeout(idleTimer);
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+
+                // POST logout with CSRF, then land on login with the expired banner.
+                // (LoginController::destroy redirects to /, which would skip ?expired=1.)
+                fetch(logoutUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'text/html',
+                    },
+                    credentials: 'same-origin',
+                    redirect: 'manual',
+                }).finally(function () {
+                    window.location.href = loginExpiredUrl;
+                });
+            };
+
+            ['mousemove', 'mousedown', 'keypress', 'keydown', 'scroll', 'touchstart', 'click']
+                .forEach(function (event) {
+                    document.addEventListener(event, resetIdle, { passive: true });
+                });
+
+            resetIdle();
+        })();
+    </script>
+    @endauth
 </body>
 </html>

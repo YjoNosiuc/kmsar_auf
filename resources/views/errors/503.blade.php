@@ -1,34 +1,9 @@
-@php
-    $isLoggedIn = false;
-    $backUrl = url()->previous() !== url()->current() ? url()->previous() : url('/');
-    $dashboardUrl = url('/');
-    $loginUrl = url('/login');
-
-    try {
-        $loginUrl = route('login');
-
-        if (auth()->check()) {
-            $isLoggedIn = true;
-            $user = auth()->user();
-            $dashboardUrl = match (true) {
-                $user->hasRole('super_admin') => route('admin.dashboard'),
-                $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => route('ovpri.dashboard'),
-                $user->hasAnyRole(['college_dean', 'unit_head']) => route('dean.dashboard'),
-                $user->hasAnyRole(['faculty', 'co_author']) => route('research.index'),
-                default => url('/'),
-            };
-        }
-    } catch (\Throwable $e) {
-        $isLoggedIn = false;
-        $dashboardUrl = url('/');
-    }
-@endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Access Denied — KMSAR</title>
+    <title>System Unavailable — KMSAR</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -87,7 +62,7 @@
             color: #1E3A8A;
         }
         .icon svg { width: 26px; height: 26px; }
-        .code { font-size: 56px; font-weight: 700; line-height: 1; color: #1E3A8A; }
+        .code { font-size: 56px; font-weight: 700; line-height: 1; color: #64748B; }
         h1 { font-size: 22px; font-weight: 600; margin: 14px 0 12px; }
         p { color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 auto 28px; max-width: 440px; }
         .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
@@ -107,8 +82,6 @@
         }
         .btn-primary { background: #1E3A8A; color: #FFFFFF; }
         .btn-primary:hover { background: #1E40AF; }
-        .btn-outline { background: #FFFFFF; color: #1E3A8A; border-color: #CBD5E1; }
-        .btn-outline:hover { background: #F8FAFC; }
         .foot {
             text-align: center;
             padding: 20px;
@@ -132,19 +105,14 @@
         <div class="card">
             <div class="icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75 3.75 2.25 7.5 4.5v1.409l4.26 4.26" />
                 </svg>
             </div>
-            <div class="code">403</div>
-            <h1>Access Denied</h1>
-            <p>You don't have permission to view this page. This may happen if your session has changed, the record moved to another approval stage, or you navigated to a restricted area.</p>
+            <div class="code">503</div>
+            <h1>System Unavailable</h1>
+            <p>KMSAR is temporarily unavailable for maintenance. Please try again in a few minutes.</p>
             <div class="actions">
-                @if ($isLoggedIn)
-                    <a class="btn btn-outline" href="{{ $backUrl }}">&larr; Go Back</a>
-                    <a class="btn btn-primary" href="{{ $dashboardUrl }}">Go to Dashboard</a>
-                @else
-                    <a class="btn btn-primary" href="{{ $loginUrl }}">Login</a>
-                @endif
+                <button type="button" class="btn btn-primary" onclick="window.location.reload()">Try Again</button>
             </div>
         </div>
     </main>

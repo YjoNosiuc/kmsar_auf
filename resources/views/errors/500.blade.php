@@ -28,7 +28,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Access Denied — KMSAR</title>
+    <title>Something Went Wrong — KMSAR</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -87,7 +87,7 @@
             color: #1E3A8A;
         }
         .icon svg { width: 26px; height: 26px; }
-        .code { font-size: 56px; font-weight: 700; line-height: 1; color: #1E3A8A; }
+        .code { font-size: 56px; font-weight: 700; line-height: 1; color: #DC2626; }
         h1 { font-size: 22px; font-weight: 600; margin: 14px 0 12px; }
         p { color: #64748B; font-size: 15px; line-height: 1.6; margin: 0 auto 28px; max-width: 440px; }
         .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
@@ -132,17 +132,18 @@
         <div class="card">
             <div class="icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                 </svg>
             </div>
-            <div class="code">403</div>
-            <h1>Access Denied</h1>
-            <p>You don't have permission to view this page. This may happen if your session has changed, the record moved to another approval stage, or you navigated to a restricted area.</p>
+            <div class="code">500</div>
+            <h1>Something Went Wrong</h1>
+            <p>An unexpected error occurred. Please try again. If the problem continues, please contact your system administrator.</p>
             <div class="actions">
                 @if ($isLoggedIn)
                     <a class="btn btn-outline" href="{{ $backUrl }}">&larr; Go Back</a>
                     <a class="btn btn-primary" href="{{ $dashboardUrl }}">Go to Dashboard</a>
                 @else
+                    <button type="button" class="btn btn-outline" onclick="window.location.reload()">Try Again</button>
                     <a class="btn btn-primary" href="{{ $loginUrl }}">Login</a>
                 @endif
             </div>

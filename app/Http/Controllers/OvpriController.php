@@ -138,7 +138,6 @@ class OvpriController extends Controller
         $classificationBreakdown = $this->buildClassificationBreakdown($base);
 
         $workflowStatus = collect([
-            ['key' => 'dean_review', 'label' => __('Dean Review'), 'count' => (clone $base)->where('approval_stage', 'dean_review')->count()],
             ['key' => 'ovpri_review', 'label' => __('OVPRI Review'), 'count' => (clone $base)->where('approval_stage', 'ovpri_review')->count()],
             ['key' => 'approved', 'label' => __('Approved'), 'count' => (clone $base)->where('approval_stage', 'approved')->count()],
             ['key' => 'rejected', 'label' => __('Rejected'), 'count' => (clone $base)->where('approval_stage', 'rejected')->count()],
@@ -201,7 +200,8 @@ class OvpriController extends Controller
 
     private function baseResearchQuery(?int $academicYear): Builder
     {
-        $query = Research::query();
+        $query = Research::query()
+            ->whereNotIn('approval_stage', ['draft', 'dean_review']);
 
         if ($academicYear !== null) {
             $query->whereYear('start_date', $academicYear);

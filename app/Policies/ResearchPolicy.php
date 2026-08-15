@@ -24,7 +24,17 @@ class ResearchPolicy
             return $user->can('research.view_all') && $research->approval_stage === 'approved';
         }
 
-        if ($user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'super_admin'])) {
+        // Super admin retains full visibility for system management (including draft).
+        if ($user->hasRole('super_admin')) {
+            return true;
+        }
+
+        // OVPRI / CDAIC cannot view draft research.
+        if ($user->hasAnyRole(['ovpri_admin', 'cdaic_admin'])) {
+            if ($research->approval_stage === 'draft') {
+                return false;
+            }
+
             return true;
         }
 
@@ -32,7 +42,12 @@ class ResearchPolicy
             return true;
         }
 
-        if ($user->can('research.view_college')) {
+        // Dean / unit head cannot view draft; college-scoped otherwise.
+        if ($user->hasAnyRole(['college_dean', 'unit_head']) || $user->can('research.view_college')) {
+            if ($research->approval_stage === 'draft') {
+                return false;
+            }
+
             return (int) $research->mother_college_id === (int) $user->college_id;
         }
 

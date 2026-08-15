@@ -65,6 +65,7 @@ class ApprovalService
     ): LengthAwarePaginator {
         return Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
+            ->whereNotIn('approval_stage', ['draft'])
             ->when($college, fn ($q) => $q->where('mother_college_id', $college))
             ->when($stage, fn ($q) => $q->where('approval_stage', $stage))
             ->when($status, fn ($q) => $q->where('status', $status))

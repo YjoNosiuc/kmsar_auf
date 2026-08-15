@@ -10,7 +10,6 @@
     @php
         $stageOptions = [
             '' => __('All'),
-            'draft' => __('Draft'),
             'dean_review' => __('Dean Review'),
             'ovpri_review' => __('OVPRI Review'),
             'approved' => __('Approved'),
@@ -74,7 +73,7 @@
 
     <x-page-header
         :title="__('All research')"
-        :subtitle="__('Institutional research register (OVPRI)')"
+        :subtitle="__('Institutional research register (OVPRI). Draft submissions are excluded — they remain visible only to the faculty authors.')"
         :breadcrumb="[
             ['label' => __('All research')],
         ]"

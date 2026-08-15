@@ -140,7 +140,8 @@ class DeanController extends Controller
 
     private function collegeResearchQuery(?College $college, ?int $academicYear = null): Builder
     {
-        $q = Research::query();
+        $q = Research::query()
+            ->whereNotIn('approval_stage', ['draft']);
 
         if ($college) {
             $q->where('mother_college_id', $college->id);
@@ -206,6 +207,7 @@ class DeanController extends Controller
         $facultyIds = $facultyUsers->pluck('id')->all();
 
         $researchQuery = Research::query()
+            ->whereNotIn('approval_stage', ['draft'])
             ->where('mother_college_id', $collegeId)
             ->where(function (Builder $b) use ($facultyIds) {
                 $b->whereIn('primary_author_id', $facultyIds)

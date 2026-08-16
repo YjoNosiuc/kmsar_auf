@@ -1,7 +1,8 @@
 import { test, expect, Page } from '@playwright/test';
 import * as path from 'path';
 import { login, logout, credentials } from './helpers/auth';
-import { resetDatabase, runArtisan } from './helpers/db';
+import { resetDatabaseAndAuth, runArtisan } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import { createAndSubmitResearch, endorseResearch } from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
@@ -79,8 +80,13 @@ async function uploadImport(page: Page, route: string, filePath: string): Promis
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Dashboard cache invalidation — UAT', () => {
-  test.beforeAll(() => {
-    resetDatabase();
+  test.beforeAll(async () => {
+    await acquireSuiteLock('cache');
+    await resetDatabaseAndAuth();
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
   });
 
   test('CACHE-001: After faculty submits research, dean pending count updates immediately', async ({

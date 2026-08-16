@@ -142,6 +142,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg"
                                  fill="none" viewBox="0 0 24 24"
                                  stroke-width="1.5" stroke="currentColor"
+                                 aria-hidden="true"
                                  style="width:1.25rem;height:1.25rem;">
                                 <path stroke-linecap="round"
                                       stroke-linejoin="round"
@@ -384,7 +385,7 @@
     <div id="kmsar-idle-modal" role="dialog" aria-modal="true" aria-labelledby="kmsar-idle-title" aria-hidden="true">
         <div class="kmsar-idle-card">
             <div class="kmsar-idle-icon" aria-hidden="true">
-                <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
                     <circle cx="12" cy="12" r="10"/>
                     <polyline points="12 6 12 12 16 14"/>
                 </svg>

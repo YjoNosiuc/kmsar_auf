@@ -1,15 +1,27 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
-import { resetDatabase } from './helpers/db';
+import { runTinker } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import {
   setupEndorsedResearch,
   approveResearch,
   returnResearchOvpri,
   rejectResearchOvpri,
+  openFacultyResearchList,
+  facultyResearchCard,
+  researchApprovalStage,
 } from './helpers/research';
 
 function uniqueTitle(prefix: string): string {
   return `${prefix} ${Date.now()}`;
+}
+
+/** Ensure at least one CBA research exists (suite no longer starts from a fresh seed). */
+function ensureCbaResearchVisible(): void {
+  const stamp = Date.now();
+  runTinker(
+    `$author = \\App\\Models\\User::where('email','faculty.cba1@auf.edu.ph')->firstOrFail(); $college = \\App\\Models\\College::where('code','CBA')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CBA-${stamp}'], ['title' => 'E2E CBA Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
+  );
 }
 
 async function ovpriLogin(page: Page): Promise<void> {
@@ -47,7 +59,11 @@ async function switchQueueTab(page: Page, tab: 'pending' | 'approved' | 'returne
 
 test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
   test.beforeAll(async () => {
-    resetDatabase();
+    await acquireSuiteLock('ovpri');
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
   });
 
   test('TC-001: Login with OVPRI credentials → redirected to OVPRI Dashboard', async ({ page }) => {
@@ -211,60 +227,89 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.getByText(/approved by OVPRI/i).first()).toBeVisible();
   });
 
-  test('TC-013: Return research to dean → stage moves back to dean_review, CDAIC sees same returned record (M-07)', async ({
+  test('TC-013: Return research to faculty → stage is returned_to_faculty; Dean Returned (not Pending); CDAIC sees returned record', async ({
     page,
   }) => {
-    const title = uniqueTitle('TC013 Return Dean');
+    const title = uniqueTitle('TC013 Return Faculty');
     const researchId = await setupEndorsedResearch(page, title);
     const remarks = 'Please revise supporting documents before final university approval.';
 
     await returnResearchOvpri(page, researchId, remarks);
 
-    await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-    await page.goto(`/approval/${researchId}`);
-    await expect(page.getByRole('cell', { name: 'Dean Review' })).toBeVisible();
+    expect(researchApprovalStage(researchId)).toBe('returned_to_faculty');
 
-    await cdaicLogin(page);
-    await openOvpriReview(page, researchId);
-    await expect(page.getByRole('heading', { name: new RegExp(title, 'i') })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'OVPRI' })).toBeVisible();
-  });
-
-  test('TC-014: Dean receives ResearchReturnedToDean notification', async ({ page }) => {
-    const title = uniqueTitle('TC014 Dean Return Notif');
-    const researchId = await setupEndorsedResearch(page, title);
-    await returnResearchOvpri(
-      page,
-      researchId,
-      'Returned by OVPRI for additional college-level review and endorsement.',
-    );
-
-    await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-    await openNotificationBell(page);
-    await expect(page.getByText(/returned by OVPRI/i).first()).toBeVisible();
-  });
-
-  test('TC-015: Faculty does NOT receive notification on OVPRI return', async ({ page }) => {
-    test.setTimeout(120_000);
-    const title = uniqueTitle('TC015 No Faculty Notif');
-    const researchId = await setupEndorsedResearch(page, title);
-
+    // Faculty list shows "Returned by OVPRI" badge
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await openFacultyResearchList(page, title);
+    const facultyCard = facultyResearchCard(page, title.toUpperCase());
+    await expect(facultyCard).toBeVisible({ timeout: 15_000 });
+    await expect(facultyCard.getByText(/Returned by OVPRI/i)).toBeVisible();
+
+    // Dean: NOT in Pending, IS in Returned
+    await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+    await page.goto('/approval/queue');
+    await expect(page.locator('#panel-pending').getByText(title.toUpperCase())).toHaveCount(0);
+    await page.locator('#tab-returned').click();
+    await expect(page.locator('#panel-returned')).toHaveClass(/active/);
+    await expect(page.locator('#panel-returned').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-returned').getByText(/Returned by OVPRI/i).first()).toBeVisible();
+
+    // CDAIC can still open the returned record (institutional reviewer)
+    await cdaicLogin(page);
+    await page.goto('/ovpri/queue?tab=returned');
+    await switchQueueTab(page, 'returned');
+    await expect(page.locator('#panel-returned').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-returned').getByText(/Returned to Faculty/i).first()).toBeVisible();
+  });
+
+  test('TC-014: Dean does NOT receive notification when OVPRI returns to faculty', async ({ page }) => {
+    const title = uniqueTitle('TC014 Dean No Return Notif');
+    const researchId = await setupEndorsedResearch(page, title);
+
+    await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+    await page.goto('/dean/dashboard');
     const before = await getUnreadBellCount(page);
 
     await returnResearchOvpri(
       page,
       researchId,
-      'OVPRI return without faculty notification for E2E validation test.',
+      'Returned by OVPRI for faculty revision — dean should not be notified.',
     );
 
-    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+    await page.goto('/dean/dashboard');
     const after = await getUnreadBellCount(page);
     expect(after).toBe(before);
 
     await openNotificationBell(page);
     await expect(page.getByText(/returned by OVPRI/i)).toHaveCount(0);
-    await expect(page.getByText(title.toUpperCase()).filter({ hasText: /returned for revision/i })).toHaveCount(0);
+  });
+
+  test('TC-015: Faculty DOES receive notification on OVPRI return', async ({ page }) => {
+    test.setTimeout(120_000);
+    const title = uniqueTitle('TC015 Faculty Return Notif');
+    const researchId = await setupEndorsedResearch(page, title);
+
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await page.goto('/research');
+    await openNotificationBell(page);
+    await page.locator('form[action*="read-all"] button[type="submit"]').click().catch(() => undefined);
+    await page.waitForLoadState('networkidle');
+    const before = await getUnreadBellCount(page);
+
+    await returnResearchOvpri(
+      page,
+      researchId,
+      'OVPRI return with faculty notification for E2E validation test.',
+    );
+
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await page.goto('/research');
+    const after = await getUnreadBellCount(page);
+    expect(after).toBeGreaterThan(before);
+
+    await openNotificationBell(page);
+    await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
   });
 
   test('TC-016: Reject at OVPRI → stage changes to Rejected, CDAIC sees same rejected record (M-07)', async ({
@@ -312,6 +357,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
   test('TC-019: All Research page shows all research across all colleges (H-05)', async ({
     page,
   }) => {
+    ensureCbaResearchVisible();
     await ovpriLogin(page);
     await page.goto('/ovpri/research');
 

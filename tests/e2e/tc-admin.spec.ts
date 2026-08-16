@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
-import { resetDatabase, runTinker } from './helpers/db';
+import { resetDatabaseAndAuth, runTinker } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 
 /** Official AUF college codes expected in the colleges directory (identity checks, not totals). */
 const AUF_COLLEGE_CODES = ['CAMP', 'CAS', 'CBA', 'CCS', 'CCJE', 'CED', 'CEA', 'GS', 'SL', 'SM'];
@@ -93,7 +94,12 @@ function seedAuditLog(action: string, auditableId = 1): void {
 
 test.describe('Super Admin — UAT Test Suite', () => {
   test.beforeAll(async () => {
-    resetDatabase();
+    await acquireSuiteLock('admin');
+    await resetDatabaseAndAuth();
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
   });
 
   test('TC-001: Login with super admin credentials → redirected to Admin Dashboard', async ({ page }) => {

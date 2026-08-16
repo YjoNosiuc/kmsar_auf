@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
-import { resetDatabase } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import {
   createAndSubmitResearch,
   endorseResearch,
@@ -72,7 +72,11 @@ async function submitProgressUpdate(page: Page, researchId: string): Promise<voi
 
 test.describe('Dean / Unit Head — UAT Test Suite', () => {
   test.beforeAll(async () => {
-    resetDatabase();
+    await acquireSuiteLock('dean');
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
   });
 
   test('TC-001: Login with dean credentials → redirected to Dean Dashboard', async ({ page }) => {

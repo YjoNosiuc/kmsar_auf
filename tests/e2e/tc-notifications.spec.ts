@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
-import { resetDatabase, runTinker } from './helpers/db';
+import { resetDatabaseAndAuth, runTinker } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import {
   createAndSubmitResearch,
   endorseResearch,
@@ -60,12 +61,17 @@ async function rejectResearchDean(page: Page, researchId: string, remarks: strin
 test.describe('Notifications — UAT', () => {
   test.describe.configure({ timeout: 120_000 });
 
+  test.beforeAll(async () => {
+    await acquireSuiteLock('notifications');
+    await resetDatabaseAndAuth();
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
+  });
+
   // -------------------------------------------------------------------------
   test.describe('Notification bell — faculty', () => {
-    test.beforeAll(() => {
-      resetDatabase();
-    });
-
     test('NOTIF-001: Bell shows unread count badge when notifications exist', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF001 Badge'));
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
@@ -191,10 +197,10 @@ test.describe('Notifications — UAT', () => {
       await expect(page.getByText(remarks).first()).toBeVisible();
     });
 
-    test('NOTIF-011: Faculty does NOT receive notification when OVPRI returns to dean (not to faculty)', async ({
+    test('NOTIF-011: Faculty DOES receive notification when OVPRI returns research to faculty', async ({
       page,
     }) => {
-      const title = uniqueTitle('NOTIF011 No Faculty Return');
+      const title = uniqueTitle('NOTIF011 Faculty Return');
       const researchId = await setupEndorsedResearch(page, title);
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
@@ -207,25 +213,21 @@ test.describe('Notifications — UAT', () => {
       await returnResearchOvpri(
         page,
         researchId,
-        'OVPRI return without faculty notification for E2E validation test.',
+        'OVPRI return with faculty notification for E2E validation test.',
       );
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research');
       const after = await getUnreadBellCount(page);
-      expect(after).toBe(before);
+      expect(after).toBeGreaterThan(before);
 
       await openNotificationBell(page);
-      await expect(page.getByText(/returned by OVPRI/i)).toHaveCount(0);
+      await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
     });
   });
 
   // -------------------------------------------------------------------------
   test.describe('Notification bell — dean', () => {
-    test.beforeAll(() => {
-      resetDatabase();
-    });
-
     test('NOTIF-012: Dean receives notification when faculty submits research', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF012 Dean Submit'));
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
@@ -243,19 +245,28 @@ test.describe('Notifications — UAT', () => {
       await expect(page.getByText(/approved by OVPRI/i).first()).toBeVisible();
     });
 
-    test('NOTIF-014: Dean receives notification when OVPRI returns research to dean', async ({
+    test('NOTIF-014: Dean does NOT receive notification when OVPRI returns research to faculty', async ({
       page,
     }) => {
-      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF014 Dean Return'));
+      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF014 Dean No Return'));
+
+      await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await page.goto('/dean/dashboard');
+      const before = await getUnreadBellCount(page);
+
       await returnResearchOvpri(
         page,
         researchId,
-        'Please have the faculty revise the abstract before re-endorsement.',
+        'Please have the faculty revise the abstract — dean should not be notified.',
       );
 
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await page.goto('/dean/dashboard');
+      const after = await getUnreadBellCount(page);
+      expect(after).toBe(before);
+
       await openNotificationBell(page);
-      await expect(page.getByText(/returned by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(/returned by OVPRI/i)).toHaveCount(0);
     });
 
     test('NOTIF-015: Dean receives notification when OVPRI rejects research', async ({ page }) => {
@@ -274,10 +285,6 @@ test.describe('Notifications — UAT', () => {
 
   // -------------------------------------------------------------------------
   test.describe('Notification bell — OVPRI', () => {
-    test.beforeAll(() => {
-      resetDatabase();
-    });
-
     test('NOTIF-016: OVPRI receives notification when dean endorses research', async ({ page }) => {
       const researchId = await createAndSubmitResearch(page, uniqueTitle('NOTIF016 Endorse'));
       expect(researchId).toBeTruthy();

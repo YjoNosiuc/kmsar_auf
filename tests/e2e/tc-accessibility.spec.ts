@@ -1,7 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { login, credentials } from './helpers/auth';
-import { resetDatabase } from './helpers/db';
 import {
   createAndSubmitResearch,
   setupEndorsedResearch,
@@ -54,12 +53,9 @@ async function fillWizardStep1(page: Page, title: string): Promise<void> {
 test.describe('Accessibility — UAT', () => {
   test.describe.configure({ timeout: 120_000 });
 
-  test.beforeAll(() => {
-    resetDatabase();
-  });
-
   // -------------------------------------------------------------------------
   test.describe('Accessibility — Authentication pages', () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
     test('A11Y-001: Login page has no critical accessibility violations', async ({ page }) => {
       await page.goto('/login');
       await expect(page.locator('input[name="login"]')).toBeVisible();
@@ -98,6 +94,7 @@ test.describe('Accessibility — UAT', () => {
 
   // -------------------------------------------------------------------------
   test.describe('Accessibility — Faculty pages', () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
     let sampleResearchId = '';
 
     test.beforeAll(async ({ browser }) => {
@@ -175,8 +172,19 @@ test.describe('Accessibility — UAT', () => {
         const titled = (await svg.locator('title').count()) > 0;
         const parentButton = svg.locator('xpath=ancestor::button[@aria-label][1]');
         const parentHasLabel = (await parentButton.count()) > 0;
+        const ancestorHidden = await svg.evaluate((el) => {
+          let node: Element | null = el.parentElement;
+          while (node) {
+            if (node.getAttribute('aria-hidden') === 'true') {
+              return true;
+            }
+            node = node.parentElement;
+          }
+          return false;
+        });
         expect(
           ariaHidden === 'true' ||
+            ancestorHidden ||
             !!ariaLabel ||
             role === 'img' ||
             titled ||

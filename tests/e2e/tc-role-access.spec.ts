@@ -1,17 +1,20 @@
 import { test, expect, Page } from '@playwright/test';
-import { login, logout, credentials } from './helpers/auth';
+import { login, logout, credentials, authStatePath } from './helpers/auth';
 import { runTinker } from './helpers/db';
 
 const CO_AUTHOR_FACULTY_EMAIL = 'faculty.ccs2@auf.edu.ph';
 const CO_AUTHOR_FACULTY_PASSWORD = 'password';
+const emptyStorage = { cookies: [] as never[], origins: [] as never[] };
 
 async function expectForbidden(page: Page, path: string): Promise<void> {
-  const response = await page.goto(path);
+  const response = await page.goto(path, { waitUntil: 'domcontentloaded' });
+  expect(page.url(), `expected 403 for ${path}, got redirect to login (stale auth?)`).not.toMatch(/\/login/);
   expect(response?.status()).toBe(403);
 }
 
 async function expectOk(page: Page, path: string): Promise<void> {
-  const response = await page.goto(path);
+  const response = await page.goto(path, { waitUntil: 'domcontentloaded' });
+  expect(page.url(), `expected 200 for ${path}, got redirect to login (stale auth?)`).not.toMatch(/\/login/);
   expect(response?.status()).toBe(200);
 }
 
@@ -44,9 +47,7 @@ function createCoAuthorRoleUser(stamp: number): string {
 
 test.describe('Role Access — UAT Test Suite', () => {
   test.describe('Faculty access control', () => {
-    test.beforeEach(async ({ page }) => {
-      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-    });
+    test.use({ storageState: authStatePath('faculty') });
 
     test('RA-001: Faculty cannot access /dean/dashboard → 403', async ({ page }) => {
       await expectForbidden(page, '/dean/dashboard');
@@ -86,9 +87,7 @@ test.describe('Role Access — UAT Test Suite', () => {
   });
 
   test.describe('Dean access control', () => {
-    test.beforeEach(async ({ page }) => {
-      await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-    });
+    test.use({ storageState: authStatePath('dean') });
 
     test('RA-010: Dean cannot access /research → 403', async ({ page }) => {
       await expectForbidden(page, '/research');
@@ -116,9 +115,7 @@ test.describe('Role Access — UAT Test Suite', () => {
   });
 
   test.describe('OVPRI access control', () => {
-    test.beforeEach(async ({ page }) => {
-      await login(page, credentials.ovpri.email, credentials.ovpri.password);
-    });
+    test.use({ storageState: authStatePath('ovpri') });
 
     test('RA-016: OVPRI cannot access /research → 403', async ({ page }) => {
       await expectForbidden(page, '/research');
@@ -142,9 +139,7 @@ test.describe('Role Access — UAT Test Suite', () => {
   });
 
   test.describe('CDAIC access control (same as OVPRI)', () => {
-    test.beforeEach(async ({ page }) => {
-      await login(page, credentials.cdaic.email, credentials.cdaic.password);
-    });
+    test.use({ storageState: authStatePath('cdaic') });
 
     test('RA-021: CDAIC cannot access /research → 403', async ({ page }) => {
       await expectForbidden(page, '/research');
@@ -160,9 +155,7 @@ test.describe('Role Access — UAT Test Suite', () => {
   });
 
   test.describe('Admin access control (should have access to everything)', () => {
-    test.beforeEach(async ({ page }) => {
-      await login(page, credentials.admin.email, credentials.admin.password);
-    });
+    test.use({ storageState: authStatePath('admin') });
 
     test('RA-024: Admin CAN access /admin/dashboard → 200', async ({ page }) => {
       await expectOk(page, '/admin/dashboard');
@@ -241,27 +234,31 @@ test.describe('Role Access — UAT Test Suite', () => {
     test('RA-034: After logout pressing back button does not show protected page', async ({ page }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research');
-      await expect(page.getByRole('heading', { name: 'My research' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /My research/i })).toBeVisible();
       await logout(page);
       await page.goBack();
       await expect(page).toHaveURL(/\/login/);
       await expect(page.getByRole('heading', { name: 'My research' })).toHaveCount(0);
     });
 
-    test('RA-035: Unauthenticated user accessing /research redirects to login', async ({ page }) => {
-      await expectRedirectToLogin(page, '/research');
-    });
+    test.describe('Unauthenticated redirects', () => {
+      test.use({ storageState: emptyStorage });
 
-    test('RA-036: Unauthenticated user accessing /dean/dashboard redirects to login', async ({ page }) => {
-      await expectRedirectToLogin(page, '/dean/dashboard');
-    });
+      test('RA-035: Unauthenticated user accessing /research redirects to login', async ({ page }) => {
+        await expectRedirectToLogin(page, '/research');
+      });
 
-    test('RA-037: Unauthenticated user accessing /ovpri/dashboard redirects to login', async ({ page }) => {
-      await expectRedirectToLogin(page, '/ovpri/dashboard');
-    });
+      test('RA-036: Unauthenticated user accessing /dean/dashboard redirects to login', async ({ page }) => {
+        await expectRedirectToLogin(page, '/dean/dashboard');
+      });
 
-    test('RA-038: Unauthenticated user accessing /admin/dashboard redirects to login', async ({ page }) => {
-      await expectRedirectToLogin(page, '/admin/dashboard');
+      test('RA-037: Unauthenticated user accessing /ovpri/dashboard redirects to login', async ({ page }) => {
+        await expectRedirectToLogin(page, '/ovpri/dashboard');
+      });
+
+      test('RA-038: Unauthenticated user accessing /admin/dashboard redirects to login', async ({ page }) => {
+        await expectRedirectToLogin(page, '/admin/dashboard');
+      });
     });
   });
 });

@@ -1,7 +1,8 @@
 import { test, expect, Page, Browser } from '@playwright/test';
 import * as path from 'path';
 import { login, logout, credentials } from './helpers/auth';
-import { resetDatabase, runArtisan, runTinker } from './helpers/db';
+import { resetDatabaseAndAuth, runArtisan, runTinker } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
 const USER_VALID = path.join(FIXTURES, 'user_import_valid.xlsx');
@@ -45,7 +46,7 @@ async function adminLogin(page: Page): Promise<void> {
 async function uploadImport(page: Page, filePath: string): Promise<void> {
   await page.setInputFiles('input[name="file"]', filePath);
   await page.locator('form').filter({ has: page.locator('input[name="file"]') }).locator('button[type="submit"]').click();
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 }
 
 async function seedUsersViaImport(browser: Browser): Promise<void> {
@@ -149,16 +150,22 @@ async function openResearchByTitle(page: Page, title: string): Promise<void> {
 }
 
 test.describe('Import Data — UAT Test Suite', () => {
-  test.describe.configure({ timeout: 90_000 });
+  test.describe.configure({ timeout: 90_000, mode: 'serial' });
+
+  // Single migrate:fresh for the whole import suite (was 5× beforeAll resets).
+  test.beforeAll(async () => {
+    await acquireSuiteLock('import');
+    await resetDatabaseAndAuth();
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
+  });
 
   // ---------------------------------------------------------------------------
   // Group 1: Import pages (independent — failure here must not skip other groups)
   // ---------------------------------------------------------------------------
   test.describe('Import pages', () => {
-    test.beforeAll(() => {
-      resetDatabase();
-    });
-
     test.beforeEach(async ({ page }) => {
       await adminLogin(page);
     });
@@ -200,10 +207,7 @@ test.describe('Import Data — UAT Test Suite', () => {
   // Group 2: User import
   // ---------------------------------------------------------------------------
   test.describe('User import', () => {
-    test.describe.configure({ mode: 'serial' });
-
     test.beforeAll(async ({ browser }) => {
-      resetDatabase();
       await seedUsersViaImport(browser);
     });
 
@@ -293,10 +297,7 @@ test.describe('Import Data — UAT Test Suite', () => {
   // Group 3: Research import
   // ---------------------------------------------------------------------------
   test.describe('Research import', () => {
-    test.describe.configure({ mode: 'serial' });
-
     test.beforeAll(async ({ browser }) => {
-      resetDatabase();
       await seedUsersViaImport(browser);
       await seedResearchViaImport(browser, RESEARCH_VALID);
     });
@@ -405,10 +406,7 @@ test.describe('Import Data — UAT Test Suite', () => {
   // Group 4: Co-author import
   // ---------------------------------------------------------------------------
   test.describe('Co-author import', () => {
-    test.describe.configure({ mode: 'serial' });
-
     test.beforeAll(async ({ browser }) => {
-      resetDatabase();
       await seedUsersViaImport(browser);
       await seedResearchViaImport(browser, RESEARCH_WITH_COAUTHORS);
     });
@@ -508,10 +506,7 @@ test.describe('Import Data — UAT Test Suite', () => {
   // Group 5: Document URL import
   // ---------------------------------------------------------------------------
   test.describe('Document URL import', () => {
-    test.describe.configure({ mode: 'serial' });
-
     test.beforeAll(async ({ browser }) => {
-      resetDatabase();
       await seedUsersViaImport(browser);
       await seedResearchViaImport(browser, RESEARCH_WITH_DOCUMENTS);
     });

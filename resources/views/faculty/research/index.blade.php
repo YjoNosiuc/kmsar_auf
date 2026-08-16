@@ -34,6 +34,7 @@
             'ovpri_review' => '#2563EB',
             'approved' => '#059669',
             'rejected' => '#DC2626',
+            'returned_to_faculty' => '#D97706',
             default => '#94A3B8',
         };
 
@@ -52,6 +53,7 @@
                 'dean_review', 'ovpri_review' => 'pending',
                 'approved' => 'approved',
                 'rejected' => 'rejected',
+                'returned_to_faculty' => 'returned',
                 default => 'info',
             };
         };
@@ -74,6 +76,7 @@
             'ovpri_review' => __('OVPRI Review'),
             'approved' => __('Approved'),
             'rejected' => __('Rejected'),
+            'returned_to_faculty' => __('Returned by OVPRI'),
         ];
 
         $filterItems = $research->map(static fn ($item) => [
@@ -144,7 +147,7 @@
         @forelse ($research as $item)
             @php
                 $statusLabel = str_replace('_', ' ', $item->status);
-                $stageLabel = str_replace('_', ' ', $item->approval_stage);
+                $stageLabel = $stageOptions[$item->approval_stage] ?? ucwords(str_replace('_', ' ', $item->approval_stage));
                 $leftBorder = $borderByStage($item->approval_stage);
             @endphp
             <div
@@ -159,7 +162,7 @@
                             <x-badge status="info">{{ __('Co-author') }}</x-badge>
                         @endif
                         <x-badge :status="$researchProgressBadgeStatus($item->status)">{{ ucwords($statusLabel) }}</x-badge>
-                        <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">{{ ucwords($stageLabel) }}</x-badge>
+                        <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">{{ $stageLabel }}</x-badge>
                     </div>
                     <div style="font-size:15px;font-weight:600;color:#0F172A;line-height:1.4;margin-bottom:6px;">{{ $item->title }}</div>
                     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#475569;">

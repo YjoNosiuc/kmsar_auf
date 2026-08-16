@@ -1,5 +1,6 @@
 import { expect, Page } from '@playwright/test';
 import { login, credentials } from './auth';
+import { runTinker } from './db';
 
 const WIZARD_TIMEOUT = 90_000;
 
@@ -98,6 +99,8 @@ export async function returnResearchOvpri(
   await page.locator('#ovpri-return-remarks').waitFor({ state: 'visible', timeout: 15_000 });
   await page.fill('#ovpri-return-remarks', remarks);
   await page.locator('form[action*="return"] button[type="submit"]').click();
+  // OVPRI return → returned_to_faculty (faculty revises; dean sees Returned tab only).
+  await expect(page.getByText(/returned to the faculty/i).first()).toBeVisible({ timeout: 15_000 });
 }
 
 export async function rejectResearchOvpri(
@@ -155,4 +158,12 @@ export function facultyResearchCard(page: Page, title: string) {
 /** First card matching approval-stage badge text (e.g. Dean Review). */
 export function facultyResearchCardByStage(page: Page, stageLabel: RegExp) {
   return page.locator('div[style*="border-left"]').filter({ hasText: stageLabel }).first();
+}
+
+/** Current approval_stage from DB (used after OVPRI return → returned_to_faculty). */
+export function researchApprovalStage(researchId: string): string {
+  const out = runTinker(
+    `echo \\App\\Models\\Research::find(${researchId})?->approval_stage ?? 'missing';`,
+  );
+  return out.trim().split(/\r?\n/).pop()?.trim() ?? 'missing';
 }

@@ -1,4 +1,10 @@
-import { Page } from '@playwright/test';
+import { chromium, Page } from '@playwright/test';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const credentials = {
   faculty_ccs: { email: 'faculty.ccs1@auf.edu.ph', password: 'password' },
@@ -10,7 +16,81 @@ export const credentials = {
   admin: { email: 'admin@auf.edu.ph', password: 'password' },
 };
 
-export async function login(page: Page, email: string, password: string) {
+export const AUTH_DIR = path.resolve(__dirname, '../.auth');
+
+export type AuthRole = 'faculty' | 'dean' | 'ovpri' | 'cdaic' | 'admin';
+
+export function authStatePath(role: AuthRole | string): string {
+  return path.join(AUTH_DIR, `${role}.json`);
+}
+
+const emailToRole: Record<string, AuthRole> = {
+  [credentials.faculty_ccs.email]: 'faculty',
+  [credentials.dean_ccs.email]: 'dean',
+  [credentials.ovpri.email]: 'ovpri',
+  [credentials.cdaic.email]: 'cdaic',
+  [credentials.admin.email]: 'admin',
+};
+
+const keepAliveTimers = new WeakMap<Page, ReturnType<typeof setInterval>>();
+
+/** Keep the 1-minute idle logout from firing during long Playwright waits. */
+export function startKeepAlive(page: Page): void {
+  stopKeepAlive(page);
+  const timer = setInterval(async () => {
+    try {
+      await page.mouse.move(100 + Math.random() * 10, 100 + Math.random() * 10);
+    } catch {
+      /* page may be closed */
+    }
+  }, 45_000);
+  keepAliveTimers.set(page, timer);
+}
+
+export function stopKeepAlive(page: Page): void {
+  const timer = keepAliveTimers.get(page);
+  if (timer) {
+    clearInterval(timer);
+    keepAliveTimers.delete(page);
+  }
+}
+
+async function applyStoredCookies(page: Page, statePath: string): Promise<boolean> {
+  try {
+    const raw = fs.readFileSync(statePath, 'utf8');
+    const state = JSON.parse(raw) as { cookies?: Array<Record<string, unknown>> };
+    if (!state.cookies?.length) {
+      return false;
+    }
+    await page.context().clearCookies();
+    await page.context().addCookies(state.cookies as Parameters<typeof page.context.addCookies>[0]);
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
+    return !page.url().includes('/login');
+  } catch {
+    return false;
+  }
+}
+
+export async function login(
+  page: Page,
+  email: string,
+  password: string,
+  options?: { forceFormLogin?: boolean },
+): Promise<void> {
+  stopKeepAlive(page);
+
+  const role = emailToRole[email];
+  const statePath = role ? authStatePath(role) : null;
+
+  if (!options?.forceFormLogin && statePath && fs.existsSync(statePath)) {
+    const ok = await applyStoredCookies(page, statePath);
+    if (ok) {
+      startKeepAlive(page);
+      return;
+    }
+  }
+
   await page.goto('/login');
 
   const loginInput = page.locator('input[name="login"]');
@@ -32,15 +112,45 @@ export async function login(page: Page, email: string, password: string) {
   await page.fill('input[name="password"]', password);
   await page.click('button[type="submit"]');
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 60_000 });
-  await page.waitForLoadState('networkidle', { timeout: 30_000 });
+  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
+  startKeepAlive(page);
 }
 
-export async function logout(page: Page) {
+export async function logout(page: Page): Promise<void> {
+  stopKeepAlive(page);
   await page.click('button[type="submit"]:has-text("Sign Out")');
   await page.waitForURL((url) => url.pathname.endsWith('/login') || url.pathname === '/', {
     timeout: 15_000,
   });
   if (!page.url().includes('/login')) {
     await page.goto('/login');
+  }
+  await page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
+}
+
+/** Re-login each seeded role and overwrite tests/e2e/.auth/*.json (call after migrate:fresh). */
+export async function refreshAuthStates(baseURL = 'http://kmsar_auf.test'): Promise<void> {
+  fs.mkdirSync(AUTH_DIR, { recursive: true });
+
+  const roles = [
+    { name: 'faculty' as const, email: credentials.faculty_ccs.email, password: credentials.faculty_ccs.password },
+    { name: 'dean' as const, email: credentials.dean_ccs.email, password: credentials.dean_ccs.password },
+    { name: 'ovpri' as const, email: credentials.ovpri.email, password: credentials.ovpri.password },
+    { name: 'cdaic' as const, email: credentials.cdaic.email, password: credentials.cdaic.password },
+    { name: 'admin' as const, email: credentials.admin.email, password: credentials.admin.password },
+  ];
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    for (const role of roles) {
+      const context = await browser.newContext({ baseURL });
+      const page = await context.newPage();
+      await login(page, role.email, role.password, { forceFormLogin: true });
+      await context.storageState({ path: authStatePath(role.name) });
+      stopKeepAlive(page);
+      await context.close();
+    }
+  } finally {
+    await browser.close();
   }
 }

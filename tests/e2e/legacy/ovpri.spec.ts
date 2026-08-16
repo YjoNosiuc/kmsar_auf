@@ -92,20 +92,20 @@ test.describe('OVPRI / CDAIC approval workflow', () => {
     await expect(page.getByText(/approved/i).first()).toBeVisible();
   });
 
-  test('return research — dean gets notification', async ({ page }) => {
+  test('return research — faculty gets notification (not dean)', async ({ page }) => {
     const title = uniqueTitle('OVPRI Return');
     await endorseToOvpri(page, title);
 
     await login(page, CREDENTIALS.ovpri.email);
     await openOvpriQueueResearch(page, title);
     await page.getByRole('button', { name: 'Return', exact: true }).click();
-    await page.locator('#ovpri-return-remarks').fill('Please have the dean verify funding documentation.');
+    await page.locator('#ovpri-return-remarks').fill('Please revise supporting documents before resubmission.');
     await page.locator('form[action*="return"] button[type="submit"]').click();
     await expect(page.getByText(/returned/i).first()).toBeVisible({ timeout: 15_000 });
 
-    await login(page, CREDENTIALS.dean.email);
+    await login(page, CREDENTIALS.faculty.email);
     await openNotificationBell(page);
-    await expect(page.getByText(/returned/i).first()).toBeVisible();
+    await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
   });
 
   test('H-04: reject research — faculty gets notification', async ({ page }) => {

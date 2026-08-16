@@ -334,10 +334,10 @@ test.describe('Security & sad-path — UAT', () => {
       await expect(page.locator('.kmsar-form-error, .kmsar-alert--danger').first()).toBeVisible({
         timeout: 15_000,
       });
-      await expect(page.getByText(/required|at least 10|remarks/i).first()).toBeVisible();
+      await expect(page.getByText(/required|at least 4|remarks/i).first()).toBeVisible();
     });
 
-    test('SEC-014: Return research with only 5 chars remarks → validation error (min 10 chars)', async ({
+    test('SEC-014: Return research with only 3 chars remarks → validation error (min 4 chars)', async ({
       page,
     }) => {
       test.slow();
@@ -346,7 +346,7 @@ test.describe('Security & sad-path — UAT', () => {
       await openDeanReturnModal(page, researchId!);
 
       // Keep HTML5 minlength — short remarks must not submit; avoid fragile page-wide /min/ text matches
-      await page.locator('#return-remarks').fill('Short');
+      await page.locator('#return-remarks').fill('abc');
       await page.locator('form[action*="return"] button[type="submit"]').click();
 
       await expect(
@@ -354,7 +354,7 @@ test.describe('Security & sad-path — UAT', () => {
       ).toBeVisible({ timeout: 10_000 });
 
       const remarks = page.locator('#return-remarks');
-      await expect(remarks).toHaveAttribute('minlength', '10');
+      await expect(remarks).toHaveAttribute('minlength', '4');
       const tooShort = await remarks.evaluate(
         (el: HTMLTextAreaElement) => el.validity.tooShort || !el.checkValidity(),
       );

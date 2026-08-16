@@ -303,9 +303,13 @@
                                 <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
                                 @if ($research->approval_stage === 'rejected')
-                                    <span style="color:#DC2626;font-weight:600;">✕ {{ __('Rejected') }}</span>
+                                    <span style="color:#DC2626;font-weight:600;">{{ __('Rejected') }}</span>
+                                @elseif ($research->approval_stage === 'returned_to_faculty')
+                                    <span style="color:#D97706;font-weight:600;">{{ __('Returned by OVPRI') }}</span>
+                                @elseif ($research->approval_stage === 'draft')
+                                    <span style="color:#D97706;font-weight:600;">{{ __('Returned by Dean') }}</span>
                                 @else
-                                    <span style="color:#D97706;font-weight:600;">↩ {{ __('Returned for revision') }}</span>
+                                    <span style="color:#D97706;font-weight:600;">{{ __('Returned for revision') }}</span>
                                 @endif
                             </div>
                         </div>

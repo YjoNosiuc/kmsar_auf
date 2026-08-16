@@ -5,7 +5,9 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "test:e2e": "playwright test",
+    "test:e2e": "node tests/e2e/run-optimized.mjs",
+    "test:e2e:parallel": "playwright test --project=parallel",
+    "test:e2e:sequential": "playwright test --project=sequential --workers=1 --no-deps",
     "test:e2e:ui": "playwright test --ui"
   },
   "devDependencies": {

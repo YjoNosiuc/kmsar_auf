@@ -50,12 +50,15 @@ class ApprovalController extends Controller
         $returned = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
             ->where('mother_college_id', $collegeId)
-            ->whereNotIn('approval_stage', ['dean_review', 'ovpri_review', 'approved'])
-            ->whereHas('approvals', function ($q) use ($request) {
-                $q->where('approver_id', $request->user()->id)
-                    ->where('stage', 'dean')
-                    ->whereIn('action', ['returned', 'rejected']);
+            ->where(function ($q) use ($request) {
+                // Dean's own returns/rejects OR OVPRI returns awaiting faculty revision (info only).
+                $q->whereHas('approvals', function ($inner) use ($request) {
+                    $inner->where('approver_id', $request->user()->id)
+                        ->where('stage', 'dean')
+                        ->whereIn('action', ['returned', 'rejected']);
+                })->orWhere('approval_stage', 'returned_to_faculty');
             })
+            ->whereNotIn('approval_stage', ['dean_review', 'ovpri_review', 'approved'])
             ->orderByDesc('updated_at')
             ->get();
 
@@ -122,7 +125,7 @@ class ApprovalController extends Controller
             'remarks' => ['required', 'string', 'min:4', 'max:5000'],
         ]);
 
-        $this->approvalService->return($research, $request->user(), $validated['remarks']);
+        $this->approvalService->return($research, $request->user(), $validated['remarks'], 'dean');
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -203,8 +206,6 @@ class ApprovalController extends Controller
             ->get();
 
         $returned = $baseQuery()
-            // OVPRI return sets approval_stage back to dean_review; reject sets rejected.
-            // Do not exclude dean_review or draft — otherwise returned papers never appear here.
             ->whereNotIn('approval_stage', ['ovpri_review', 'approved'])
             ->whereHas('approvals', function ($q) {
                 $q->where('stage', 'ovpri')
@@ -264,13 +265,13 @@ class ApprovalController extends Controller
             'remarks' => ['required', 'string', 'min:4', 'max:5000'],
         ]);
 
-        $this->approvalService->return($research, $request->user(), $validated['remarks']);
+        $this->approvalService->return($research, $request->user(), $validated['remarks'], 'ovpri');
 
         $this->forgetResearchDashboardCaches($research);
 
         return redirect()
             ->route('ovpri.queue')
-            ->with('success', __('Research has been returned to the college for dean review.'));
+            ->with('success', __('Research has been returned to the faculty for revision.'));
     }
 
     public function ovpriReject(Request $request, Research $research): RedirectResponse

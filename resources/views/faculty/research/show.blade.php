@@ -1,6 +1,9 @@
 @php
     $listRoute = route('research.index');
-    $approvalStageLabel = ucwords(str_replace('_', ' ', (string) $research->approval_stage));
+    $approvalStageLabel = match ((string) $research->approval_stage) {
+        'returned_to_faculty' => __('Returned by OVPRI'),
+        default => ucwords(str_replace('_', ' ', (string) $research->approval_stage)),
+    };
     $statusLabel = ucwords(str_replace('_', ' ', (string) $research->status));
     $progressBadge = match ($research->status) {
         'published_scopus', 'published_non_indexed', 'presented_external', 'presented_internal', 'completed_unpublished' => 'approved',
@@ -13,6 +16,7 @@
         'ovpri_review' => 'info',
         'approved' => 'approved',
         'rejected' => 'rejected',
+        'returned_to_faculty' => 'returned',
         default => 'draft',
     };
 @endphp
@@ -114,7 +118,7 @@
                     @endif
                 @endif
 
-                @if ($research->approval_stage === 'rejected')
+                @if (in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true))
                     @can('revise', $research)
                         <form method="post" action="{{ route('research.revise', $research) }}" class="inline">
                             @csrf
@@ -132,6 +136,12 @@
         @if ($research->approval_stage === 'draft' && $research->revision_count > 0)
             <x-alert type="warning" class="mb-6">
                 {{ __('This submission was returned for revision. Please update your documents and resubmit.') }}
+            </x-alert>
+        @endif
+
+        @if ($research->approval_stage === 'returned_to_faculty')
+            <x-alert type="warning" class="mb-6">
+                {{ __('OVPRI returned this submission for revision. Click Revise to edit and resubmit through your college dean.') }}
             </x-alert>
         @endif
 

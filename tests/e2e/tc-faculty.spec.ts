@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, logout, credentials } from './helpers/auth';
-import { resetDatabase, runTinker } from './helpers/db';
+import { runTinker } from './helpers/db';
+import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import { createAndSubmitResearch, openFacultyResearchList, facultyResearchCard, facultyResearchCardByStage } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
@@ -50,7 +51,11 @@ async function getUnreadBellCount(page: Page): Promise<number> {
 
 test.describe('Faculty — UAT Test Suite', () => {
   test.beforeAll(async () => {
-    resetDatabase();
+    await acquireSuiteLock('faculty');
+  });
+
+  test.afterAll(() => {
+    releaseSuiteLock();
   });
 
   test('TC-001: login page loads with email and password fields', async ({ page }) => {
@@ -429,6 +434,31 @@ test.describe('Faculty — UAT Test Suite', () => {
     );
 
     await page.goto(`/research/${researchId}`);
+    await page.getByRole('button', { name: 'Revise', exact: true }).click();
+    await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveURL(/\/research\/\d+\/edit/);
+  });
+
+  test('TC-028b: after OVPRI return (returned_to_faculty) Revise button appears with Returned by OVPRI badge', async ({
+    page,
+  }) => {
+    const title = uniqueTitle('TC028b Ovpri Return');
+    const researchId = await createAndSubmitResearch(page, title);
+    expect(researchId).toBeTruthy();
+    runTinker(
+      `App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'returned_to_faculty']);`,
+    );
+
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await openFacultyResearchList(page, title);
+    const card = facultyResearchCard(page, title.toUpperCase());
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card.getByText(/Returned by OVPRI/i)).toBeVisible();
+    await expect(card.getByText(/^Rejected$/i)).toHaveCount(0);
+
+    await page.goto(`/research/${researchId}`);
+    await expect(page.getByText(/Returned by OVPRI/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revise', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
     await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
     await expect(page).toHaveURL(/\/research\/\d+\/edit/);

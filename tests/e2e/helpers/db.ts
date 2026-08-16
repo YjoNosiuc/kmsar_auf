@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { refreshAuthStates } from './auth';
 
 const PROJECT_ROOT = 'C:/laragon/www/kmsar_auf';
 
@@ -26,6 +27,12 @@ export function resetDatabase(retries = 3): void {
       execSync('ping -n 4 127.0.0.1 > nul', { stdio: 'pipe', shell: true });
     }
   }
+}
+
+/** migrate:fresh --seed, then rewrite storageState files so cookies match new session rows. */
+export async function resetDatabaseAndAuth(): Promise<void> {
+  resetDatabase();
+  await refreshAuthStates();
 }
 
 export function runArtisan(command: string) {

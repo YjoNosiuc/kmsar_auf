@@ -12,7 +12,6 @@ use App\Models\User;
 use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
 use App\Notifications\ResearchReturned;
-use App\Notifications\ResearchReturnedToDean;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -385,18 +384,32 @@ class ApprovalService
     }
 
     /**
-     * [dean_review] ──return()──► [draft] · [ovpri_review] ──return()──► [dean_review] (KMSAR §8).
+     * [dean_review] ──return(dean)──► [draft]
+     * [ovpri_review] ──return(ovpri)──► [returned_to_faculty]
      */
-    public function return(Research $research, User $actor, string $remarks): void
+    public function return(Research $research, User $actor, string $remarks, string $stage = 'dean'): void
     {
         $this->assertRemarksNonEmpty($remarks);
 
+        if (! in_array($stage, ['dean', 'ovpri'], true)) {
+            throw ValidationException::withMessages([
+                'stage' => [__('Invalid return stage.')],
+            ]);
+        }
+
+        $newStage = $stage === 'ovpri' ? 'returned_to_faculty' : 'draft';
         $researchId = (int) $research->getKey();
 
-        DB::transaction(function () use ($researchId, $actor, $remarks) {
+        DB::transaction(function () use ($researchId, $actor, $remarks, $stage, $newStage) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
 
-            if ($locked->approval_stage === 'dean_review') {
+            if ($stage === 'dean') {
+                if ($locked->approval_stage !== 'dean_review') {
+                    throw ValidationException::withMessages([
+                        'approval_stage' => [__('Research cannot be returned in its current approval stage.')],
+                    ]);
+                }
+
                 $this->assertDeanMayActOnResearch($actor, $locked);
                 if (! $actor->can('approval.return')) {
                     throw ValidationException::withMessages([
@@ -415,7 +428,7 @@ class ApprovalService
 
                 $oldStage = $locked->approval_stage;
                 $locked->update([
-                    'approval_stage' => 'draft',
+                    'approval_stage' => $newStage,
                     'revision_count' => $locked->revision_count + 1,
                 ]);
 
@@ -423,62 +436,55 @@ class ApprovalService
                     'approval_stage' => $oldStage,
                     'revision_count' => $locked->revision_count - 1,
                 ], [
-                    'approval_stage' => 'draft',
+                    'approval_stage' => $newStage,
                     'revision_count' => $locked->revision_count,
                 ]);
 
                 return;
             }
 
-            if ($locked->approval_stage === 'ovpri_review') {
-                if (! $actor->can('approval.return')) {
-                    throw ValidationException::withMessages([
-                        'user' => [__('You are not allowed to return research at this stage.')],
-                    ]);
-                }
-
-                Approval::query()->create([
-                    'research_id' => $locked->id,
-                    'approver_id' => $actor->id,
-                    'stage' => 'ovpri',
-                    'action' => 'returned',
-                    'remarks' => $remarks,
-                    'acted_at' => now(),
+            // OVPRI return → faculty revision (not dean_review).
+            if ($locked->approval_stage !== 'ovpri_review') {
+                throw ValidationException::withMessages([
+                    'approval_stage' => [__('Research cannot be returned in its current approval stage.')],
                 ]);
-
-                $oldStage = $locked->approval_stage;
-                $locked->update([
-                    'approval_stage' => 'dean_review',
-                    'revision_count' => $locked->revision_count + 1,
-                ]);
-
-                $this->writeAuditLog($actor, $locked, 'approval.returned', [
-                    'approval_stage' => $oldStage,
-                    'revision_count' => $locked->revision_count - 1,
-                ], [
-                    'approval_stage' => 'dean_review',
-                    'revision_count' => $locked->revision_count,
-                ]);
-
-                return;
             }
 
-            throw ValidationException::withMessages([
-                'approval_stage' => [__('Research cannot be returned in its current approval stage.')],
+            if (! $actor->can('approval.return')) {
+                throw ValidationException::withMessages([
+                    'user' => [__('You are not allowed to return research at this stage.')],
+                ]);
+            }
+
+            Approval::query()->create([
+                'research_id' => $locked->id,
+                'approver_id' => $actor->id,
+                'stage' => 'ovpri',
+                'action' => 'returned',
+                'remarks' => $remarks,
+                'acted_at' => now(),
+            ]);
+
+            $oldStage = $locked->approval_stage;
+            $locked->update([
+                'approval_stage' => $newStage,
+                'revision_count' => $locked->revision_count + 1,
+            ]);
+
+            $this->writeAuditLog($actor, $locked, 'approval.returned', [
+                'approval_stage' => $oldStage,
+                'revision_count' => $locked->revision_count - 1,
+            ], [
+                'approval_stage' => $newStage,
+                'revision_count' => $locked->revision_count,
             ]);
         });
 
         $fresh = Research::query()->with('primaryAuthor')->findOrFail($researchId);
 
-        if ($fresh->approval_stage === 'draft') {
+        // Dean return (draft) and OVPRI return (returned_to_faculty) both notify faculty.
+        if (in_array($fresh->approval_stage, ['draft', 'returned_to_faculty'], true)) {
             $fresh->primaryAuthor?->notify(new ResearchReturned($fresh));
-        } elseif ($fresh->approval_stage === 'dean_review') {
-            $collegeDean = User::query()
-                ->whereHas('roles', fn ($q) => $q->where('name', 'college_dean'))
-                ->where('college_id', $fresh->mother_college_id)
-                ->first();
-
-            $collegeDean?->notify(new ResearchReturnedToDean($fresh));
         }
     }
 
@@ -560,7 +566,7 @@ class ApprovalService
     }
 
     /**
-     * [rejected] ──resubmit()──► [draft] (KMSAR §8).
+     * [rejected|returned_to_faculty] ──resubmit()──► [draft]
      */
     public function resubmit(Research $research, User $actor): void
     {
@@ -569,9 +575,9 @@ class ApprovalService
         DB::transaction(function () use ($researchId, $actor) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
 
-            if ($locked->approval_stage !== 'rejected') {
+            if (! in_array($locked->approval_stage, ['rejected', 'returned_to_faculty'], true)) {
                 throw ValidationException::withMessages([
-                    'approval_stage' => [__('Only rejected research can be moved back to draft for resubmission.')],
+                    'approval_stage' => [__('Only rejected or OVPRI-returned research can be moved back to draft for resubmission.')],
                 ]);
             }
 

@@ -115,7 +115,7 @@ class ResearchPolicy
             return false;
         }
 
-        if ($research->approval_stage !== 'rejected') {
+        if (! in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true)) {
             return false;
         }
 

@@ -16,7 +16,7 @@
     >
         <x-page-header
             :title="$research->reference_number"
-            :subtitle="__('Step 3 of 3 · Upload documents and finish registration') . ' · ' . str($research->title)->limit(100)"
+            :subtitle="__('Step 3 of 3 · Upload documents') . ' · ' . str($research->title)->limit(100)"
             :breadcrumb="[
                 ['label' => __('My Research'), 'route' => 'research.index'],
                 ['label' => $research->reference_number, 'route' => 'research.show', 'parameters' => [$research]],
@@ -112,17 +112,9 @@
                 :aria-selected="tab === 'upload'"
                 @click="tab = 'upload'"
             >{{ __('Upload documents') }}</button>
-            <button
-                type="button"
-                role="tab"
-                class="kmsar-tab"
-                :class="{ 'active': tab === 'finish' }"
-                :aria-selected="tab === 'finish'"
-                @click="tab = 'finish'"
-            >@if ($research->revision_count > 0){{ __('Finish') }}@else{{ __('Finish registration') }}@endif</button>
         </div>
 
-        {{-- Tab 1: Upload documents --}}
+        {{-- Upload documents --}}
         <div x-show="tab === 'upload'" class="space-y-6" role="tabpanel">
             <div class="kmsar-card kmsar-card--accent-primary">
                 <div class="kmsar-card-header">
@@ -366,94 +358,36 @@
                     @else
                         <p class="kmsar-body mb-0" style="color: var(--color-text-muted);">{{ __('No documents uploaded yet.') }}</p>
                     @endif
-                </div>
-            </div>
-        </div>
 
-        {{-- Tab 2: Finish registration --}}
-        <div x-show="tab === 'finish'" x-cloak class="space-y-6" style="display: none;" role="tabpanel">
-            <div class="kmsar-card kmsar-card--accent-primary">
-                <div class="kmsar-card-header">
-                    <h2 class="kmsar-card-title">
-                        @if ($research->revision_count > 0)
-                            {{ __('Changes saved') }}
-                        @else
-                            {{ __('Finish registration') }}
-                        @endif
-                    </h2>
-                </div>
-                <div class="kmsar-card-body" style="padding:0;">
-                    @php
-                        $detailsComplete = $research->title !== __('Untitled research');
-                        $docCount = $research->documents->count();
-                    @endphp
-                    <div style="padding:24px;">
-                        <div style="background:#F0FDF4;border:1px solid #A7F3D0;border-radius:10px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
-                            <div style="width:40px;height:40px;background:#059669;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                <svg style="width:20px;height:20px;color:#fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <div>
-                                <div style="font-size:14px;font-weight:600;color:#065F46;">{{ __('Research draft saved successfully') }}</div>
-                                <div style="font-size:12px;color:#059669;margin-top:2px;">{{ __('Reference') }}: {{ $research->reference_number }}</div>
-                            </div>
-                        </div>
-
-                        @if ($research->revision_count > 0)
-                            <p class="kmsar-body" style="margin:0 0 24px;font-size:13px;color:#475569;line-height:1.6;">
-                                {{ __('Your changes have been saved. Review your research and submit for dean review when ready.') }}
-                            </p>
-                        @else
-                            <div style="margin-bottom:24px;">
-                                <div style="font-size:13px;font-weight:600;color:#0F172A;margin-bottom:12px;">{{ __('Before submitting for review:') }}</div>
-                                <div style="display:flex;flex-direction:column;gap:8px;">
-                                    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
-                                        <span style="width:20px;height:20px;border-radius:50%;background:{{ $detailsComplete ? '#059669' : '#E2E8F0' }};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;">{{ $detailsComplete ? '✓' : '!' }}</span>
-                                        {{ __('Research details completed') }}
-                                    </div>
-                                    <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#475569;">
-                                        <span
-                                            style="width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;"
-                                            :style="documentCount > 0 ? 'background:#059669' : 'background:#E2E8F0'"
-                                            x-text="documentCount > 0 ? '✓' : '!'"
-                                        ></span>
-                                        <span>
-                                            {{ __('Required document uploaded') }}
-                                            (<span x-text="documentCount"></span>
-                                            <span x-text="documentCount === 1 ? '{{ __('file') }}' : '{{ __('files') }}'"></span>)
-                                        </span>
-                                    </div>
-                                </div>
-                                <p x-show="documentCount === 0" x-cloak class="kmsar-body" style="margin:12px 0 0;font-size:12px;color:#D97706;">
-                                    {{ __('Upload at least one document before submitting for dean review.') }}
-                                </p>
-                            </div>
-                        @endif
-
-                        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;">
-                            @if ($research->revision_count > 0)
-                                <a href="{{ route('research.show', $research) }}"
-                                   style="display:inline-block;padding:10px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;">
-                                    {{ __('Save Changes & View Research') }}
-                                </a>
-                            @else
+                    {{-- Submit for Dean Review — shown at bottom of Documents tab --}}
+                    <div style="margin-top:24px; padding-top:20px; border-top:1px solid #E2E8F0;">
+                        @if ($research->approval_stage === 'draft')
+                            @can('submit', $research)
                                 <form method="POST" action="{{ route('research.submit', $research) }}">
                                     @csrf
-                                    <button
-                                        type="submit"
+                                    <button type="submit"
                                         class="kmsar-btn kmsar-btn--primary"
+                                        style="width:100%;padding:12px;"
                                         :disabled="documentCount === 0"
-                                        :style="documentCount === 0
-                                            ? 'padding:10px 24px;background:#94A3B8;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:not-allowed;opacity:0.7;'
-                                            : 'padding:10px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;'"
-                                    >
-                                        {{ __('Submit for Dean Review') }} →
+                                        :style="documentCount === 0 ? 'width:100%;padding:12px;opacity:0.5;cursor:not-allowed;' : 'width:100%;padding:12px;'">
+                                        {{ __('Submit for Dean Review') }}
                                     </button>
+                                    <p x-show="documentCount === 0"
+                                       x-cloak
+                                       style="text-align:center;color:#DC2626;font-size:13px;margin-top:8px;">
+                                        {{ __('Please upload at least one document before submitting.') }}
+                                    </p>
                                 </form>
-                            @endif
-                            <a href="{{ route('research.index') }}" style="padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:13px;font-weight:500;text-decoration:none;display:inline-flex;align-items:center;">
-                                {{ __('Back to My Research') }}
-                            </a>
-                        </div>
+                            @endcan
+                        @elseif (in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true))
+                            @can('revise', $research)
+                                <a href="{{ route('research.show', $research) }}"
+                                   class="kmsar-btn kmsar-btn--primary"
+                                   style="display:block;text-align:center;padding:12px;width:100%;box-sizing:border-box;">
+                                    {{ __('Save Changes & View Research') }}
+                                </a>
+                            @endcan
+                        @endif
                     </div>
                 </div>
             </div>

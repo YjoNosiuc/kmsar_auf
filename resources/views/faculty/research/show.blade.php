@@ -97,6 +97,7 @@
                 @if ($research->approval_stage === 'draft')
                     @can('update', $research)
                         <x-button variant="secondary" href="{{ route('research.wizard.details', $research) }}">{{ __('Edit') }}</x-button>
+                        <x-button variant="outline" href="{{ route('research.wizard.documents', $research) }}">{{ __('Continue to documents') }}</x-button>
                     @endcan
 
                     @can('submit', $research)
@@ -463,6 +464,10 @@
                                     href="{{ route('research.wizard.details', $research) }}"
                                     style="display:inline-flex;align-items:center;padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;background:#fff;"
                                 >{{ __('Edit') }}</a>
+                                <a
+                                    href="{{ route('research.wizard.documents', $research) }}"
+                                    style="display:inline-flex;align-items:center;padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;background:#fff;"
+                                >{{ __('Continue to documents') }}</a>
                             @endcan
                         </div>
                     </div>

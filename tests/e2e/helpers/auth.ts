@@ -7,13 +7,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const credentials = {
-  faculty_ccs: { email: 'faculty.ccs1@auf.edu.ph', password: 'password' },
-  faculty_cba: { email: 'faculty.cba1@auf.edu.ph', password: 'password' },
-  dean_ccs: { email: 'dean.ccs@auf.edu.ph', password: 'password' },
-  dean_cba: { email: 'dean.cba@auf.edu.ph', password: 'password' },
-  ovpri: { email: 'ovpri@auf.edu.ph', password: 'password' },
-  cdaic: { email: 'cdaic@auf.edu.ph', password: 'password' },
-  admin: { email: 'admin@auf.edu.ph', password: 'password' },
+  faculty_ccs: { email: 'faculty.ccs1@yopmail.com', password: 'password' },
+  faculty_cba: { email: 'faculty.cba1@yopmail.com', password: 'password' },
+  dean_ccs: { email: 'dean.ccs@yopmail.com', password: 'password' },
+  dean_cba: { email: 'dean.cba@yopmail.com', password: 'password' },
+  ovpri: { email: 'ovpri@yopmail.com', password: 'password' },
+  cdaic: { email: 'cdaic@yopmail.com', password: 'password' },
+  admin: { email: 'admin@yopmail.com', password: 'password' },
 };
 
 export const AUTH_DIR = path.resolve(__dirname, '../.auth');

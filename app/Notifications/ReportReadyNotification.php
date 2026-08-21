@@ -24,14 +24,18 @@ class ReportReadyNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $data = $this->toDatabase($notifiable);
-        $name = $notifiable->name ?? $notifiable->first_name ?? 'User';
 
         return (new MailMessage)
             ->subject(__('KMSAR — Report ready'))
-            ->greeting('Hello '.$name.',')
-            ->line($data['message'])
-            ->action(__('Download report'), $data['url'])
-            ->line(__('This is an automated message from KMSAR — Angeles University Foundation.'));
+            ->view('emails.notification', [
+                'recipientName' => $notifiable->name ?? $notifiable->first_name ?? 'User',
+                'bodyText' => $data['message'],
+                'referenceNumber' => null,
+                'researchTitle' => null,
+                'remarks' => null,
+                'actionUrl' => $data['url'],
+                'actionLabel' => __('Download report'),
+            ]);
     }
 
     /**

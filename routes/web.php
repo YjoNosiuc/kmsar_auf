@@ -26,6 +26,8 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResearchController;
 use Illuminate\Support\Facades\Route;
 
+// To process queued emails run: php artisan queue:work --sleep=3 --tries=3
+
 Route::get('/', function () {
 if (auth()->check()) {
 $role = auth()->user()->getRoleNames()->first();
@@ -54,11 +56,12 @@ Route::middleware('guest')->group(function () {
         ->name('register.store');
 
     Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
-    Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink'])->name('password.email');
-    Route::get('/reset-password/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
+    Route::post('/forgot-password', [PasswordResetController::class, 'sendOtp'])->name('password.email');
+    Route::get('/verify-otp', [PasswordResetController::class, 'showVerifyForm'])->name('password.verify');
+    Route::post('/verify-otp', [PasswordResetController::class, 'verifyOtp'])->name('password.verify.submit');
+    Route::get('/reset-password', [PasswordResetController::class, 'showResetForm'])->name('password.reset');
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->name('password.update');
 });
-
 Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');

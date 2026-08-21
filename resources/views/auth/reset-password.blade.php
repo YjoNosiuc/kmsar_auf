@@ -34,8 +34,8 @@
 
     <div class="kmsar-login-panel">
         <div class="kmsar-login-card">
-            <h1 class="kmsar-login-heading">Reset password</h1>
-            <p class="kmsar-login-lead">Enter your email and a new password below.</p>
+            <h1 class="kmsar-login-heading">Set new password</h1>
+            <p class="kmsar-login-lead">Enter a new password for <strong>{{ $email }}</strong>.</p>
 
             @if ($errors->any())
                 <x-alert type="danger" class="kmsar-form-group">
@@ -49,21 +49,8 @@
 
             <form method="POST" action="{{ route('password.update') }}">
                 @csrf
-                <input type="hidden" name="token" value="{{ $token }}">
-
-                <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="email">Email address</label>
-                    <input
-                        id="email"
-                        type="email"
-                        name="email"
-                        value="{{ old('email', $email ?? '') }}"
-                        class="kmsar-input"
-                        autocomplete="email"
-                        required
-                        autofocus
-                    >
-                </div>
+                <input type="hidden" name="email" value="{{ old('email', $email) }}">
+                <input type="hidden" name="otp" value="{{ old('otp', $otp) }}">
 
                 <div class="kmsar-form-group">
                     <label class="kmsar-form-label" for="password">New password</label>
@@ -74,6 +61,7 @@
                         class="kmsar-input"
                         autocomplete="new-password"
                         required
+                        autofocus
                         placeholder="••••••••"
                     >
                 </div>

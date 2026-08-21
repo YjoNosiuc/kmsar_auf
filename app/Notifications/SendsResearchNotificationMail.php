@@ -17,18 +17,18 @@ trait SendsResearchNotificationMail
     public function toMail(object $notifiable): MailMessage
     {
         $data = $this->toArray($notifiable);
-        $name = $notifiable->name ?? $notifiable->first_name ?? 'User';
 
-        $mail = (new MailMessage)
+        return (new MailMessage)
             ->subject($this->mailSubject($data))
-            ->greeting('Hello '.$name.',')
-            ->line($data['message'] ?? 'You have a new notification in KMSAR.');
-
-        if (! empty($data['action_url'])) {
-            $mail->action(__('Open in KMSAR'), $data['action_url']);
-        }
-
-        return $mail->line(__('This is an automated message from KMSAR — Angeles University Foundation.'));
+            ->view('emails.notification', [
+                'recipientName' => $notifiable->name ?? $notifiable->first_name ?? 'User',
+                'bodyText' => $data['message'] ?? __('You have a new notification in KMSAR.'),
+                'referenceNumber' => $data['reference_number'] ?? null,
+                'researchTitle' => $data['title'] ?? null,
+                'remarks' => $data['remarks'] ?? null,
+                'actionUrl' => $data['action_url'] ?? null,
+                'actionLabel' => __('Open in KMSAR'),
+            ]);
     }
 
     /**

@@ -17,19 +17,19 @@ class ResearchSeeder extends Seeder
         $cea = College::where('code', 'CEA')->firstOrFail();
 
         // CCS Faculty
-        $ccs1 = User::where('email', 'faculty.ccs1@auf.edu.ph')->firstOrFail();
-        $ccs2 = User::where('email', 'faculty.ccs2@auf.edu.ph')->firstOrFail();
-        $ccs3 = User::where('email', 'faculty.ccs3@auf.edu.ph')->firstOrFail();
+        $ccs1 = User::where('email', 'faculty.ccs1@yopmail.com')->firstOrFail();
+        $ccs2 = User::where('email', 'faculty.ccs2@yopmail.com')->firstOrFail();
+        $ccs3 = User::where('email', 'faculty.ccs3@yopmail.com')->firstOrFail();
 
         // CBA Faculty
-        $cba1 = User::where('email', 'faculty.cba1@auf.edu.ph')->firstOrFail();
-        $cba2 = User::where('email', 'faculty.cba2@auf.edu.ph')->firstOrFail();
-        $cba3 = User::where('email', 'faculty.cba3@auf.edu.ph')->firstOrFail();
+        $cba1 = User::where('email', 'faculty.cba1@yopmail.com')->firstOrFail();
+        $cba2 = User::where('email', 'faculty.cba2@yopmail.com')->firstOrFail();
+        $cba3 = User::where('email', 'faculty.cba3@yopmail.com')->firstOrFail();
 
         // CEA Faculty
-        $cea1 = User::where('email', 'faculty.cea1@auf.edu.ph')->firstOrFail();
-        $cea2 = User::where('email', 'faculty.cea2@auf.edu.ph')->firstOrFail();
-        $cea3 = User::where('email', 'faculty.cea3@auf.edu.ph')->firstOrFail();
+        $cea1 = User::where('email', 'faculty.cea1@yopmail.com')->firstOrFail();
+        $cea2 = User::where('email', 'faculty.cea2@yopmail.com')->firstOrFail();
+        $cea3 = User::where('email', 'faculty.cea3@yopmail.com')->firstOrFail();
 
         $records = [
 

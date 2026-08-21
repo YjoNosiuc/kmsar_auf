@@ -2,6 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResearchApprovedDeanMail;
+use App\Mail\ResearchApprovedFacultyMail;
+use App\Mail\ResearchEndorsedFacultyMail;
+use App\Mail\ResearchEndorsedOvpriMail;
+use App\Mail\ResearchRejectedDeanMail;
+use App\Mail\ResearchRejectedFacultyMail;
+use App\Mail\ResearchReturnedByOvpriDeanMail;
+use App\Mail\ResearchReturnedByOvpriFacultyMail;
+use App\Mail\ResearchReturnedFacultyMail;
 use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
@@ -10,6 +19,7 @@ use App\Notifications\ResearchApprovedDean;
 use App\Notifications\ResearchRejected;
 use App\Notifications\ResearchRejectedDean;
 use App\Services\ApprovalService;
+use App\Support\SafeMail;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -105,6 +115,29 @@ class ApprovalController extends Controller
 
         $this->approvalService->endorse($research, $request->user(), $validated['remarks'] ?? null);
 
+        $research->refresh()->loadMissing(['primaryAuthor', 'researchAuthors', 'motherCollege']);
+
+        $delay = 0;
+
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send($research->primaryAuthor->email, new ResearchEndorsedFacultyMail($research), $delay);
+            $delay += 2;
+        }
+
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, &$delay) {
+                SafeMail::send($author->email, new ResearchEndorsedFacultyMail($research), $delay);
+                $delay += 2;
+            });
+
+        User::whereHas('roles', fn ($q) => $q->whereIn('name', ['ovpri_admin', 'cdaic_admin']))
+            ->each(function (User $ovpri) use ($research, &$delay) {
+                SafeMail::send($ovpri->email, new ResearchEndorsedOvpriMail($research, $ovpri), $delay);
+                $delay += 2;
+            });
+
         $this->forgetResearchDashboardCaches($research);
 
         return redirect()
@@ -126,6 +159,27 @@ class ApprovalController extends Controller
         ]);
 
         $this->approvalService->return($research, $request->user(), $validated['remarks'], 'dean');
+
+        $research->refresh()->loadMissing(['primaryAuthor', 'researchAuthors']);
+
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send(
+                $research->primaryAuthor->email,
+                new ResearchReturnedFacultyMail($research, $validated['remarks']),
+                0
+            );
+        }
+
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, $validated) {
+                SafeMail::send(
+                    $author->email,
+                    new ResearchReturnedFacultyMail($research, $validated['remarks']),
+                    0
+                );
+            });
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -161,6 +215,30 @@ class ApprovalController extends Controller
         $research->primaryAuthor?->notify(
             new ResearchRejected($research, $validated['remarks'], 'dean')
         );
+
+        $delay = 0;
+
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send(
+                $research->primaryAuthor->email,
+                new ResearchRejectedFacultyMail($research, $validated['remarks']),
+                $delay
+            );
+            $delay += 2;
+        }
+
+        $research->loadMissing('researchAuthors');
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, $validated, &$delay) {
+                SafeMail::send(
+                    $author->email,
+                    new ResearchRejectedFacultyMail($research, $validated['remarks']),
+                    $delay
+                );
+                $delay += 2;
+            });
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -246,9 +324,27 @@ class ApprovalController extends Controller
             ->where('college_id', $research->mother_college_id)
             ->first();
 
+        $delay = 0;
+
         if ($dean) {
             $dean->notify(new ResearchApprovedDean($research));
+            SafeMail::send($dean->email, new ResearchApprovedDeanMail($research, $dean), $delay);
+            $delay += 2;
         }
+
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send($research->primaryAuthor->email, new ResearchApprovedFacultyMail($research), $delay);
+            $delay += 2;
+        }
+
+        $research->loadMissing('researchAuthors');
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, &$delay) {
+                SafeMail::send($author->email, new ResearchApprovedFacultyMail($research), $delay);
+                $delay += 2;
+            });
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -266,6 +362,46 @@ class ApprovalController extends Controller
         ]);
 
         $this->approvalService->return($research, $request->user(), $validated['remarks'], 'ovpri');
+
+        $research->refresh()->loadMissing(['primaryAuthor', 'researchAuthors']);
+
+        $delay = 0;
+
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send(
+                $research->primaryAuthor->email,
+                new ResearchReturnedByOvpriFacultyMail($research, $validated['remarks']),
+                $delay
+            );
+            $delay += 2;
+        }
+
+        $dean = User::whereHas('roles', function ($q) {
+            $q->where('name', 'college_dean');
+        })
+            ->where('college_id', $research->mother_college_id)
+            ->first();
+
+        if ($dean) {
+            SafeMail::send(
+                $dean->email,
+                new ResearchReturnedByOvpriDeanMail($research, $dean, $validated['remarks']),
+                $delay
+            );
+            $delay += 2;
+        }
+
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, $validated, &$delay) {
+                SafeMail::send(
+                    $author->email,
+                    new ResearchReturnedByOvpriFacultyMail($research, $validated['remarks']),
+                    $delay
+                );
+                $delay += 2;
+            });
 
         $this->forgetResearchDashboardCaches($research);
 
@@ -292,13 +428,43 @@ class ApprovalController extends Controller
             ->where('college_id', $research->mother_college_id)
             ->first();
 
+        $delay = 0;
+
         if ($dean) {
             $dean->notify(new ResearchRejectedDean($research));
+            SafeMail::send(
+                $dean->email,
+                new ResearchRejectedDeanMail($research, $dean, $validated['remarks']),
+                $delay
+            );
+            $delay += 2;
         }
 
         $research->primaryAuthor?->notify(
             new ResearchRejected($research, $validated['remarks'], 'ovpri')
         );
+
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send(
+                $research->primaryAuthor->email,
+                new ResearchRejectedFacultyMail($research, $validated['remarks']),
+                $delay
+            );
+            $delay += 2;
+        }
+
+        $research->loadMissing('researchAuthors');
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, $validated, &$delay) {
+                SafeMail::send(
+                    $author->email,
+                    new ResearchRejectedFacultyMail($research, $validated['remarks']),
+                    $delay
+                );
+                $delay += 2;
+            });
 
         $this->forgetResearchDashboardCaches($research);
 

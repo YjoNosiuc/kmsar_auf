@@ -9,11 +9,14 @@ use App\Models\Program;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
+use App\Mail\ResearchSubmittedDeanMail;
+use App\Mail\ResearchSubmittedFacultyMail;
 use App\Notifications\ResearchProgressUpdated;
 use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchSubmitted;
 use App\Services\ApprovalService;
 use App\Services\FileValidationService;
+use App\Support\SafeMail;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\RedirectResponse;
@@ -401,7 +404,34 @@ class ResearchController extends Controller
             $dean->notify(new ResearchSubmitted($research));
         }
 
+        // Faculty confirmation — queue immediately; dean + co-authors staggered for Mailtrap.
+        if ($research->primaryAuthor?->email) {
+            SafeMail::send(
+                $research->primaryAuthor->email,
+                new ResearchSubmittedFacultyMail($research),
+                0
+            );
+        }
+
         $research->primaryAuthor?->notify(new ResearchSubmissionConfirmed($research));
+
+        if ($dean?->email) {
+            SafeMail::send(
+                $dean->email,
+                new ResearchSubmittedDeanMail($research, $dean),
+                2
+            );
+        }
+
+        $research->loadMissing('researchAuthors');
+        $delay = 4;
+        $research->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($research, &$delay) {
+                SafeMail::send($author->email, new ResearchSubmittedFacultyMail($research), $delay);
+                $delay += 2;
+            });
 
         $this->forgetResearchDashboardCaches($research);
 

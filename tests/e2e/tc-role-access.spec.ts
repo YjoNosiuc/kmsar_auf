@@ -2,7 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 import { login, logout, credentials, authStatePath } from './helpers/auth';
 import { runTinker } from './helpers/db';
 
-const CO_AUTHOR_FACULTY_EMAIL = 'faculty.ccs2@auf.edu.ph';
+const CO_AUTHOR_FACULTY_EMAIL = 'faculty.ccs2@yopmail.com';
 const CO_AUTHOR_FACULTY_PASSWORD = 'password';
 const emptyStorage = { cookies: [] as never[], origins: [] as never[] };
 
@@ -26,7 +26,7 @@ async function expectRedirectToLogin(page: Page, path: string): Promise<void> {
 function seedCoAuthorResearch(approvalStage: string, revisionCount = 0): number {
   const stamp = Date.now();
   const output = runTinker(
-    `$primary = \\App\\Models\\User::where('email','faculty.ccs1@auf.edu.ph')->firstOrFail(); $co = \\App\\Models\\User::where('email','faculty.ccs2@auf.edu.ph')->firstOrFail(); $college = \\App\\Models\\College::where('code','CCS')->firstOrFail(); $r = \\App\\Models\\Research::create(['reference_number' => 'TEMP-CO-${stamp}', 'title' => 'COAUTHOR ACCESS ${stamp}', 'primary_author_id' => $primary->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => '${approvalStage}', 'revision_count' => ${revisionCount}, 'sdg_tags' => [4]]); \\App\\Models\\ResearchAuthor::create(['research_id' => $r->id, 'user_id' => $co->id, 'author_type' => 'internal', 'email' => $co->email, 'employee_number' => $co->employee_number, 'first_name' => $co->first_name, 'last_name' => $co->last_name, 'name' => $co->name, 'college_id' => $co->college_id, 'is_primary' => false, 'can_edit' => true]); echo $r->id;`,
+    `$primary = \\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $co = \\App\\Models\\User::where('email','faculty.ccs2@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CCS')->firstOrFail(); $r = \\App\\Models\\Research::create(['reference_number' => 'TEMP-CO-${stamp}', 'title' => 'COAUTHOR ACCESS ${stamp}', 'primary_author_id' => $primary->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => '${approvalStage}', 'revision_count' => ${revisionCount}, 'sdg_tags' => [4]]); \\App\\Models\\ResearchAuthor::create(['research_id' => $r->id, 'user_id' => $co->id, 'author_type' => 'internal', 'email' => $co->email, 'employee_number' => $co->employee_number, 'first_name' => $co->first_name, 'last_name' => $co->last_name, 'name' => $co->name, 'college_id' => $co->college_id, 'is_primary' => false, 'can_edit' => true]); echo $r->id;`,
   ).trim();
 
   const id = parseInt(output.match(/\d+/)?.[0] ?? '', 10);

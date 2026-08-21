@@ -28,7 +28,7 @@
         <div class="kmsar-login-brand-inner">
             <div class="kmsar-login-brand-inst">Angeles University Foundation</div>
             <div class="kmsar-login-brand-title">KMSAR <span>Reset</span></div>
-            <p class="kmsar-login-brand-sub">Request a secure link to reset your account password.</p>
+            <p class="kmsar-login-brand-sub">We will send a 6-digit verification code to your email so you can reset your password securely.</p>
         </div>
     </div>
 
@@ -65,13 +65,13 @@
                         autocomplete="email"
                         required
                         autofocus
-                        placeholder="name@auf.edu.ph"
+                        placeholder="name@yopmail.com"
                     >
                 </div>
 
                 <div class="kmsar-form-group" style="margin-top: 1.25rem;">
                     <button type="submit" class="kmsar-btn kmsar-btn--primary kmsar-btn--lg" style="width: 100%;">
-                        Send Reset Link
+                        Send verification code
                     </button>
                 </div>
 
@@ -81,7 +81,7 @@
             </form>
 
             <p style="margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--color-border, #E2E8F0); font-size: 0.8125rem; color: var(--color-text-muted, #94A3B8); line-height: 1.5;">
-                If you do not receive an email, please contact your system administrator.
+                If you do not receive an email, check your spam folder or contact your system administrator.
             </p>
         </div>
     </div>

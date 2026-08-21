@@ -88,7 +88,7 @@ async function findProgramRow(page: Page, programCode: string) {
 
 function seedAuditLog(action: string, auditableId = 1): void {
   runTinker(
-    `\\App\\Models\\AuditLog::create(['user_id' => \\App\\Models\\User::where('email','admin@auf.edu.ph')->value('id'), 'action' => '${action}', 'auditable_type' => \\App\\Models\\User::class, 'auditable_id' => ${auditableId}, 'ip_address' => '127.0.0.1', 'created_at' => now()]);`,
+    `\\App\\Models\\AuditLog::create(['user_id' => \\App\\Models\\User::where('email','admin@yopmail.com')->value('id'), 'action' => '${action}', 'auditable_type' => \\App\\Models\\User::class, 'auditable_id' => ${auditableId}, 'ip_address' => '127.0.0.1', 'created_at' => now()]);`,
   );
 }
 
@@ -152,7 +152,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     expect(users).toBeGreaterThan(0);
 
     await page.goto('/admin/users');
-    await expect(page.getByRole('row', { name: /admin@auf\.edu\.ph/i })).toBeVisible();
+    await expect(page.getByRole('row', { name: /admin@yopmail\.com/i })).toBeVisible();
     await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toBeVisible();
   });
 
@@ -192,7 +192,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await expect(directoryHint).toBeVisible();
     const usersListed = parseInt(((await directoryHint.innerText()).match(/(\d+)/) ?? ['0'])[1], 10);
     expect(usersListed).toBeGreaterThan(0);
-    await expect(page.getByRole('row', { name: /admin@auf\.edu\.ph/i })).toBeVisible();
+    await expect(page.getByRole('row', { name: /admin@yopmail\.com/i })).toBeVisible();
     await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toContainText('Faculty');
     await expect(page.getByRole('row', { name: /dean\.ccs@auf\.edu\.ph/i })).toContainText('College Dean');
     await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toContainText('CCS');

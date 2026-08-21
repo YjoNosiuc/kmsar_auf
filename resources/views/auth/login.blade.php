@@ -169,7 +169,7 @@
                         autocomplete="username"
                         required
                         autofocus
-                        placeholder="e.g. AUF-2024-0001 or email@auf.edu.ph"
+                        placeholder="e.g. AUF-2024-0001 or email@yopmail.com"
                     >
                 </div>
 

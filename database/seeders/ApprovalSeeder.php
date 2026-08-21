@@ -13,10 +13,10 @@ class ApprovalSeeder extends Seeder
     public function run(): void
     {
         // Approvers
-        $deanCcs  = User::where('email', 'dean.ccs@auf.edu.ph')->firstOrFail();
-        $deanCba  = User::where('email', 'dean.cba@auf.edu.ph')->firstOrFail();
-        $deanCea  = User::where('email', 'dean.cea@auf.edu.ph')->firstOrFail();
-        $ovpri    = User::where('email', 'ovpri@auf.edu.ph')->firstOrFail();
+        $deanCcs  = User::where('email', 'dean.ccs@yopmail.com')->firstOrFail();
+        $deanCba  = User::where('email', 'dean.cba@yopmail.com')->firstOrFail();
+        $deanCea  = User::where('email', 'dean.cea@yopmail.com')->firstOrFail();
+        $ovpri    = User::where('email', 'ovpri@yopmail.com')->firstOrFail();
 
         // Clear all existing approvals
         DB::table('approvals')->truncate();

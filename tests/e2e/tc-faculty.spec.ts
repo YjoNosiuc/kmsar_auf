@@ -81,9 +81,9 @@ test.describe('Faculty — UAT Test Suite', () => {
   });
 
   test('TC-004: login with inactive account shows error message', async ({ page }) => {
-    runTinker('App\\Models\\User::where(\'email\', \'faculty.ccs3@auf.edu.ph\')->update([\'is_active\' => false]);');
+    runTinker('App\\Models\\User::where(\'email\', \'faculty.ccs3@yopmail.com\')->update([\'is_active\' => false]);');
     await page.goto('/login');
-    await page.fill('input[name="login"]', 'faculty.ccs3@auf.edu.ph');
+    await page.fill('input[name="login"]', 'faculty.ccs3@yopmail.com');
     await page.fill('input[name="password"]', 'password');
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/login/);
@@ -141,7 +141,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/research/);
 
-    runTinker(`use Illuminate\\Support\\Facades\\Hash; App\\Models\\User::where('email', 'faculty.cba1@auf.edu.ph')->update(['password' => Hash::make('password')]);`);
+    runTinker(`use Illuminate\\Support\\Facades\\Hash; App\\Models\\User::where('email', 'faculty.cba1@yopmail.com')->update(['password' => Hash::make('password')]);`);
   });
 
   test('TC-009: click New Research redirects to Wizard Step 1', async ({ page }) => {
@@ -197,7 +197,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     const card = page.locator('.authors-coauthor-card').last();
     await card.getByRole('tab', { name: 'Employee' }).click();
     await card.locator('[id^="coauthor_emp_en_"]').fill('AUF-0022');
-    await card.locator('[id^="coauthor_emp_em_"]').fill('faculty.ccs2@auf.edu.ph');
+    await card.locator('[id^="coauthor_emp_em_"]').fill('faculty.ccs2@yopmail.com');
     await card.locator('[id^="coauthor_emp_fn_"]').fill('JUAN');
     await card.locator('[id^="coauthor_emp_ln_"]').fill('DELA CRUZ');
     await card.locator('[id^="coauthor_emp_mc_"]').selectOption({ index: 1 });
@@ -210,7 +210,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     });
 
     await logout(page);
-    await login(page, 'faculty.ccs2@auf.edu.ph', 'password');
+    await login(page, 'faculty.ccs2@yopmail.com', 'password');
     await page.goto('/research');
     await expect(page.getByText(title)).toBeVisible();
     await expect(page.getByText('Co-author', { exact: true }).first()).toBeVisible();
@@ -324,7 +324,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     expect(researchId).toBeTruthy();
 
     runTinker(
-      `$r = App\\Models\\Research::find(${researchId}); $u = App\\Models\\User::where('email', 'faculty.ccs2@auf.edu.ph')->first(); App\\Models\\ResearchAuthor::updateOrCreate(['research_id' => $r->id, 'user_id' => $u->id], ['name' => 'JUAN DELA CRUZ', 'email' => 'faculty.ccs2@auf.edu.ph', 'is_primary' => false, 'can_edit' => true]);`,
+      `$r = App\\Models\\Research::find(${researchId}); $u = App\\Models\\User::where('email', 'faculty.ccs2@yopmail.com')->first(); App\\Models\\ResearchAuthor::updateOrCreate(['research_id' => $r->id, 'user_id' => $u->id], ['name' => 'JUAN DELA CRUZ', 'email' => 'faculty.ccs2@yopmail.com', 'is_primary' => false, 'can_edit' => true]);`,
     );
 
     await openFacultyResearchList(page, title);
@@ -333,7 +333,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await expect(ownCard.getByText('Co-author', { exact: true })).toHaveCount(0);
 
     await logout(page);
-    await login(page, 'faculty.ccs2@auf.edu.ph', 'password');
+    await login(page, 'faculty.ccs2@yopmail.com', 'password');
     await openFacultyResearchList(page, title);
     const coAuthoredCard = facultyResearchCard(page, title);
     await expect(coAuthoredCard).toBeVisible({ timeout: 15_000 });

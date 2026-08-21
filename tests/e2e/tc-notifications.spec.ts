@@ -343,7 +343,7 @@ test.describe('Notifications — UAT', () => {
       page,
     }) => {
       runTinker(
-        "$u=\\App\\Models\\User::where('email','ovpri@auf.edu.ph')->first(); for($i=0;$i<25;$i++){ $u->notifications()->create(['id'=>(string)\\Illuminate\\Support\\Str::uuid(),'type'=>'App\\\\Notifications\\\\ResearchEndorsedToOvpri','data'=>['message'=>'Bulk notification '.$i,'title'=>'Bulk','action_url'=>'/ovpri/queue','reference_number'=>'BULK-'.$i,'type'=>'endorsed_to_ovpri']]); } echo 'OK';",
+        "$u=\\App\\Models\\User::where('email','ovpri@yopmail.com')->first(); for($i=0;$i<25;$i++){ $u->notifications()->create(['id'=>(string)\\Illuminate\\Support\\Str::uuid(),'type'=>'App\\\\Notifications\\\\ResearchEndorsedToOvpri','data'=>['message'=>'Bulk notification '.$i,'title'=>'Bulk','action_url'=>'/ovpri/queue','reference_number'=>'BULK-'.$i,'type'=>'endorsed_to_ovpri']]); } echo 'OK';",
       );
 
       await login(page, credentials.ovpri.email, credentials.ovpri.password);

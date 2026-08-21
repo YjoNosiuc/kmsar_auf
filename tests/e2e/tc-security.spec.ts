@@ -135,10 +135,10 @@ test.describe('Security & sad-path — UAT', () => {
 
     test('SEC-004: Login with deactivated account → specific error shown', async ({ page }) => {
       runTinker(
-        "App\\Models\\User::where('email', 'faculty.ccs3@auf.edu.ph')->update(['is_active' => false]);",
+        "App\\Models\\User::where('email', 'faculty.ccs3@yopmail.com')->update(['is_active' => false]);",
       );
       await page.goto('/login');
-      await page.fill('input[name="login"]', 'faculty.ccs3@auf.edu.ph');
+      await page.fill('input[name="login"]', 'faculty.ccs3@yopmail.com');
       await page.fill('input[name="password"]', 'password');
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL(/\/login/);

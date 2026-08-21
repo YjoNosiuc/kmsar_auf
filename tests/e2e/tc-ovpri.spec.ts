@@ -20,7 +20,7 @@ function uniqueTitle(prefix: string): string {
 function ensureCbaResearchVisible(): void {
   const stamp = Date.now();
   runTinker(
-    `$author = \\App\\Models\\User::where('email','faculty.cba1@auf.edu.ph')->firstOrFail(); $college = \\App\\Models\\College::where('code','CBA')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CBA-${stamp}'], ['title' => 'E2E CBA Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
+    `$author = \\App\\Models\\User::where('email','faculty.cba1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CBA')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CBA-${stamp}'], ['title' => 'E2E CBA Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
   );
 }
 

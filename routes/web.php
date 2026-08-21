@@ -24,6 +24,7 @@ use App\Http\Controllers\OvpriController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResearchController;
+use App\Http\Controllers\UserSearchController;
 use Illuminate\Support\Facades\Route;
 
 // To process queued emails run: php artisan queue:work --sleep=3 --tries=3
@@ -67,6 +68,9 @@ Route::post('/logout', [LoginController::class, 'destroy'])
     ->name('logout');
 
 Route::middleware(['auth', 'nocache'])->group(function () {
+    Route::get('/api/users/search', [UserSearchController::class, 'search'])
+        ->name('api.users.search');
+
     Route::get('/profile',
         [ProfileController::class, 'edit'])
         ->name('profile.edit');

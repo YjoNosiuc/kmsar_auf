@@ -155,9 +155,10 @@
                     <div style="font-size: var(--text-xs);
                         color: var(--color-text-muted);
                         margin-top: 2px;">
-                        {{ $research->primaryAuthor?->college?->code ?? '' }}
-                        @if ($research->primaryAuthor?->college?->code) · @endif
-                        {{ __('Primary Author') }}
+                        {{ $research->primaryAuthor?->college?->name ?? '—' }}
+                        @if ($research->primaryAuthor?->program?->name || $research->primaryAuthor?->office)
+                            · {{ $research->primaryAuthor?->program?->name ?? $research->primaryAuthor?->office }}
+                        @endif
                     </div>
                 </div>
                 <span class="kmsar-badge kmsar-badge--info">
@@ -192,22 +193,9 @@
                             <div style="font-size: var(--text-xs);
                                 color: var(--color-text-muted);
                                 margin-top: 2px;">
-                                @if ($author->author_type === 'student')
-                                    {{ __('Student') }}
-                                    @if ($author->college)
-                                        · {{ $author->college->code }}
-                                    @endif
-                                    @if ($author->program)
-                                        · {{ $author->program->name ?? $author->program }}
-                                    @endif
-                                @else
-                                    {{ __('Employee / Researcher') }}
-                                    @if ($author->college)
-                                        · {{ $author->college->code }}
-                                    @endif
-                                    @if ($author->institution)
-                                        · {{ $author->institution }}
-                                    @endif
+                                {{ $author->college_text ?? $author->college?->name ?? '—' }}
+                                @if ($author->program)
+                                    · {{ $author->program }}
                                 @endif
                             </div>
                         </div>

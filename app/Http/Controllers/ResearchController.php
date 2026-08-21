@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Approval;
 use App\Models\College;
 use App\Models\Document;
-use App\Models\Program;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
@@ -94,189 +93,140 @@ class ResearchController extends Controller
     {
         $this->authorize('update', $research);
 
-        $research->load([
-            'researchAuthors' => fn ($q) => $q->orderBy('id'),
-        ]);
+        $me = request()->user()->loadMissing(['college', 'program', 'roles']);
+        $meData = $this->authorUserData($me);
 
-        $externalPrimary = $research->researchAuthors
+        $existingPrimary = $research->researchAuthors()
             ->where('is_primary', true)
-            ->whereNull('user_id')
+            ->with(['user.college', 'user.program', 'user.roles'])
             ->first();
 
-        $colleges = College::query()
-            ->where('is_active', true)
-            ->with(['programs' => fn ($q) => $q->where('is_active', true)->orderBy('code')])
-            ->orderBy('code')
+        $existingCoAuthors = $research->researchAuthors()
+            ->where('is_primary', false)
+            ->whereNotNull('user_id')
+            ->with(['user.college', 'user.program', 'user.roles'])
+            ->orderBy('id')
             ->get();
 
-        $programsByCollege = Program::query()
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->get()
-            ->groupBy(fn (Program $p) => (string) $p->college_id)
-            ->map(fn ($programs) => $programs->values());
+        $primaryUserId = old(
+            'primary_author_user_id',
+            $existingPrimary?->user_id ?? $research->primary_author_id
+        );
 
-        $oldPrimary = old('primary_author_type');
-        if ($oldPrimary !== null) {
-            $iAmPrimary = $oldPrimary === 'self';
-            $primaryType = in_array($oldPrimary, ['student', 'employee'], true) ? $oldPrimary : 'student';
+        $primaryUser = $primaryUserId
+            ? User::query()->with(['college', 'program', 'roles'])->find($primaryUserId)
+            : null;
+        $primaryData = $primaryUser ? $this->authorUserData($primaryUser) : null;
+
+        $oldCoAuthors = old('coauthors');
+        if (is_array($oldCoAuthors)) {
+            $oldUsers = User::query()
+                ->with(['college', 'program', 'roles'])
+                ->whereIn('id', collect($oldCoAuthors)->pluck('user_id')->filter()->all())
+                ->get()
+                ->keyBy('id');
+
+            $coAuthorsData = collect($oldCoAuthors)
+                ->map(function (array $row) use ($oldUsers) {
+                    $user = $oldUsers->get((int) ($row['user_id'] ?? 0));
+                    if (! $user) {
+                        return null;
+                    }
+
+                    return array_merge($this->authorUserData($user), [
+                        'user_id' => $user->id,
+                        'can_edit' => (bool) ($row['can_edit'] ?? false),
+                    ]);
+                })
+                ->filter()
+                ->values()
+                ->all();
         } else {
-            $iAmPrimary = $externalPrimary === null;
-            $primaryType = ($externalPrimary && ($externalPrimary->author_type ?? 'student') === 'employee')
-                ? 'employee'
-                : 'student';
+            $coAuthorsData = $existingCoAuthors
+                ->filter(fn (ResearchAuthor $author) => $author->user !== null)
+                ->map(fn (ResearchAuthor $author) => array_merge(
+                    $this->authorUserData($author->user),
+                    [
+                        'user_id' => $author->user_id,
+                        'can_edit' => (bool) $author->can_edit,
+                    ]
+                ))
+                ->values()
+                ->all();
         }
 
-        $coauthorsFromOld = old('authors');
-        if (is_array($coauthorsFromOld)) {
-            $coauthorsInitial = array_values($coauthorsFromOld);
-        } else {
-            $coauthorsNonPrimary = $research->researchAuthors->where('is_primary', false)->values();
-            $coauthorsInitial = $coauthorsNonPrimary->map(function (ResearchAuthor $a) {
-                return [
-                    'isMe' => false,
-                    'authorType' => $a->author_type ?? 'student',
-                    'name' => $a->name,
-                    'empNo' => $a->employee_number ?? '',
-                    'institution' => $a->institution ?? '',
-                    'collegeId' => $a->college_id ? (string) $a->college_id : '',
-                    'programId' => $a->program_id ? (string) $a->program_id : '',
-                    'affiliatedCollegeId' => $a->affiliated_college_id ? (string) $a->affiliated_college_id : '',
-                    'email' => $a->email ?? '',
-                ];
-            })->all();
-
-            if ($coauthorsInitial === []) {
-                $coauthorsInitial = [[
-                    'isMe' => false,
-                    'authorType' => 'student',
-                    'name' => '',
-                    'empNo' => '',
-                    'institution' => '',
-                    'collegeId' => '',
-                    'programId' => '',
-                    'affiliatedCollegeId' => '',
-                    'email' => '',
-                ]];
-            }
-        }
-
-        $selfAdded = collect($coauthorsInitial)->contains(fn ($row) => ! empty($row['isMe']));
-
-        return view('faculty.research.authors', [
-            'research' => $research,
-            'colleges' => $colleges,
-            'programsByCollege' => $programsByCollege,
-            'externalPrimary' => $externalPrimary,
-            'iAmPrimary' => $iAmPrimary,
-            'primaryType' => $primaryType,
-            'selfAdded' => $selfAdded,
-            'coauthorsInitial' => $coauthorsInitial,
-        ]);
+        return view('faculty.research.authors', compact(
+            'research',
+            'meData',
+            'existingPrimary',
+            'existingCoAuthors',
+            'primaryData',
+            'coAuthorsData',
+        ));
     }
 
     public function saveRegistrationAuthors(Request $request, Research $research): RedirectResponse
     {
         $this->authorize('update', $research);
 
-        $authors = collect($request->input('authors', []))
-            ->map(function (array $row) {
-                foreach (['college_id', 'program_id', 'affiliated_college_id'] as $key) {
-                    if (array_key_exists($key, $row) && $row[$key] === '') {
-                        $row[$key] = null;
-                    }
-                }
-
-                return $row;
-            })
-            ->all();
-        $request->merge(['authors' => $authors]);
-
-        foreach (['primary_author_college_id', 'primary_author_program_id'] as $key) {
-            if ($request->input($key) === '') {
-                $request->merge([$key => null]);
-            }
-        }
-
         $validated = $request->validate([
-            'primary_author_type' => ['required', 'in:self,student,employee'],
-            'primary_author_name' => ['required_unless:primary_author_type,self', 'nullable', 'string', 'max:150'],
-            'primary_author_employee_number' => ['nullable', 'string', 'max:20'],
-            'primary_author_email' => ['nullable', 'email', 'max:255'],
-            'primary_author_college_id' => ['nullable', 'integer', 'exists:colleges,id'],
-            'primary_author_program_id' => ['nullable', 'integer', 'exists:programs,id'],
-            'primary_author_institution' => ['nullable', 'string', 'max:255'],
-            'authors' => ['nullable', 'array'],
-            'authors.*.name' => ['nullable', 'string', 'max:150'],
-            'authors.*.author_type' => ['nullable', 'in:student,employee'],
-            'authors.*.employee_number' => ['nullable', 'string', 'max:20'],
-            'authors.*.email' => ['nullable', 'email', 'max:255'],
-            'authors.*.college_id' => ['nullable', 'integer', 'exists:colleges,id'],
-            'authors.*.program_id' => ['nullable', 'integer', 'exists:programs,id'],
-            'authors.*.affiliated_college_id' => ['nullable', 'integer', 'exists:colleges,id'],
-            'authors.*.institution' => ['nullable', 'string', 'max:255'],
+            'primary_author_user_id' => ['required', 'integer', 'exists:users,id'],
+            'coauthors' => ['nullable', 'array'],
+            'coauthors.*.user_id' => [
+                'required',
+                'integer',
+                'distinct',
+                'exists:users,id',
+                'different:primary_author_user_id',
+            ],
+            'coauthors.*.can_edit' => ['nullable', 'boolean'],
         ]);
 
-        $coauthorRows = collect($validated['authors'] ?? [])
-            ->filter(fn (array $row) => filled($row['name'] ?? null))
-            ->values();
+        $primaryUserId = (int) $validated['primary_author_user_id'];
+        $coAuthorRows = collect($validated['coauthors'] ?? []);
 
-        DB::transaction(function () use ($research, $validated, $coauthorRows) {
-            $research->researchAuthors()->where('is_primary', false)->delete();
+        if ($coAuthorRows->pluck('user_id')->map(fn ($id) => (int) $id)->contains($primaryUserId)) {
+            return back()
+                ->withInput()
+                ->withErrors(['coauthors' => __('Primary author cannot also be a co-author.')]);
+        }
 
-            $type = $validated['primary_author_type'];
+        DB::transaction(function () use ($research, $validated, $primaryUserId, $coAuthorRows) {
+            $userIds = $coAuthorRows->pluck('user_id')->map(fn ($id) => (int) $id)
+                ->prepend($primaryUserId)
+                ->unique()
+                ->all();
+            $users = User::query()
+                ->with(['college', 'program'])
+                ->whereIn('id', $userIds)
+                ->get()
+                ->keyBy('id');
 
-            if ($type === 'self') {
-                $research->researchAuthors()
-                    ->where('is_primary', true)
-                    ->whereNull('user_id')
-                    ->delete();
-            } else {
-                ResearchAuthor::query()->updateOrCreate(
-                    [
-                        'research_id' => $research->id,
-                        'is_primary' => true,
-                        'user_id' => null,
-                    ],
-                    [
-                        'author_type' => $type,
-                        'name' => $validated['primary_author_name'] ?? '',
-                        'employee_number' => $validated['primary_author_employee_number'] ?? null,
-                        'email' => $validated['primary_author_email'] ?? null,
-                        'college_id' => $validated['primary_author_college_id'] ?? null,
-                        'program_id' => $type === 'student' ? ($validated['primary_author_program_id'] ?? null) : null,
-                        'affiliated_college_id' => null,
-                        'institution' => $type === 'employee' ? ($validated['primary_author_institution'] ?? null) : null,
-                        'college_text' => null,
-                        'program' => null,
-                        'is_primary' => true,
-                        'can_edit' => false,
-                    ]
+            $primaryUser = $users->get($primaryUserId);
+            abort_unless($primaryUser instanceof User, 422);
+
+            $research->researchAuthors()->delete();
+
+            ResearchAuthor::query()->create(
+                $this->researchAuthorData($research, $primaryUser, true, true)
+            );
+
+            $research->update(['primary_author_id' => $primaryUser->id]);
+
+            foreach ($coAuthorRows as $row) {
+                $coAuthor = $users->get((int) $row['user_id']);
+                if (! $coAuthor instanceof User) {
+                    continue;
+                }
+
+                ResearchAuthor::query()->create(
+                    $this->researchAuthorData(
+                        $research,
+                        $coAuthor,
+                        false,
+                        (bool) ($row['can_edit'] ?? true),
+                    )
                 );
-            }
-
-            foreach ($coauthorRows as $row) {
-                $linkedUserId = ResearchAuthor::resolveLinkedUserId(
-                    $row['email'] ?? null,
-                    $row['employee_number'] ?? null,
-                );
-
-                ResearchAuthor::query()->create([
-                    'research_id' => $research->id,
-                    'user_id' => $linkedUserId,
-                    'author_type' => $row['author_type'] ?? 'student',
-                    'name' => $row['name'],
-                    'employee_number' => $row['employee_number'] ?? null,
-                    'email' => $row['email'] ?? null,
-                    'college_id' => $row['college_id'] ?? null,
-                    'program_id' => $row['program_id'] ?? null,
-                    'affiliated_college_id' => $row['affiliated_college_id'] ?? null,
-                    'institution' => $row['institution'] ?? null,
-                    'college_text' => null,
-                    'program' => null,
-                    'is_primary' => false,
-                    'can_edit' => ResearchAuthor::canEditForUserId($linkedUserId),
-                ]);
             }
         });
 
@@ -284,7 +234,7 @@ class ResearchController extends Controller
 
         return redirect()
             ->route('research.wizard.documents', $research)
-            ->with('success', __('Co-authors saved.'));
+            ->with('success', __('Authors saved.'));
     }
 
     public function registrationDocuments(Research $research): View
@@ -329,12 +279,12 @@ class ResearchController extends Controller
 
         $research->load([
             'primaryAuthor.college',
+            'primaryAuthor.program',
             'motherCollege',
             'documents',
             'approvals' => fn ($q) => $q->orderBy('created_at'),
             'approvals.approver',
             'researchAuthors.college',
-            'researchAuthors.program',
         ]);
 
         return view('faculty.research.show', [
@@ -786,6 +736,59 @@ class ResearchController extends Controller
             'start_date' => ['required', 'date'],
             'estimated_completion_date' => ['required', 'date', 'after_or_equal:start_date'],
             'status' => ['required', 'string', 'max:40'],
+        ];
+    }
+
+    /**
+     * @return array<string, int|string|null>
+     */
+    private function authorUserData(User $user): array
+    {
+        $user->loadMissing(['college', 'program', 'roles']);
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'employee_number' => $user->employee_number,
+            'college' => $user->college?->name ?? '—',
+            'college_code' => $user->college?->code ?? '—',
+            'program' => $user->program?->name ?? $user->office ?? '—',
+            'role' => $user->getRoleNames()->first() ?? '—',
+            'user_type' => $user->user_type ?? '—',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function researchAuthorData(
+        Research $research,
+        User $user,
+        bool $isPrimary,
+        bool $canEdit,
+    ): array {
+        $user->loadMissing(['college', 'program']);
+
+        return [
+            'research_id' => $research->id,
+            'user_id' => $user->id,
+            'author_type' => 'internal',
+            'employee_number' => $user->employee_number,
+            'name' => $user->name,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'middle_name' => $user->middle_name,
+            'suffix' => $user->suffix,
+            'college_id' => $user->college_id,
+            'college_text' => $user->college?->name,
+            'program_id' => $user->program_id,
+            'program' => $user->program?->name ?? $user->office,
+            'affiliated_college_id' => null,
+            'institution' => null,
+            'email' => $user->email,
+            'is_primary' => $isPrimary,
+            'can_edit' => $canEdit,
         ];
     }
 }

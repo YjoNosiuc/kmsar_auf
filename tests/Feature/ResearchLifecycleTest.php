@@ -97,8 +97,8 @@ describe('Wizard: Draft Creation', function () {
         $research = makeDraftResearch($faculty, $college);
 
         $payload = [
-            'primary_author_type' => 'self',
-            'authors' => [],
+            'primary_author_user_id' => $faculty->id,
+            'coauthors' => [],
         ];
 
         $this->actingAs($faculty)

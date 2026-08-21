@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', __('Co-authors — Step 2'))
+@section('title', __('Authors — Step 2'))
 
 @section('navbar-context')
     {{ __('Faculty · Research registration') }}
@@ -8,11 +8,12 @@
 
 @section('content')
     <x-page-header
-        :title="__('Co-authors')"
-        :subtitle="__('Step 2 of 3 · Add collaborators (optional)')"
+        :title="__('Authors')"
+        :subtitle="__('Step 2 of 3 · Select the primary author and co-authors from KMSAR users')"
         :breadcrumb="[
             ['label' => __('My Research'), 'route' => 'research.index'],
-            ['label' => __('Co-authors')],
+            ['label' => $research->reference_number, 'route' => 'research.show', 'parameters' => [$research]],
+            ['label' => __('Authors')],
         ]"
     />
 
@@ -23,8 +24,8 @@
     @if ($errors->any())
         <x-alert type="danger" class="mb-6">
             <ul class="list-disc pl-5 space-y-1">
-                @foreach ($errors->all() as $err)
-                    <li>{{ $err }}</li>
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
                 @endforeach
             </ul>
         </x-alert>
@@ -32,906 +33,304 @@
 
     @include('faculty.research.partials.registration-stepper', ['currentStep' => 2, 'research' => $research])
 
-    @php
-        $kmsarSplitAuthorName = static function (?string $full): array {
-            $full = trim((string) $full);
-            if ($full === '') {
-                return ['first' => '', 'middle' => '', 'last' => '', 'suffix' => ''];
-            }
-            $parts = preg_split('/\s+/u', $full);
-            $parts = array_values(array_filter($parts, static fn ($p) => $p !== ''));
-            $n = count($parts);
-            if ($n === 1) {
-                return ['first' => $parts[0], 'middle' => '', 'last' => '', 'suffix' => ''];
-            }
-            $last = $parts[$n - 1];
-            $first = $parts[0];
-            $middle = $n > 2 ? implode(' ', array_slice($parts, 1, -1)) : '';
-
-            return ['first' => $first, 'middle' => $middle, 'last' => $last, 'suffix' => ''];
-        };
-
-        $primaryFull = old('primary_author_name', $externalPrimary?->name ?? '');
-        $primaryParts = $kmsarSplitAuthorName($primaryFull);
-
-        $coauthorsInitial = collect($coauthorsInitial)
-            ->map(function (array $row) use ($kmsarSplitAuthorName) {
-                $p = $kmsarSplitAuthorName($row['name'] ?? '');
-                $firstName = $row['first_name'] ?? $p['first'];
-                $middleName = $row['middle_name'] ?? $p['middle'];
-                $lastName = $row['last_name'] ?? $p['last'];
-                $suffix = $row['suffix'] ?? $p['suffix'];
-                $empNo = $row['employee_number'] ?? $row['student_number'] ?? $row['empNo'] ?? '';
-                $collegeId = isset($row['college_id']) ? (string) $row['college_id'] : (string) ($row['collegeId'] ?? '');
-                $programId = isset($row['program_id']) ? (string) $row['program_id'] : (string) ($row['programId'] ?? '');
-                $affiliatedCollegeId = isset($row['affiliated_college_id'])
-                    ? (string) $row['affiliated_college_id']
-                    : (string) ($row['affiliatedCollegeId'] ?? '');
-                $authorType = $row['author_type'] ?? $row['authorType'] ?? 'student';
-                foreach (['name', 'first_name', 'last_name', 'middle_name', 'suffix', 'student_number', 'employee_number', 'college_id', 'program_id', 'affiliated_college_id', 'author_type'] as $k) {
-                    unset($row[$k]);
-                }
-
-                return array_merge($row, [
-                    'authorType' => $authorType,
-                    'firstName' => $firstName,
-                    'middleName' => $middleName,
-                    'lastName' => $lastName,
-                    'suffix' => $suffix,
-                    'empNo' => $empNo,
-                    'collegeId' => $collegeId,
-                    'programId' => $programId,
-                    'affiliatedCollegeId' => $affiliatedCollegeId,
-                ]);
-            })
-            ->values()
-            ->all();
-
-        $programsJson = json_encode($programsByCollege);
-        $authUserJson = json_encode([
-            'name' => auth()->user()->name,
-            'employee_number' => auth()->user()->employee_number,
-            'college_id' => auth()->user()->college_id,
-        ]);
-        $stateJson = json_encode([
-            'iAmPrimary' => $iAmPrimary,
-            'primaryType' => $primaryType,
-            'selfAdded' => $selfAdded,
-            'coauthors' => $coauthorsInitial,
-            'primaryFirstName' => $primaryParts['first'],
-            'primaryMiddleName' => $primaryParts['middle'],
-            'primaryLastName' => $primaryParts['last'],
-            'primarySuffix' => $primaryParts['suffix'],
-            'primaryEmpNo' => old('primary_author_employee_number', $externalPrimary?->employee_number ?? ''),
-            'primaryEmail' => old('primary_author_email', $externalPrimary?->email ?? ''),
-            'primaryInstitution' => old('primary_author_institution', $externalPrimary?->institution ?? ''),
-            'primaryAffiliatedCollegeId' => old('primary_author_affiliated_college_id', ''),
-        ]);
-    @endphp
-
     <form
-        method="post"
+        method="POST"
         action="{{ route('research.wizard.authors.save', $research) }}"
-        x-data="authorManager({{ $programsJson }}, {{ $authUserJson }}, {{ $stateJson }})"
-        class="authors-wizard-step"
+        x-data="kmsarAuthorSelector(
+            @js($meData),
+            @js($primaryData),
+            @js($coAuthorsData),
+            @js(route('api.users.search'))
+        )"
+        class="space-y-6"
     >
         @csrf
 
-        <x-card :title="__('Primary author')" accent="primary">
-            <div class="authors-primary-author-toggle">
-                <label class="authors-primary-author-toggle__label">
-                    <input type="checkbox" x-model="iAmPrimary" class="authors-checkbox">
-                    <span>{{ __('I am the primary author of this research') }}</span>
-                </label>
-                <p class="authors-primary-author-toggle__hint">{{ __('Uncheck if a student or another researcher is the primary author') }}</p>
+        <x-card :title="__('Primary Author')" accent="primary">
+            <p class="kmsar-body mb-4 text-slate-500">
+                {{ __('Choose one active KMSAR user as the primary author.') }}
+            </p>
+
+            <input
+                type="hidden"
+                name="primary_author_user_id"
+                :value="primaryAuthor?.id ?? ''"
+            >
+
+            <div x-show="!primaryAuthor" class="space-y-4">
+                <button
+                    type="button"
+                    class="kmsar-btn kmsar-btn--secondary"
+                    @click="setMeAsPrimary()"
+                >
+                    {{ __('This is me') }}
+                </button>
+
+                <div class="relative">
+                    <label for="primary-author-search" class="kmsar-form-label">
+                        {{ __('Or search for another KMSAR user') }}
+                    </label>
+                    <div class="relative mt-2">
+                        <input
+                            id="primary-author-search"
+                            type="search"
+                            class="kmsar-input w-full"
+                            x-model="primarySearch"
+                            @input.debounce.300ms="searchPrimary()"
+                            @keydown.escape="primaryResults = []"
+                            placeholder="{{ __('Search by name, email, or employee number') }}"
+                            autocomplete="off"
+                        >
+                        <span
+                            x-show="primaryLoading"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"
+                        >{{ __('Searching…') }}</span>
+                    </div>
+
+                    <div
+                        x-show="primaryResults.length > 0"
+                        x-cloak
+                        class="author-search-results"
+                    >
+                        <template x-for="user in primaryResults" :key="user.id">
+                            <button type="button" class="author-search-result" @click="selectPrimary(user)">
+                                <span class="author-search-result__name" x-text="user.name"></span>
+                                <span class="author-search-result__meta" x-text="user.email"></span>
+                                <span class="author-search-result__meta" x-text="userDetails(user)"></span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <p
+                        x-show="primarySearch.trim().length > 0 && !primaryLoading && primaryResults.length === 0"
+                        x-cloak
+                        class="kmsar-form-hint mt-2"
+                    >{{ __('No matching active users found.') }}</p>
+                </div>
             </div>
 
-            <div x-show="iAmPrimary" x-cloak>
-                <div class="authors-primary-chip">
-                    <div class="authors-primary-chip__avatar" aria-hidden="true">
-                        <span>{{ strtoupper(substr((string) auth()->user()->name, 0, 2)) }}</span>
+            <div x-show="primaryAuthor" x-cloak class="author-selected-card author-selected-card--primary">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="font-semibold text-slate-900" x-text="primaryAuthor?.name"></h3>
+                        <x-badge status="info">{{ __('Primary Author') }}</x-badge>
+                        <span
+                            x-show="iAmPrimary"
+                            class="text-xs font-semibold text-blue-700"
+                        >{{ __('This is me') }}</span>
                     </div>
-                    <div class="authors-primary-chip__text">
-                        <div class="authors-primary-chip__name">{{ auth()->user()->name }}</div>
-                        <div class="authors-primary-chip__meta">{{ auth()->user()->employee_number }} · {{ auth()->user()->college?->name }}</div>
-                    </div>
-                    <span class="authors-primary-chip__badge">{{ __('Primary Author') }}</span>
+                    <dl class="author-details-grid">
+                        <div><dt>{{ __('Employee Number') }}</dt><dd x-text="primaryAuthor?.employee_number || '—'"></dd></div>
+                        <div><dt>{{ __('College / Office') }}</dt><dd x-text="primaryAuthor?.college || '—'"></dd></div>
+                        <div><dt>{{ __('Program / Dept') }}</dt><dd x-text="primaryAuthor?.program || '—'"></dd></div>
+                        <div><dt>{{ __('Role') }}</dt><dd x-text="roleLabel(primaryAuthor?.role)"></dd></div>
+                    </dl>
                 </div>
-            </div>
-
-            <div x-show="!iAmPrimary" x-cloak>
-                <div class="authors-role-segment authors-role-segment--primary" role="tablist" aria-label="{{ __('Primary author type') }}">
-                    <button
-                        type="button"
-                        role="tab"
-                        class="authors-role-segment__tab"
-                        :class="{ 'authors-role-segment__tab--active': primaryType === 'student' }"
-                        :aria-selected="primaryType === 'student'"
-                        @click="primaryType = 'student'"
-                    >{{ __('Student') }}</button>
-                    <button
-                        type="button"
-                        role="tab"
-                        class="authors-role-segment__tab"
-                        :class="{ 'authors-role-segment__tab--active': primaryType === 'employee' }"
-                        :aria-selected="primaryType === 'employee'"
-                        @click="primaryType = 'employee'"
-                    >{{ __('Employee') }}</button>
-                </div>
-
-                <input type="hidden" name="primary_author_type" x-bind:value="iAmPrimary ? 'self' : primaryType">
-                <input type="hidden" name="primary_author_name" :value="primaryAuthorFullName" x-bind:disabled="iAmPrimary">
-
-                <div
-                    x-show="primaryType==='student'"
-                    x-data="{
-                        selectedCollege: @js(old('primary_author_college_id', $externalPrimary?->college_id ? (string) $externalPrimary->college_id : '')),
-                        selectedProgram: @js(old('primary_author_program_id', $externalPrimary?->program_id ? (string) $externalPrimary->program_id : '')),
-                    }"
-                    class="authors-primary-external-fields space-y-4"
-                >
-                    <div class="kmsar-form-row-3">
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_first_name">{{ __('First Name') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_student_first_name" type="text" name="first_name" class="kmsar-input" style="text-transform: uppercase"
-                                x-model="primaryFirstName"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student'"
-                                x-bind:required="!iAmPrimary && primaryType==='student'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_last_name">{{ __('Last Name') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_student_last_name" type="text" name="last_name" class="kmsar-input" style="text-transform: uppercase"
-                                x-model="primaryLastName"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student'"
-                                x-bind:required="!iAmPrimary && primaryType==='student'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_middle_name">{{ __('Middle Name') }}</label>
-                            <input id="primary_student_middle_name" type="text" name="middle_name" class="kmsar-input" style="text-transform: uppercase"
-                                x-model="primaryMiddleName"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student'">
-                        </div>
-                    </div>
-                    <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="primary_student_suffix">{{ __('Suffix') }}</label>
-                        <input id="primary_student_suffix" type="text" name="suffix" class="kmsar-input" placeholder="{{ __('Jr., Sr., III, etc.') }}"
-                            style="text-transform: none"
-                            x-model="primarySuffix"
-                            x-bind:disabled="iAmPrimary || primaryType !== 'student'">
-                    </div>
-                    <div class="kmsar-form-row-2">
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_number">{{ __('ID Number') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_student_number" type="text" name="student_number" class="kmsar-input"
-                                inputmode="numeric" pattern="[0-9]*" autocomplete="off"
-                                x-model="primaryEmpNo"
-                                @input="primaryEmpNo = ($event.target.value || '').replace(/\D/g, '')"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student'"
-                                x-bind:required="!iAmPrimary && primaryType==='student'">
-                            <input type="hidden" name="primary_author_employee_number" :value="primaryEmpNo" x-bind:disabled="iAmPrimary || primaryType !== 'student'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_email">{{ __('Email Address') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_student_email" type="email" name="email" class="kmsar-input"
-                                x-model="primaryEmail"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student'"
-                                x-bind:required="!iAmPrimary && primaryType==='student'">
-                            <input type="hidden" name="primary_author_email" :value="primaryEmail" x-bind:disabled="iAmPrimary || primaryType !== 'student'">
-                            <p class="kmsar-form-hint">{{ __('AUF or non-AUF email accepted') }}</p>
-                        </div>
-                    </div>
-                    <div class="kmsar-form-row-2">
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_college">{{ __('College') }} <span class="kmsar-form-required">*</span></label>
-                            <select id="primary_student_college" name="college_id" class="kmsar-select" x-model="selectedCollege"
-                                @change="selectedProgram = ''"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student'"
-                                x-bind:required="!iAmPrimary && primaryType==='student'">
-                                <option value="">{{ __('— Select college —') }}</option>
-                                @foreach ($colleges as $college)
-                                    <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
-                                @endforeach
-                            </select>
-                            <input type="hidden" name="primary_author_college_id" :value="selectedCollege" x-bind:disabled="iAmPrimary || primaryType !== 'student'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_student_program">{{ __('Program') }} <span class="kmsar-form-required">*</span></label>
-                            <select id="primary_student_program" name="program_id" class="kmsar-select" x-model="selectedProgram"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'student' || !selectedCollege"
-                                x-bind:required="!iAmPrimary && primaryType==='student'">
-                                <option value="">{{ __('Select college first') }}</option>
-                                @foreach ($colleges as $college)
-                                    @foreach ($college->programs as $program)
-                                        <option value="{{ $program->id }}"
-                                            x-show="selectedCollege == '{{ $college->id }}'">
-                                            {{ $program->name }}
-                                        </option>
-                                    @endforeach
-                                @endforeach
-                            </select>
-                            <input type="hidden" name="primary_author_program_id" :value="selectedProgram" x-bind:disabled="iAmPrimary || primaryType !== 'student'">
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    x-show="primaryType==='employee'"
-                    x-data="{
-                        selectedCollege: @js(old('primary_author_college_id', $externalPrimary?->college_id ? (string) $externalPrimary->college_id : '')),
-                        selectedProgram: @js(old('primary_author_program_id', $externalPrimary?->program_id ? (string) $externalPrimary->program_id : '')),
-                    }"
-                    class="authors-primary-external-fields space-y-4"
-                >
-                    <div class="kmsar-form-row-3">
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_first_name">{{ __('First Name') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_emp_first_name" type="text" name="first_name" class="kmsar-input" style="text-transform: uppercase"
-                                x-model="primaryFirstName"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'"
-                                x-bind:required="!iAmPrimary && primaryType==='employee'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_last_name">{{ __('Last Name') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_emp_last_name" type="text" name="last_name" class="kmsar-input" style="text-transform: uppercase"
-                                x-model="primaryLastName"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'"
-                                x-bind:required="!iAmPrimary && primaryType==='employee'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_middle_name">{{ __('Middle Name') }}</label>
-                            <input id="primary_emp_middle_name" type="text" name="middle_name" class="kmsar-input" style="text-transform: uppercase"
-                                x-model="primaryMiddleName"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        </div>
-                    </div>
-                    <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="primary_emp_suffix">{{ __('Suffix') }}</label>
-                        <input id="primary_emp_suffix" type="text" name="suffix" class="kmsar-input" placeholder="{{ __('Jr., Sr., III, etc.') }}"
-                            style="text-transform: none"
-                            x-model="primarySuffix"
-                            x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                    </div>
-                    <div class="kmsar-form-row-2">
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_number">{{ __('Employee Number') }}</label>
-                            <input id="primary_emp_number" type="text" name="employee_number" class="kmsar-input"
-                                x-model="primaryEmpNo"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                            <input type="hidden" name="primary_author_employee_number" :value="primaryEmpNo" x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_email">{{ __('Email Address') }} <span class="kmsar-form-required">*</span></label>
-                            <input id="primary_emp_email" type="email" name="email" class="kmsar-input"
-                                x-model="primaryEmail"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'"
-                                x-bind:required="!iAmPrimary && primaryType==='employee'">
-                            <input type="hidden" name="primary_author_email" :value="primaryEmail" x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        </div>
-                    </div>
-                    <div class="kmsar-form-row-3">
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_mother_college">{{ __('Mother College') }} <span class="kmsar-form-required">*</span></label>
-                            <select id="primary_emp_mother_college" name="college_id" class="kmsar-select" x-model="selectedCollege"
-                                @change="selectedProgram = ''"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'"
-                                x-bind:required="!iAmPrimary && primaryType==='employee'">
-                                <option value="">{{ __('— Select college —') }}</option>
-                                @foreach ($colleges as $college)
-                                    <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
-                                @endforeach
-                            </select>
-                            <input type="hidden" name="primary_author_college_id" :value="selectedCollege" x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_affiliated">{{ __('Affiliated College/Unit') }}</label>
-                            <select id="primary_emp_affiliated" name="affiliated_college_id" class="kmsar-select" x-model="primaryAffiliatedCollegeId"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                                <option value="">{{ __('— None —') }}</option>
-                                @foreach ($colleges as $college)
-                                    <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="primary_emp_program">{{ __('Program') }}</label>
-                            <select id="primary_emp_program" name="program_id" class="kmsar-select" x-model="selectedProgram"
-                                x-bind:disabled="iAmPrimary || primaryType !== 'employee' || !selectedCollege">
-                                <option value="">{{ __('Select college first') }}</option>
-                                @foreach ($colleges as $college)
-                                    @foreach ($college->programs as $program)
-                                        <option value="{{ $program->id }}"
-                                            x-show="selectedCollege == '{{ $college->id }}'">
-                                            {{ $program->name }}
-                                        </option>
-                                    @endforeach
-                                @endforeach
-                            </select>
-                            <input type="hidden" name="primary_author_program_id" :value="selectedProgram" x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        </div>
-                    </div>
-                    <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="primary_emp_institution">{{ __('Institution') }}</label>
-                        <input id="primary_emp_institution" type="text" name="institution" class="kmsar-input"
-                            placeholder="{{ __('e.g. University of the Philippines') }}"
-                            style="text-transform: none"
-                            x-model="primaryInstitution"
-                            x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        <input type="hidden" name="primary_author_institution" :value="primaryInstitution" x-bind:disabled="iAmPrimary || primaryType !== 'employee'">
-                        <p class="kmsar-form-hint">{{ __('Fill if researcher is from outside AUF') }}</p>
-                    </div>
-                </div>
+                <button
+                    type="button"
+                    class="kmsar-btn kmsar-btn--outline kmsar-btn--sm"
+                    @click="clearPrimary()"
+                >{{ __('Clear') }}</button>
             </div>
         </x-card>
 
-        <x-card :title="__('Co-authors')" accent="primary">
-            <div class="authors-coauthors-toolbar">
-                <div class="authors-coauthors-toolbar__actions">
-                    <button type="button" @click="addCoauthor()" class="authors-btn-secondary authors-btn-secondary--muted">
-                        + {{ __('Add co-author') }}
-                    </button>
+        <x-card :title="__('Co-Authors')" accent="primary">
+            <p class="kmsar-body mb-4 text-slate-500">
+                {{ __('Add any number of KMSAR users. A user cannot be both primary author and co-author.') }}
+            </p>
+
+            <div class="relative mb-5">
+                <label for="coauthor-search" class="kmsar-form-label">{{ __('Add Co-Author') }}</label>
+                <div class="relative mt-2">
+                    <input
+                        id="coauthor-search"
+                        type="search"
+                        class="kmsar-input w-full"
+                        x-model="coAuthorSearch"
+                        @input.debounce.300ms="searchCoAuthors()"
+                        @keydown.escape="coAuthorResults = []"
+                        :disabled="!primaryAuthor"
+                        placeholder="{{ __('Search by name, email, or employee number') }}"
+                        autocomplete="off"
+                    >
+                    <span
+                        x-show="coAuthorLoading"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"
+                    >{{ __('Searching…') }}</span>
                 </div>
+
+                <p x-show="!primaryAuthor" class="kmsar-form-hint mt-2">
+                    {{ __('Select a primary author before adding co-authors.') }}
+                </p>
+
+                <div
+                    x-show="coAuthorResults.length > 0"
+                    x-cloak
+                    class="author-search-results"
+                >
+                    <template x-for="user in coAuthorResults" :key="user.id">
+                        <button type="button" class="author-search-result" @click="addCoAuthor(user)">
+                            <span class="author-search-result__name" x-text="user.name"></span>
+                            <span class="author-search-result__meta" x-text="user.email"></span>
+                            <span class="author-search-result__meta" x-text="userDetails(user)"></span>
+                        </button>
+                    </template>
+                </div>
+
+                <p
+                    x-show="primaryAuthor && coAuthorSearch.trim().length > 0 && !coAuthorLoading && coAuthorResults.length === 0"
+                    x-cloak
+                    class="kmsar-form-hint mt-2"
+                >{{ __('No matching users available to add.') }}</p>
             </div>
 
-            <p class="authors-coauthors-hint">{{ __('Leave all rows empty if there are no co-authors.') }}</p>
+            <div x-show="coAuthors.length === 0" class="rounded-lg border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+                {{ __('No co-authors selected.') }}
+            </div>
 
-            <template x-for="(author, index) in coauthors" :key="index">
-                <div class="coauthor-row authors-coauthor-card">
+            <div class="space-y-3">
+                <template x-for="(author, index) in coAuthors" :key="author.user_id">
+                    <div class="author-selected-card">
+                        <input type="hidden" :name="`coauthors[${index}][user_id]`" :value="author.user_id">
+                        <input type="hidden" :name="`coauthors[${index}][can_edit]`" value="0">
 
-                    <button type="button" @click="removeCoauthor(index)"
-                        x-show="coauthors.length > 1"
-                        class="authors-coauthor-remove"
-                        aria-label="{{ __('Remove co-author') }}">×</button>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="font-semibold text-slate-900" x-text="author.name"></h3>
+                                <span class="text-xs text-slate-500" x-text="author.email"></span>
+                            </div>
+                            <div class="mt-1 text-sm text-slate-600" x-text="userDetails(author)"></div>
+                            <div class="mt-3">
+                                <label class="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        :name="`coauthors[${index}][can_edit]`"
+                                        value="1"
+                                        x-model="author.can_edit"
+                                        class="rounded border-slate-300 text-blue-800 focus:ring-blue-800"
+                                    >
+                                    <span>{{ __('Can edit this research') }}</span>
+                                </label>
+                            </div>
+                        </div>
 
-                    <div x-show="!selfAdded || author.isMe" class="authors-me-card">
-                        <label class="authors-me-card__label">
-                            <input type="checkbox" x-model="author.isMe" @change="fillSelf(index)" class="authors-checkbox">
-                            <span>{{ __('This is me — fill my details automatically') }}</span>
-                        </label>
-                    </div>
-
-                    <div x-show="!author.isMe" class="authors-role-segment authors-role-segment--coauthor" role="tablist" :aria-label="'{{ __('Co-author type') }} ' + (index + 1)">
                         <button
                             type="button"
-                            role="tab"
-                            class="authors-role-segment__tab"
-                            :class="{ 'authors-role-segment__tab--active': author.authorType === 'student' }"
-                            :aria-selected="author.authorType === 'student'"
-                            @click="author.authorType = 'student'"
-                        >{{ __('Student') }}</button>
-                        <button
-                            type="button"
-                            role="tab"
-                            class="authors-role-segment__tab"
-                            :class="{ 'authors-role-segment__tab--active': author.authorType === 'employee' }"
-                            :aria-selected="author.authorType === 'employee'"
-                            @click="author.authorType = 'employee'"
-                        >{{ __('Employee') }}</button>
+                            class="kmsar-btn kmsar-btn--danger-outline kmsar-btn--sm"
+                            @click="removeCoAuthor(index)"
+                            :aria-label="'{{ __('Remove') }} ' + author.name"
+                        >{{ __('Remove') }}</button>
                     </div>
-
-                    <input type="hidden" :name="'authors[' + index + '][author_type]'" :value="author.authorType">
-                    <input type="hidden" :name="'authors[' + index + '][name]'" :value="coauthorFullName(author)">
-
-                    <div x-show="author.authorType==='student'" class="authors-coauthor-fields space-y-4">
-                        <div class="kmsar-form-row-3">
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_fn_' + index">{{ __('First Name') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="text" :id="'coauthor_student_fn_' + index" :name="'authors[' + index + '][first_name]'" class="kmsar-input" style="text-transform: uppercase"
-                                    x-model="author.firstName"
-                                    x-bind:disabled="author.authorType !== 'student'">
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_ln_' + index">{{ __('Last Name') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="text" :id="'coauthor_student_ln_' + index" :name="'authors[' + index + '][last_name]'" class="kmsar-input" style="text-transform: uppercase"
-                                    x-model="author.lastName"
-                                    x-bind:disabled="author.authorType !== 'student'">
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_mn_' + index">{{ __('Middle Name') }}</label>
-                                <input type="text" :id="'coauthor_student_mn_' + index" :name="'authors[' + index + '][middle_name]'" class="kmsar-input" style="text-transform: uppercase"
-                                    x-model="author.middleName"
-                                    x-bind:disabled="author.authorType !== 'student'">
-                            </div>
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" :for="'coauthor_student_sx_' + index">{{ __('Suffix') }}</label>
-                            <input type="text" :id="'coauthor_student_sx_' + index" :name="'authors[' + index + '][suffix]'" class="kmsar-input" placeholder="{{ __('Jr., Sr., III, etc.') }}"
-                                style="text-transform: none"
-                                x-model="author.suffix"
-                                x-bind:disabled="author.authorType !== 'student'">
-                        </div>
-                        <div class="kmsar-form-row-2">
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_sn_' + index">{{ __('ID Number') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="text" :id="'coauthor_student_sn_' + index" :name="'authors[' + index + '][student_number]'" class="kmsar-input"
-                                    inputmode="numeric" pattern="[0-9]*" autocomplete="off"
-                                    x-model="author.empNo"
-                                    @input="author.empNo = ($event.target.value || '').replace(/\D/g, '')"
-                                    x-bind:disabled="author.authorType !== 'student'">
-                                <input type="hidden" :name="'authors[' + index + '][employee_number]'" :value="author.empNo" x-bind:disabled="author.authorType !== 'student'">
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_em_' + index">{{ __('Email Address') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="email" :id="'coauthor_student_em_' + index" :name="'authors[' + index + '][email]'" class="kmsar-input"
-                                    x-model="author.email"
-                                    x-bind:disabled="author.authorType !== 'student'">
-                                <p class="kmsar-form-hint">{{ __('AUF or non-AUF email accepted') }}</p>
-                            </div>
-                        </div>
-                        <div class="kmsar-form-row-2">
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_col_' + index">{{ __('College') }} <span class="kmsar-form-required">*</span></label>
-                                <select :id="'coauthor_student_col_' + index" :name="'authors[' + index + '][college_id]'" x-model="author.collegeId"
-                                    @change="author.programId = ''" class="kmsar-select"
-                                    x-bind:disabled="author.authorType !== 'student'">
-                                    <option value="">{{ __('— Select college —') }}</option>
-                                    @foreach ($colleges as $college)
-                                        <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_student_pr_' + index">{{ __('Program') }} <span class="kmsar-form-required">*</span></label>
-                                <select :id="'coauthor_student_pr_' + index" :name="'authors[' + index + '][program_id]'" x-model="author.programId"
-                                    x-bind:disabled="author.authorType !== 'student' || !author.collegeId" class="kmsar-select">
-                                    <option value="">{{ __('Select college first') }}</option>
-                                    @foreach ($colleges as $college)
-                                        @foreach ($college->programs as $program)
-                                            <option value="{{ $program->id }}"
-                                                x-show="author.collegeId == '{{ $college->id }}'">
-                                                {{ $program->name }}
-                                            </option>
-                                        @endforeach
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div x-show="author.authorType==='employee'" class="authors-coauthor-fields space-y-4">
-                        <div class="kmsar-form-row-3">
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_fn_' + index">{{ __('First Name') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="text" :id="'coauthor_emp_fn_' + index" :name="'authors[' + index + '][first_name]'" class="kmsar-input" style="text-transform: uppercase"
-                                    x-model="author.firstName"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_ln_' + index">{{ __('Last Name') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="text" :id="'coauthor_emp_ln_' + index" :name="'authors[' + index + '][last_name]'" class="kmsar-input" style="text-transform: uppercase"
-                                    x-model="author.lastName"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_mn_' + index">{{ __('Middle Name') }}</label>
-                                <input type="text" :id="'coauthor_emp_mn_' + index" :name="'authors[' + index + '][middle_name]'" class="kmsar-input" style="text-transform: uppercase"
-                                    x-model="author.middleName"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                            </div>
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" :for="'coauthor_emp_sx_' + index">{{ __('Suffix') }}</label>
-                            <input type="text" :id="'coauthor_emp_sx_' + index" :name="'authors[' + index + '][suffix]'" class="kmsar-input" placeholder="{{ __('Jr., Sr., III, etc.') }}"
-                                style="text-transform: none"
-                                x-model="author.suffix"
-                                x-bind:disabled="author.authorType !== 'employee'">
-                        </div>
-                        <div class="kmsar-form-row-2">
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_en_' + index">{{ __('Employee Number') }}</label>
-                                <input type="text" :id="'coauthor_emp_en_' + index" :name="'authors[' + index + '][employee_number]'" class="kmsar-input"
-                                    x-model="author.empNo"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_em_' + index">{{ __('Email Address') }} <span class="kmsar-form-required">*</span></label>
-                                <input type="email" :id="'coauthor_emp_em_' + index" :name="'authors[' + index + '][email]'" class="kmsar-input"
-                                    x-model="author.email"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                            </div>
-                        </div>
-                        <div class="kmsar-form-row-3">
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_mc_' + index">{{ __('Mother College') }} <span class="kmsar-form-required">*</span></label>
-                                <select :id="'coauthor_emp_mc_' + index" :name="'authors[' + index + '][college_id]'" x-model="author.collegeId"
-                                    @change="author.programId = ''" class="kmsar-select"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                                    <option value="">{{ __('— Select college —') }}</option>
-                                    @foreach ($colleges as $college)
-                                        <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_ac_' + index">{{ __('Affiliated College/Unit') }}</label>
-                                <select :id="'coauthor_emp_ac_' + index" :name="'authors[' + index + '][affiliated_college_id]'" x-model="author.affiliatedCollegeId" class="kmsar-select"
-                                    x-bind:disabled="author.authorType !== 'employee'">
-                                    <option value="">{{ __('— None —') }}</option>
-                                    @foreach ($colleges as $college)
-                                        <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
-                                    @endforeach
-                                </select>
-                            </div>
-                            <div class="kmsar-form-group">
-                                <label class="kmsar-form-label" :for="'coauthor_emp_pr_' + index">{{ __('Program') }}</label>
-                                <select :id="'coauthor_emp_pr_' + index" :name="'authors[' + index + '][program_id]'" x-model="author.programId"
-                                    x-bind:disabled="author.authorType !== 'employee' || !author.collegeId" class="kmsar-select">
-                                    <option value="">{{ __('Select college first') }}</option>
-                                    @foreach ($colleges as $college)
-                                        @foreach ($college->programs as $program)
-                                            <option value="{{ $program->id }}"
-                                                x-show="author.collegeId == '{{ $college->id }}'">
-                                                {{ $program->name }}
-                                            </option>
-                                        @endforeach
-                                    @endforeach
-                                </select>
-                            </div>
-                        </div>
-                        <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" :for="'coauthor_emp_inst_' + index">{{ __('Institution') }}</label>
-                            <input type="text" :id="'coauthor_emp_inst_' + index" :name="'authors[' + index + '][institution]'" x-model="author.institution"
-                                class="kmsar-input" placeholder="{{ __('e.g. University of the Philippines') }}"
-                                style="text-transform: none"
-                                x-bind:disabled="author.authorType !== 'employee'">
-                            <p class="kmsar-form-hint">{{ __('Fill if researcher is from outside AUF') }}</p>
-                        </div>
-                    </div>
-
-                </div>
-            </template>
+                </template>
+            </div>
         </x-card>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 1.5rem;">
-            <a href="{{ route('research.wizard.details', $research) }}" class="kmsar-btn kmsar-btn--secondary">{{ __('Back') }}</a>
-            <button type="submit" class="kmsar-btn kmsar-btn--primary">{{ __('Continue to documents') }}</button>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <a href="{{ route('research.wizard.details', $research) }}" class="kmsar-btn kmsar-btn--secondary">
+                {{ __('Back') }}
+            </a>
+            <button
+                type="submit"
+                class="kmsar-btn kmsar-btn--primary"
+                :disabled="!primaryAuthor"
+            >{{ __('Continue to documents') }}</button>
         </div>
     </form>
 
     <style>
-        .authors-wizard-step {
-            --authors-blue: #1a56db;
-            --authors-blue-soft: rgba(26, 86, 219, 0.14);
-            --authors-border: #d1d5db;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .authors-wizard-step .kmsar-card-title {
-            font-size: 14px;
-            font-weight: 500;
-            color: #374151;
-        }
-
-        .authors-primary-author-toggle {
-            background: #f9fafb;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 16px;
-            border: 1px solid #e5e7eb;
-        }
-
-        .authors-primary-author-toggle__label {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            color: #374151;
-            margin: 0;
-        }
-
-        .authors-primary-author-toggle__hint {
-            font-size: 12px;
-            color: #9ca3af;
-            margin: 8px 0 0 28px;
-        }
-
-        .authors-checkbox {
-            width: 17px;
-            height: 17px;
-            margin-top: 2px;
-            flex-shrink: 0;
-            accent-color: var(--authors-blue);
-            cursor: pointer;
-        }
-
-        .authors-primary-chip {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 14px 16px;
-            background: #eff6ff;
-            border-radius: 8px;
-            border: 1px solid #dbeafe;
-            margin-bottom: 0;
-        }
-
-        .authors-primary-chip__avatar {
-            width: 38px;
-            height: 38px;
-            background: var(--authors-blue);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .authors-primary-chip__avatar span {
-            color: #fff;
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .authors-primary-chip__name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #111827;
-        }
-
-        .authors-primary-chip__meta {
-            font-size: 12px;
-            color: #4b5563;
-        }
-
-        .authors-primary-chip__badge {
-            margin-left: auto;
-            display: inline-flex;
-            align-items: center;
-            padding: 4px 8px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            border: 1px solid #bfdbfe;
-        }
-
-        .authors-role-segment {
-            display: flex;
-            padding: 4px;
-            background: #f3f4f6;
-            border-radius: 8px;
-            gap: 0;
-            margin-bottom: 16px;
-        }
-
-        .authors-role-segment--coauthor {
-            margin-bottom: 16px;
-        }
-
-        .authors-role-segment__tab {
-            flex: 1;
-            border: none;
-            background: transparent;
-            padding: 10px 14px;
-            font-size: 13px;
-            font-weight: 500;
-            color: #6b7280;
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
-        }
-
-        .authors-role-segment__tab:hover {
-            color: #374151;
-        }
-
-        .authors-role-segment__tab--active {
-            background: #fff;
-            color: #111827;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        }
-
-        .authors-role-segment__tab:focus-visible {
-            outline: 2px solid var(--authors-blue);
-            outline-offset: 2px;
-        }
-
-        .authors-label {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            color: #6b7280;
-            margin-bottom: 6px;
-        }
-
-        .authors-label--optional {
-            font-size: 10px;
-            font-weight: 500;
-            letter-spacing: 0.04em;
-            text-transform: none;
-            color: #9ca3af;
-        }
-
-        .authors-fields-grid {
-            display: grid;
-            gap: 16px;
-        }
-
-        .authors-fields-grid--two {
-            grid-template-columns: 1fr 1fr;
-        }
-
-        .authors-fields-grid--three {
-            grid-template-columns: 1fr 1fr 1fr;
-        }
-
-        .authors-field--full {
-            grid-column: 1 / -1;
-        }
-
-        .authors-wizard-step .kmsar-input,
-        .authors-wizard-step .kmsar-select {
-            height: 40px;
-            min-height: 40px;
-            border: 1px solid var(--authors-border);
-            border-radius: 6px;
-            box-sizing: border-box;
-        }
-
-        .authors-wizard-step .kmsar-input:focus,
-        .authors-wizard-step .kmsar-select:focus {
-            border-color: var(--authors-blue);
-            box-shadow: 0 0 0 3px var(--authors-blue-soft);
-        }
-
-        .authors-coauthors-toolbar {
-            margin-bottom: 8px;
-        }
-
-        .authors-coauthors-toolbar__actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: flex-end;
-        }
-
-        .authors-btn-secondary {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 7px 14px;
-            background: #eff6ff;
-            color: var(--authors-blue);
-            border: 1px solid #bfdbfe;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-        }
-
-        .authors-btn-secondary--muted {
-            background: #f9fafb;
-            color: #4b5563;
-            border-color: #e5e7eb;
-        }
-
-        .authors-coauthors-hint {
-            font-size: 12px;
-            color: #9ca3af;
-            margin: 0 0 16px;
-        }
-
-        .authors-coauthor-card {
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 12px;
-            background: #fff;
-            position: relative;
-        }
-
-        .authors-coauthor-remove {
+        .author-search-results {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            color: #dc2626;
-            font-size: 16px;
-            cursor: pointer;
+            z-index: 30;
+            top: 100%;
+            right: 0;
+            left: 0;
+            max-height: 22rem;
+            overflow-y: auto;
+            margin-top: 0.25rem;
+            border: 1px solid #E2E8F0;
+            border-radius: 0.5rem;
+            background: #FFFFFF;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.14);
+        }
+
+        .author-search-result {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-            font-family: inherit;
+            width: 100%;
+            flex-direction: column;
+            gap: 0.15rem;
+            padding: 0.75rem 1rem;
+            border: 0;
+            border-bottom: 1px solid #E2E8F0;
+            background: #FFFFFF;
+            text-align: left;
+            cursor: pointer;
         }
 
-        .authors-me-card {
-            background: #f9fafb;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 16px;
-            border: 1px solid #e5e7eb;
+        .author-search-result:last-child {
+            border-bottom: 0;
         }
 
-        .authors-me-card__label {
+        .author-search-result:hover,
+        .author-search-result:focus-visible {
+            background: #F8FAFC;
+            outline: none;
+        }
+
+        .author-search-result__name {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #0F172A;
+        }
+
+        .author-search-result__meta {
+            font-size: 0.75rem;
+            color: #64748B;
+        }
+
+        .author-selected-card {
             display: flex;
             align-items: flex-start;
-            gap: 10px;
-            cursor: pointer;
-            font-size: 13px;
-            color: #374151;
-            margin: 0;
-        }
-
-        .authors-wizard-step__footer {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            padding-top: 8px;
-            margin-top: 4px;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid #E2E8F0;
+            border-radius: 0.625rem;
+            background: #FFFFFF;
         }
 
-        .authors-wizard-step__btn-back {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 40px;
-            padding: 0 20px;
-            font-size: 14px;
-            font-weight: 500;
-            color: #6b7280;
-            background: transparent;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            text-decoration: none;
-            font-family: inherit;
-            transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        .author-selected-card--primary {
+            border-color: #BFDBFE;
+            background: #EFF6FF;
         }
 
-        .authors-wizard-step__btn-back:hover {
-            background: #f9fafb;
-            color: #374151;
-            border-color: #9ca3af;
+        .author-details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem 1.5rem;
+            margin-top: 1rem;
         }
 
-        .authors-wizard-step__btn-continue {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 40px;
-            padding: 0 22px;
-            font-size: 14px;
-            font-weight: 600;
-            color: #fff;
-            background: var(--authors-blue);
-            border: 1px solid var(--authors-blue);
-            border-radius: 6px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: background 0.15s ease, border-color 0.15s ease, filter 0.15s ease;
+        .author-details-grid dt {
+            font-size: 0.6875rem;
+            font-weight: 700;
+            color: #64748B;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
-        .authors-wizard-step__btn-continue:hover {
-            filter: brightness(1.05);
+        .author-details-grid dd {
+            margin-top: 0.15rem;
+            font-size: 0.8125rem;
+            color: #334155;
         }
 
-        .authors-wizard-step__btn-continue:focus-visible {
-            outline: 2px solid var(--authors-blue);
-            outline-offset: 2px;
-        }
-
-        @media (max-width: 1024px) {
-            .authors-fields-grid--three,
-            .authors-fields-grid--two {
-                grid-template-columns: 1fr !important;
+        @media (max-width: 640px) {
+            .author-selected-card {
+                flex-direction: column;
             }
 
-            .authors-field--full {
-                grid-column: 1;
+            .author-details-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -940,110 +339,143 @@
 @push('scripts')
     <script>
         document.addEventListener('alpine:init', () => {
-            Alpine.data('authorManager', (programsByCollege, authUser, initial) => ({
-                iAmPrimary: initial.iAmPrimary,
-                primaryType: initial.primaryType ?? 'student',
-                selfAdded: initial.selfAdded ?? false,
-                coauthors: initial.coauthors,
+            Alpine.data('kmsarAuthorSelector', (me, initialPrimary, initialCoAuthors, searchUrl) => ({
+                primaryAuthor: initialPrimary,
+                primarySearch: '',
+                primaryResults: [],
+                primaryLoading: false,
+                iAmPrimary: Number(initialPrimary?.id) === Number(me.id),
 
-                primaryFirstName: initial.primaryFirstName ?? '',
-                primaryMiddleName: initial.primaryMiddleName ?? '',
-                primaryLastName: initial.primaryLastName ?? '',
-                primarySuffix: initial.primarySuffix ?? '',
-                primaryEmpNo: initial.primaryEmpNo ?? '',
-                primaryEmail: initial.primaryEmail ?? '',
-                primaryInstitution: initial.primaryInstitution ?? '',
-                primaryAffiliatedCollegeId: initial.primaryAffiliatedCollegeId ?? '',
+                coAuthors: (initialCoAuthors || []).map(author => ({
+                    ...author,
+                    user_id: Number(author.user_id || author.id),
+                    can_edit: Boolean(author.can_edit),
+                })),
+                coAuthorSearch: '',
+                coAuthorResults: [],
+                coAuthorLoading: false,
 
-                get primaryAuthorFullName() {
-                    const f = (this.primaryFirstName || '').trim();
-                    const m = (this.primaryMiddleName || '').trim();
-                    const l = (this.primaryLastName || '').trim();
-                    const s = (this.primarySuffix || '').trim();
-                    return [f, m, l, s].filter(Boolean).join(' ');
+                primaryRequest: 0,
+                coAuthorRequest: 0,
+
+                roleLabel(role) {
+                    if (!role || role === '—') return '—';
+                    return String(role).replaceAll('_', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
                 },
 
-                coauthorFullName(author) {
-                    const f = (author.firstName || '').trim();
-                    const m = (author.middleName || '').trim();
-                    const l = (author.lastName || '').trim();
-                    const s = (author.suffix || '').trim();
-                    return [f, m, l, s].filter(Boolean).join(' ');
+                userDetails(user) {
+                    return [
+                        user?.employee_number,
+                        user?.college_code || user?.college,
+                        user?.program,
+                        this.roleLabel(user?.role),
+                    ].filter(value => value && value !== '—').join(' · ') || '—';
                 },
 
-                getProgramsForCollege(collegeId) {
-                    if (!collegeId) return [];
-                    return programsByCollege[collegeId] || [];
+                selectPrimary(user) {
+                    this.coAuthors = this.coAuthors.filter(author => Number(author.user_id) !== Number(user.id));
+                    this.primaryAuthor = user;
+                    this.iAmPrimary = Number(user.id) === Number(me.id);
+                    this.primarySearch = '';
+                    this.primaryResults = [];
+                    this.coAuthorSearch = '';
+                    this.coAuthorResults = [];
                 },
 
-                addCoauthor() {
-                    this.coauthors.push({
-                        isMe: false,
-                        authorType: 'student',
-                        firstName: '',
-                        middleName: '',
-                        lastName: '',
-                        suffix: '',
-                        empNo: '',
-                        institution: '',
-                        collegeId: '',
-                        programId: '',
-                        affiliatedCollegeId: '',
-                        email: '',
+                clearPrimary() {
+                    this.primaryAuthor = null;
+                    this.iAmPrimary = false;
+                    this.primarySearch = '';
+                    this.primaryResults = [];
+                    this.coAuthorSearch = '';
+                    this.coAuthorResults = [];
+                },
+
+                setMeAsPrimary() {
+                    this.selectPrimary(me);
+                },
+
+                addCoAuthor(user) {
+                    const id = Number(user.id);
+                    if (!this.primaryAuthor || Number(this.primaryAuthor.id) === id) return;
+                    if (this.coAuthors.some(author => Number(author.user_id) === id)) return;
+
+                    this.coAuthors.push({
+                        ...user,
+                        user_id: id,
+                        can_edit: true,
                     });
+                    this.coAuthorSearch = '';
+                    this.coAuthorResults = [];
                 },
 
-                removeCoauthor(index) {
-                    if (this.coauthors[index].isMe) this.selfAdded = false;
-                    this.coauthors.splice(index, 1);
+                removeCoAuthor(index) {
+                    this.coAuthors.splice(index, 1);
+                    this.coAuthorResults = [];
                 },
 
-                fillSelf(index) {
-                    const a = this.coauthors[index];
-                    if (a.isMe) {
-                        this.selfAdded = true;
-                        const parts = String(authUser.name || '').trim().split(/\s+/).filter(Boolean);
-                        a.firstName = parts[0] || '';
-                        a.lastName = parts.length > 1 ? parts[parts.length - 1] : '';
-                        a.middleName = parts.length > 2 ? parts.slice(1, -1).join(' ') : '';
-                        a.suffix = '';
-                        a.empNo = authUser.employee_number || '';
-                        a.collegeId = authUser.college_id ? String(authUser.college_id) : '';
-                        a.programId = '';
-                        a.affiliatedCollegeId = '';
-                        a.email = '';
-                        a.institution = '';
-                        a.authorType = 'employee';
-                    } else {
-                        this.selfAdded = false;
-                        a.firstName = '';
-                        a.middleName = '';
-                        a.lastName = '';
-                        a.suffix = '';
-                        a.empNo = '';
-                        a.collegeId = '';
-                        a.programId = '';
-                        a.email = '';
+                excludedIds() {
+                    return [
+                        this.primaryAuthor?.id,
+                        ...this.coAuthors.map(author => author.user_id),
+                    ].filter(Boolean).map(Number);
+                },
+
+                async fetchUsers(search, excludeIds, requestNumber, requestType) {
+                    const params = new URLSearchParams({ q: search });
+                    excludeIds.forEach(id => params.append('exclude[]', id));
+
+                    try {
+                        const response = await fetch(`${searchUrl}?${params.toString()}`, {
+                            headers: { Accept: 'application/json' },
+                        });
+                        if (!response.ok) throw new Error('Search failed');
+
+                        const users = await response.json();
+                        if (requestType === 'primary' && requestNumber === this.primaryRequest) {
+                            this.primaryResults = users;
+                        }
+                        if (requestType === 'coauthor' && requestNumber === this.coAuthorRequest) {
+                            this.coAuthorResults = users;
+                        }
+                    } catch (error) {
+                        if (requestType === 'primary') this.primaryResults = [];
+                        if (requestType === 'coauthor') this.coAuthorResults = [];
+                    } finally {
+                        if (requestType === 'primary' && requestNumber === this.primaryRequest) {
+                            this.primaryLoading = false;
+                        }
+                        if (requestType === 'coauthor' && requestNumber === this.coAuthorRequest) {
+                            this.coAuthorLoading = false;
+                        }
                     }
                 },
 
-                addMyselfAsCoauthor() {
-                    const parts = String(authUser.name || '').trim().split(/\s+/).filter(Boolean);
-                    this.coauthors.push({
-                        isMe: true,
-                        authorType: 'employee',
-                        firstName: parts[0] || '',
-                        middleName: parts.length > 2 ? parts.slice(1, -1).join(' ') : '',
-                        lastName: parts.length > 1 ? parts[parts.length - 1] : '',
-                        suffix: '',
-                        empNo: authUser.employee_number || '',
-                        institution: '',
-                        collegeId: authUser.college_id ? String(authUser.college_id) : '',
-                        programId: '',
-                        affiliatedCollegeId: '',
-                        email: '',
-                    });
-                    this.selfAdded = true;
+                searchPrimary() {
+                    const search = this.primarySearch.trim();
+                    const requestNumber = ++this.primaryRequest;
+                    if (!search) {
+                        this.primaryResults = [];
+                        this.primaryLoading = false;
+                        return;
+                    }
+
+                    this.primaryLoading = true;
+                    const coAuthorIds = this.coAuthors.map(author => author.user_id);
+                    this.fetchUsers(search, coAuthorIds, requestNumber, 'primary');
+                },
+
+                searchCoAuthors() {
+                    const search = this.coAuthorSearch.trim();
+                    const requestNumber = ++this.coAuthorRequest;
+                    if (!this.primaryAuthor || !search) {
+                        this.coAuthorResults = [];
+                        this.coAuthorLoading = false;
+                        return;
+                    }
+
+                    this.coAuthorLoading = true;
+                    this.fetchUsers(search, this.excludedIds(), requestNumber, 'coauthor');
                 },
             }));
         });

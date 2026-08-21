@@ -20,6 +20,10 @@
         <x-alert type="success" :message="session('success')" class="mb-6" />
     @endif
 
+    @if (session('warning'))
+        <x-alert type="warning" :message="session('warning')" class="mb-6" />
+    @endif
+
     @if ($errors->any())
         <x-alert type="danger" class="mb-6">
             <ul class="list-disc pl-5 space-y-1">
@@ -30,7 +34,12 @@
         </x-alert>
     @endif
 
-    @include('faculty.research.partials.registration-stepper', ['currentStep' => 1, 'research' => $research])
+    @include('faculty.research.partials.registration-stepper', [
+        'currentStep' => 1,
+        'research' => $research,
+        'step1Complete' => $step1Complete,
+        'step2Complete' => $step2Complete,
+    ])
 
     <x-card :title="__('Research information')" accent="primary">
         @php

@@ -68,6 +68,8 @@ class ResearchController extends Controller
         return view('faculty.research.details', [
             'research' => $research,
             'colleges' => College::query()->where('is_active', true)->orderBy('code')->get(),
+            'step1Complete' => $this->wizardStep1Complete($research),
+            'step2Complete' => $this->wizardStep2Complete($research),
         ]);
     }
 
@@ -89,9 +91,15 @@ class ResearchController extends Controller
             ->with('success', __('Details saved.'));
     }
 
-    public function registrationAuthors(Research $research): View
+    public function registrationAuthors(Research $research): View|RedirectResponse
     {
         $this->authorize('update', $research);
+
+        if (! $this->wizardStep1Complete($research)) {
+            return redirect()
+                ->route('research.wizard.details', $research)
+                ->with('warning', __('Please complete Step 1 before proceeding to Authors.'));
+        }
 
         $me = request()->user()->loadMissing(['college', 'program', 'roles']);
         $meData = $this->authorUserData($me);
@@ -155,14 +163,16 @@ class ResearchController extends Controller
                 ->all();
         }
 
-        return view('faculty.research.authors', compact(
-            'research',
-            'meData',
-            'existingPrimary',
-            'existingCoAuthors',
-            'primaryData',
-            'coAuthorsData',
-        ));
+        return view('faculty.research.authors', [
+            'research' => $research,
+            'meData' => $meData,
+            'existingPrimary' => $existingPrimary,
+            'existingCoAuthors' => $existingCoAuthors,
+            'primaryData' => $primaryData,
+            'coAuthorsData' => $coAuthorsData,
+            'step1Complete' => $this->wizardStep1Complete($research),
+            'step2Complete' => $this->wizardStep2Complete($research),
+        ]);
     }
 
     public function saveRegistrationAuthors(Request $request, Research $research): RedirectResponse
@@ -237,14 +247,28 @@ class ResearchController extends Controller
             ->with('success', __('Authors saved.'));
     }
 
-    public function registrationDocuments(Research $research): View
+    public function registrationDocuments(Research $research): View|RedirectResponse
     {
         $this->authorize('update', $research);
+
+        if (! $this->wizardStep1Complete($research)) {
+            return redirect()
+                ->route('research.wizard.details', $research)
+                ->with('warning', __('Please complete Step 1 before proceeding.'));
+        }
+
+        if (! $this->wizardStep2Complete($research)) {
+            return redirect()
+                ->route('research.wizard.authors', $research)
+                ->with('warning', __('Please select a primary author before proceeding to Documents.'));
+        }
 
         $research->load(['documents']);
 
         return view('faculty.research.documents', [
             'research' => $research,
+            'step1Complete' => true,
+            'step2Complete' => true,
         ]);
     }
 
@@ -742,6 +766,20 @@ class ResearchController extends Controller
     /**
      * @return array<string, int|string|null>
      */
+    private function wizardStep1Complete(Research $research): bool
+    {
+        return ! empty($research->title)
+            && ! empty($research->research_classification)
+            && ! empty($research->sdg_tags)
+            && ! empty($research->start_date)
+            && ! empty($research->status);
+    }
+
+    private function wizardStep2Complete(Research $research): bool
+    {
+        return $research->researchAuthors()->where('is_primary', true)->exists();
+    }
+
     private function authorUserData(User $user): array
     {
         $user->loadMissing(['college', 'program', 'roles']);

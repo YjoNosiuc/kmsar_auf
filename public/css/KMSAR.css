@@ -1707,6 +1707,17 @@ input[name="title"] {
 
 .kmsar-step-connector--done { background: var(--color-approved); }
 
+.kmsar-step.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.kmsar-step.locked .kmsar-step-num,
+.kmsar-step.locked .kmsar-step-number {
+  background: #CBD5E1;
+  color: #64748B;
+}
+
 
 /* ============================================================
    19. APPROVAL QUEUE CARDS

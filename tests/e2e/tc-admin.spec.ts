@@ -194,7 +194,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     expect(usersListed).toBeGreaterThan(0);
     await expect(page.getByRole('row', { name: /admin@yopmail\.com/i })).toBeVisible();
     await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toContainText('Faculty');
-    await expect(page.getByRole('row', { name: /dean\.ccs@auf\.edu\.ph/i })).toContainText('College Dean');
+    await expect(page.getByRole('row', { name: /dean\.ccs@auf\.edu\.ph/i })).toContainText('Dean/Head');
     await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toContainText('CCS');
   });
 
@@ -276,7 +276,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('CBA');
   });
 
-  test('TC-011: Update user role from faculty to co_author → role updated', async ({ page }) => {
+  test('TC-011: Update user role from faculty to viewer → role updated', async ({ page }) => {
     const stamp = Date.now();
     const email = `e2e.rolechg.${stamp}@auf.edu.ph`;
 
@@ -295,10 +295,10 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
 
     await openEditUserByEmail(page, email);
-    await page.locator('#edit-role').selectOption('co_author');
+    await page.locator('#edit-role').selectOption('viewer');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('User updated successfully')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('Co-Author');
+    await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('Viewer');
   });
 
   test('TC-012: Deactivate user → edit modal is scrollable (L-03) → user marked inactive', async ({ page }) => {
@@ -618,7 +618,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-email').fill(email);
     await page.locator('#add-password').fill('password');
     await page.locator('#add-password_confirmation').fill('password');
-    await page.locator('#add-role').selectOption('unit_head');
+    await page.locator('#add-role').selectOption('college_dean');
     await page.locator('#add-office').fill('OVPRI');
     await page.getByRole('button', { name: 'Create user' }).click();
 

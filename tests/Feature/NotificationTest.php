@@ -215,7 +215,7 @@ describe('ResearchReturned', function () {
 
 describe('ResearchReturnedToDean', function () {
 
-    it('is sent to the college dean when OVPRI returns', function () {
+    it('is NOT sent to the college dean when OVPRI returns — faculty is notified instead', function () {
         Notification::fake();
         $college = makeCollege();
         $faculty = makeFaculty($college);
@@ -228,10 +228,11 @@ describe('ResearchReturnedToDean', function () {
             'remarks' => 'Needs additional documentation from the college.',
         ]);
 
-        Notification::assertSentTo($dean, ResearchReturnedToDean::class);
+        Notification::assertSentTo($faculty, ResearchReturned::class);
+        Notification::assertNotSentTo($dean, ResearchReturnedToDean::class);
     });
 
-    it('is NOT sent to the primary author on OVPRI return', function () {
+    it('is sent to the primary author on OVPRI return — not as ResearchReturnedToDean', function () {
         Notification::fake();
         $college = makeCollege();
         $faculty = makeFaculty($college);
@@ -243,8 +244,8 @@ describe('ResearchReturnedToDean', function () {
             'remarks' => 'Needs additional documentation from the college.',
         ]);
 
+        Notification::assertSentTo($faculty, ResearchReturned::class);
         Notification::assertNotSentTo($faculty, ResearchReturnedToDean::class);
-        Notification::assertNotSentTo($faculty, ResearchReturned::class);
     });
 });
 

@@ -220,6 +220,22 @@
                 </div>
 
                 <div class="kmsar-form-group">
+                    <label class="kmsar-form-label" for="user_type">
+                        User Type <span class="kmsar-form-required">*</span>
+                    </label>
+                    <select id="user_type" name="user_type" class="kmsar-select" required>
+                        <option value="">— Select user type —</option>
+                        <option value="faculty" @selected(old('user_type') === 'faculty')>Faculty</option>
+                        <option value="staff" @selected(old('user_type') === 'staff')>Staff</option>
+                        <option value="student" @selected(old('user_type') === 'student')>Student</option>
+                        <option value="external_affiliate" @selected(old('user_type') === 'external_affiliate')>External Affiliate</option>
+                    </select>
+                    @error('user_type')
+                        <p class="kmsar-form-error">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="kmsar-form-group">
                     <label class="kmsar-form-label" for="email">Email Address <span class="kmsar-form-required">*</span></label>
                     <input
                         id="email"

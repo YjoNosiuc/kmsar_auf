@@ -596,6 +596,10 @@ class ApprovalService
 
     private function assertDeanMayActOnResearch(User $dean, Research $research): void
     {
+        if ($dean->hasRole('super_admin')) {
+            return;
+        }
+
         if ((int) $dean->college_id !== (int) $research->mother_college_id) {
             throw ValidationException::withMessages([
                 'user' => [__('You may only act on research for your college.')],

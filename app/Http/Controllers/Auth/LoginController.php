@@ -88,7 +88,7 @@ class LoginController extends Controller
             $authUser->hasRole('super_admin') => route('admin.dashboard'),
             $authUser->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => route('ovpri.dashboard'),
             $authUser->hasAnyRole(['college_dean', 'unit_head']) => route('dean.dashboard'),
-            $authUser->hasAnyRole(['faculty', 'co_author']) => route('research.index'),
+            $authUser->hasAnyRole(['faculty', 'viewer']) => route('research.index'),
             default => '/',
         };
 

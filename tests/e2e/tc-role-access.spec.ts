@@ -35,11 +35,11 @@ function seedCoAuthorResearch(approvalStage: string, revisionCount = 0): number 
   return id;
 }
 
-function createCoAuthorRoleUser(stamp: number): string {
-  const email = `e2e.coauthor.${stamp}@auf.edu.ph`;
+function createViewerRoleUser(stamp: number): string {
+  const email = `e2e.viewer.${stamp}@auf.edu.ph`;
   const employeeNumber = `AUF-C${String(stamp).slice(-6)}`;
   runTinker(
-    `$college = \\App\\Models\\College::where('code','CCS')->firstOrFail(); $user = \\App\\Models\\User::updateOrCreate(['email' => '${email}'], ['employee_number' => '${employeeNumber}', 'first_name' => 'CO', 'last_name' => 'AUTHOR', 'name' => 'CO AUTHOR', 'password' => bcrypt('password'), 'college_id' => $college->id, 'is_active' => true, 'email_verified_at' => now()]); $user->syncRoles(['co_author']); echo $user->email;`,
+    `$college = \\App\\Models\\College::where('code','CCS')->firstOrFail(); $user = \\App\\Models\\User::updateOrCreate(['email' => '${email}'], ['employee_number' => '${employeeNumber}', 'first_name' => 'VIEWER', 'last_name' => 'USER', 'name' => 'VIEWER USER', 'password' => bcrypt('password'), 'college_id' => $college->id, 'is_active' => true, 'email_verified_at' => now()]); $user->syncRoles(['viewer']); echo $user->email;`,
   );
 
   return email;
@@ -221,8 +221,8 @@ test.describe('Role Access — UAT Test Suite', () => {
       await expect(card.getByRole('button', { name: 'Delete' })).toHaveCount(0);
     });
 
-    test('RA-033: Co-author CANNOT access dean/ovpri/admin routes → 403', async ({ page }) => {
-      const email = createCoAuthorRoleUser(Date.now());
+    test('RA-033: Viewer CANNOT access dean/ovpri/admin routes → 403', async ({ page }) => {
+      const email = createViewerRoleUser(Date.now());
       await login(page, email, 'password');
       await expectForbidden(page, '/dean/dashboard');
       await expectForbidden(page, '/ovpri/dashboard');

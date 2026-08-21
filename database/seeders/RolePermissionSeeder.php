@@ -12,7 +12,7 @@ class RolePermissionSeeder extends Seeder
     private const GUARD = 'web';
 
     /**
-     * All nine KMSAR roles — KMSAR_ARCHITECTURE.md §6 (Role Definitions).
+     * All KMSAR roles — KMSAR_ARCHITECTURE.md §6 (Role Definitions).
      *
      * @var list<string>
      */
@@ -23,7 +23,6 @@ class RolePermissionSeeder extends Seeder
         'college_dean',
         'unit_head',
         'faculty',
-        'co_author',
         'registrar',
         'viewer',
     ];
@@ -57,6 +56,11 @@ class RolePermissionSeeder extends Seeder
 
     public function run(): void
     {
+        Role::query()
+            ->where('name', 'co_author')
+            ->where('guard_name', self::GUARD)
+            ->delete();
+
         foreach (self::PERMISSIONS as $name) {
             Permission::findOrCreate($name, self::GUARD);
         }
@@ -118,24 +122,15 @@ class RolePermissionSeeder extends Seeder
             'document.download',
         ]);
 
-        // co_author: shared research access (policy narrows); document participation; may start registration flow
-        $assign('co_author', [
-            'research.view_own',
-            'research.create',
-            'document.upload',
-            'document.download',
-        ]);
-
         // registrar: approved-only visibility enforced in policy; read documents as needed
         $assign('registrar', [
             'research.view_all',
             'document.download',
         ]);
 
-        // viewer: published / summary reporting without export
+        // viewer: read-only access to research records associated with the user
         $assign('viewer', [
-            'report.view_college',
-            'report.view_university',
+            'research.view_own',
         ]);
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();

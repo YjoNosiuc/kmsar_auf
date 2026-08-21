@@ -18,15 +18,12 @@ class UserController extends Controller
         'ovpri_admin',
         'cdaic_admin',
         'college_dean',
-        'unit_head',
         'faculty',
-        'co_author',
-        'registrar',
         'viewer',
     ];
 
     /**
-     * Human labels for the nine KMSAR roles (RolePermissionSeeder).
+     * Human labels for roles assignable through user management.
      *
      * @return array<string, string>
      */
@@ -36,11 +33,8 @@ class UserController extends Controller
             'super_admin' => __('Super Admin'),
             'ovpri_admin' => __('OVPRI Admin'),
             'cdaic_admin' => __('CDAIC Admin'),
-            'college_dean' => __('College Dean'),
-            'unit_head' => __('Unit Head'),
+            'college_dean' => __('Dean/Head'),
             'faculty' => __('Faculty'),
-            'co_author' => __('Co-Author'),
-            'registrar' => __('Registrar'),
             'viewer' => __('Viewer'),
         ];
     }

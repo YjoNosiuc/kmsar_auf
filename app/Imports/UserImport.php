@@ -20,7 +20,6 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
         'college_dean',
         'unit_head',
         'faculty',
-        'co_author',
         'registrar',
         'viewer',
     ];

@@ -392,29 +392,29 @@ describe('Faculty', function () {
 });
 
 // ─────────────────────────────────────────────
-// CO-AUTHOR
+// VIEWER
 // ─────────────────────────────────────────────
 
-describe('Co-Author', function () {
+describe('Viewer research access', function () {
 
     it('can access /research', function () {
-        $user = userWithCollege('co_author');
+        $user = userWithCollege('viewer');
 
         $this->actingAs($user)
             ->get(route('research.index'))
             ->assertOk();
     });
 
-    it('can access /research/create', function () {
-        $user = userWithCollege('co_author');
+    it('cannot access /research/create without research.create permission', function () {
+        $user = userWithCollege('viewer');
 
         $this->actingAs($user)
             ->get(route('research.create'))
-            ->assertRedirect();
+            ->assertForbidden();
     });
 
     it('cannot access /admin/dashboard', function () {
-        $user = userWithCollege('co_author');
+        $user = userWithCollege('viewer');
 
         $this->actingAs($user)
             ->get(route('admin.dashboard'))
@@ -422,7 +422,7 @@ describe('Co-Author', function () {
     });
 
     it('cannot access /approval/queue', function () {
-        $user = userWithCollege('co_author');
+        $user = userWithCollege('viewer');
 
         $this->actingAs($user)
             ->get(route('approval.queue'))
@@ -491,12 +491,12 @@ describe('Viewer', function () {
             ->assertForbidden();
     });
 
-    it('cannot access /research', function () {
+    it('can access /research', function () {
         $user = makeUserWithRole('viewer');
 
         $this->actingAs($user)
             ->get(route('research.index'))
-            ->assertForbidden();
+            ->assertOk();
     });
 
     it('cannot access /admin/dashboard', function () {

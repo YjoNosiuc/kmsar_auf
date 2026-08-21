@@ -7,7 +7,7 @@
 @auth
     @php($u = auth()->user())
 
-    @if($u->hasAnyRole(['faculty', 'co_author']) && (Route::has('research.index') || Route::has('research.create')))
+    @if($u->hasAnyRole(['faculty', 'viewer']) && (Route::has('research.index') || Route::has('research.create')))
         <div class="kmsar-sidebar-section">Faculty</div>
         @if(Route::has('research.index'))
             <a href="{{ route('research.index') }}"

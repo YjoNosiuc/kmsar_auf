@@ -70,12 +70,11 @@
                                 'college_dean' => $collegeCode ? $collegeCode.' Dean' : 'Dean',
                                 'unit_head' => $collegeCode ? $collegeCode.' Unit Head' : 'Unit Head',
                                 'faculty' => $collegeCode ? $collegeCode.' Faculty' : 'Faculty',
-                                'co_author' => $collegeCode ? $collegeCode.' Co-Author' : 'Co-Author',
+                                'viewer' => 'Viewer',
                                 'ovpri_admin' => 'OVPRI Admin',
                                 'cdaic_admin' => 'CDAIC Admin',
                                 'super_admin' => 'Super Admin',
                                 'registrar' => 'Registrar',
-                                'viewer' => 'Viewer',
                                 default => $roleSlug ? str_replace('_', ' ', $roleSlug) : '',
                             };
                         @endphp

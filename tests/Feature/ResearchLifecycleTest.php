@@ -62,7 +62,7 @@ describe('Wizard: Draft Creation', function () {
             'registration_type'         => 'new',
             'title'                     => 'Effects of AI in Philippine Education',
             'mother_college_id'         => $college->id,
-            'research_classification'   => 'applied',
+            'research_classification'   => 'internally_funded',
             'funding_agency'            => 'CHED',
             'sdg_tags'                  => [4, 8],
             'expected_output'           => ['publication'],
@@ -407,7 +407,7 @@ describe('OVPRI: approve / return / reject', function () {
         Notification::assertSentTo($dean, ResearchApprovedDean::class);
     });
 
-    it('OVPRI can return research to dean_review', function () {
+    it('OVPRI can return research to faculty', function () {
         Notification::fake();
         $college  = makeCollege();
         $faculty  = makeFaculty($college);
@@ -420,11 +420,11 @@ describe('OVPRI: approve / return / reject', function () {
             ->assertRedirect(route('ovpri.queue'));
 
         $research->refresh();
-        expect($research->approval_stage)->toBe('dean_review');
+        expect($research->approval_stage)->toBe('returned_to_faculty');
         expect($research->revision_count)->toBe(1);
     });
 
-    it('OVPRI return notifies dean only — NOT the primary author', function () {
+    it('OVPRI return notifies the primary author — NOT the college dean', function () {
         Notification::fake();
         $college  = makeCollege();
         $faculty  = makeFaculty($college);
@@ -436,8 +436,8 @@ describe('OVPRI: approve / return / reject', function () {
         $this->actingAs($ovpri)
             ->post(route('ovpri.return', $research), ['remarks' => 'Please have the dean review this again.']);
 
-        Notification::assertSentTo($dean, ResearchReturnedToDean::class);
-        Notification::assertNotSentTo($faculty, ResearchReturned::class);
+        Notification::assertSentTo($faculty, ResearchReturned::class);
+        Notification::assertNotSentTo($dean, ResearchReturnedToDean::class);
     });
 
     it('OVPRI can reject research', function () {
@@ -612,7 +612,7 @@ describe('Full Lifecycle: happy path end-to-end', function () {
             'registration_type'         => 'new',
             'title'                     => 'AI in Pampanga Schools',
             'mother_college_id'         => $college->id,
-            'research_classification'   => 'applied',
+            'research_classification'   => 'internally_funded',
             'sdg_tags'                  => [4],
             'expected_output'           => ['publication'],
             'start_date'                => now()->toDateString(),

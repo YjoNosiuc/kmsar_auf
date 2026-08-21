@@ -14,7 +14,7 @@
                 $user->hasRole('super_admin') => route('admin.dashboard'),
                 $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => route('ovpri.dashboard'),
                 $user->hasAnyRole(['college_dean', 'unit_head']) => route('dean.dashboard'),
-                $user->hasAnyRole(['faculty', 'co_author']) => route('research.index'),
+                $user->hasAnyRole(['faculty', 'viewer']) => route('research.index'),
                 default => url('/'),
             };
         }

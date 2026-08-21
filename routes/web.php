@@ -35,7 +35,7 @@ return match($role) {
 'super_admin' => redirect()->route('admin.dashboard'),
 'ovpri_admin', 'cdaic_admin' => redirect()->route('ovpri.dashboard'),
 'college_dean', 'unit_head' => redirect()->route('dean.dashboard'),
-'faculty', 'co_author' => redirect()->route('research.index'),
+'faculty', 'viewer' => redirect()->route('research.index'),
 default => redirect()->route('login'),
 };
 }
@@ -91,10 +91,10 @@ Route::middleware(['auth', 'nocache'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Faculty & co-author — research module
+| Faculty & viewer — research module
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'nocache', 'role:faculty|co_author|super_admin'])
+Route::middleware(['auth', 'nocache', 'role:faculty|viewer|super_admin'])
     ->prefix('research')
     ->group(function () {
         Route::get('/', [ResearchController::class, 'index'])->name('research.index');
@@ -117,7 +117,7 @@ Route::middleware(['auth', 'nocache', 'role:faculty|co_author|super_admin'])
         Route::get('/{research}/documents/{document}/preview', [FileController::class, 'preview'])->name('documents.preview');
     });
 
-Route::middleware(['auth', 'nocache', 'role:faculty|co_author|super_admin'])
+Route::middleware(['auth', 'nocache', 'role:faculty|viewer|super_admin'])
     ->delete('/documents/{document}', [DocumentController::class, 'destroy'])
     ->name('documents.destroy');
 

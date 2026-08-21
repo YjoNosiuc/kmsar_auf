@@ -11,10 +11,10 @@ class RoleMiddleware
     /**
      * Restrict access to users who have at least one of the given Spatie roles.
      *
-     * Usage: middleware('role:faculty|co_author')
+     * Usage: middleware('role:faculty|viewer')
      * Optional guard: middleware('role:super_admin,web')
      *
-     * @param  string  $roles  Pipe-separated role names (e.g. faculty|co_author)
+     * @param  string  $roles  Pipe-separated role names (e.g. faculty|viewer)
      */
     public function handle(Request $request, Closure $next, string $roles, ?string $guard = null): Response
     {

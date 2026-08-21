@@ -36,36 +36,42 @@ class ApprovalController extends Controller
 
     public function queue(Request $request): View
     {
-        $collegeId = $request->user()->college_id;
+        $user = $request->user();
+        $isSuperAdmin = $user->hasRole('super_admin');
+        $collegeId = $user->college_id;
 
         $pending = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
-            ->where('mother_college_id', $collegeId)
+            ->when(! $isSuperAdmin, fn ($q) => $q->where('mother_college_id', $collegeId))
             ->where('approval_stage', 'dean_review')
             ->orderBy('submitted_at', 'asc')
             ->get();
 
         $endorsed = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
-            ->where('mother_college_id', $collegeId)
+            ->when(! $isSuperAdmin, fn ($q) => $q->where('mother_college_id', $collegeId))
             ->whereIn('approval_stage', ['ovpri_review', 'approved'])
-            ->whereHas('approvals', function ($q) use ($request) {
-                $q->where('approver_id', $request->user()->id)
-                    ->where('stage', 'dean')
+            ->whereHas('approvals', function ($q) use ($request, $isSuperAdmin) {
+                $q->where('stage', 'dean')
                     ->where('action', 'endorsed');
+                if (! $isSuperAdmin) {
+                    $q->where('approver_id', $request->user()->id);
+                }
             })
             ->orderByDesc('updated_at')
             ->get();
 
         $returned = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
-            ->where('mother_college_id', $collegeId)
-            ->where(function ($q) use ($request) {
-                // Dean's own returns/rejects OR OVPRI returns awaiting faculty revision (info only).
-                $q->whereHas('approvals', function ($inner) use ($request) {
-                    $inner->where('approver_id', $request->user()->id)
-                        ->where('stage', 'dean')
+            ->when(! $isSuperAdmin, fn ($q) => $q->where('mother_college_id', $collegeId))
+            ->where(function ($q) use ($request, $isSuperAdmin) {
+                // Dean returns/rejects OR OVPRI returns awaiting faculty revision (info only).
+                $q->whereHas('approvals', function ($inner) use ($request, $isSuperAdmin) {
+                    $inner->where('stage', 'dean')
                         ->whereIn('action', ['returned', 'rejected']);
+                    if (! $isSuperAdmin) {
+                        $inner->where('approver_id', $request->user()->id);
+                    }
                 })->orWhere('approval_stage', 'returned_to_faculty');
             })
             ->whereNotIn('approval_stage', ['dean_review', 'ovpri_review', 'approved'])
@@ -78,14 +84,17 @@ class ApprovalController extends Controller
     public function review(Request $request, Research $research): View
     {
         $this->authorize('view', $research);
-        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+        $this->authorizeCollegeScope($request, $research);
 
         $isActiveDeanQueue = $research->approval_stage === 'dean_review';
         $hasDeanHistory = $research->approvals()
             ->where('approver_id', $request->user()->id)
             ->where('stage', 'dean')
             ->exists();
-        abort_unless($isActiveDeanQueue || $hasDeanHistory, 403);
+        abort_unless(
+            $isActiveDeanQueue || $hasDeanHistory || $request->user()->hasRole('super_admin'),
+            403
+        );
 
         $research->load([
             'motherCollege',
@@ -107,7 +116,7 @@ class ApprovalController extends Controller
     {
         $this->authorize('view', $research);
         abort_unless($research->approval_stage === 'dean_review', 403);
-        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+        $this->authorizeCollegeScope($request, $research);
 
         $validated = $request->validate([
             'remarks' => ['nullable', 'string', 'max:5000'],
@@ -152,7 +161,7 @@ class ApprovalController extends Controller
     {
         $this->authorize('view', $research);
         abort_unless($research->approval_stage === 'dean_review', 403);
-        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+        $this->authorizeCollegeScope($request, $research);
 
         $validated = $request->validate([
             'remarks' => ['required', 'string', 'min:4', 'max:5000'],
@@ -192,7 +201,7 @@ class ApprovalController extends Controller
     {
         $this->authorize('view', $research);
         abort_unless($research->approval_stage === 'dean_review', 403);
-        abort_unless((int) $research->mother_college_id === (int) $request->user()->college_id, 403);
+        $this->authorizeCollegeScope($request, $research);
 
         $validated = $request->validate([
             'remarks' => ['required', 'string', 'min:1', 'max:5000'],
@@ -498,6 +507,25 @@ class ApprovalController extends Controller
                 }
             }
         }
+    }
+
+    /**
+     * Dean / unit head act only on their own college. Super admins are university-wide
+     * and carry no college_id, so they are not college-scoped.
+     */
+    private function authorizeCollegeScope(Request $request, Research $research): void
+    {
+        $user = $request->user();
+
+        if ($user->hasRole('super_admin')) {
+            return;
+        }
+
+        abort_unless(
+            (int) $research->mother_college_id === (int) $user->college_id,
+            403,
+            __('You may only act on research for your college.')
+        );
     }
 
     /**

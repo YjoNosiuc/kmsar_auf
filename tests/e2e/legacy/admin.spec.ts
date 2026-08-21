@@ -66,7 +66,7 @@ test.describe('Admin management', () => {
     await page.locator('#add-email').fill(email);
     await page.locator('#add-password').fill('password');
     await page.locator('#add-password_confirmation').fill('password');
-    await page.locator('#add-role').selectOption('unit_head');
+    await page.locator('#add-role').selectOption('college_dean');
     await page.locator('#add-office').fill('OVPRI');
     await page.getByRole('button', { name: 'Create user' }).click();
     await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });

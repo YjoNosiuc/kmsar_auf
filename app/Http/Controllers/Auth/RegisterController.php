@@ -29,6 +29,7 @@ class RegisterController extends Controller
             'suffix' => ['nullable', 'string', 'max:20'],
             'employee_number' => ['required', 'string', 'max:50', 'unique:users,employee_number'],
             'college_id' => ['required', 'exists:colleges,id'],
+            'user_type' => ['required', 'in:faculty,staff,student,external_affiliate'],
             'email' => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
@@ -44,12 +45,19 @@ class RegisterController extends Controller
                 .' '.strtoupper($validated['last_name']),
             'employee_number' => strtoupper($validated['employee_number']),
             'college_id' => $validated['college_id'],
+            'user_type' => $validated['user_type'],
             'email' => strtolower($validated['email']),
             'password' => $validated['password'],
             'is_active' => true,
         ]);
 
-        $user->assignRole('faculty');
+        $role = match ($validated['user_type']) {
+            'faculty', 'staff' => 'faculty',
+            'student', 'external_affiliate' => 'viewer',
+            default => 'faculty',
+        };
+
+        $user->assignRole($role);
 
         Auth::login($user);
 

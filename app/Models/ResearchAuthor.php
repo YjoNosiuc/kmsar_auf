@@ -200,6 +200,6 @@ class ResearchAuthor extends Model
             return false;
         }
 
-        return $user->can('research.update') || $user->hasRole('co_author');
+        return $user->can('research.update') || $user->hasRole('viewer');
     }
 }

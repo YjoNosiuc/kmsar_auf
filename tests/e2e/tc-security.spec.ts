@@ -151,6 +151,7 @@ test.describe('Security & sad-path — UAT', () => {
       await page.fill('#last_name', 'DUPLICATE');
       await page.fill('#employee_number', `SEC${Date.now()}`.slice(0, 20));
       await page.locator('#college_id').selectOption({ index: 1 });
+      await page.locator('#user_type').selectOption('faculty');
       await page.fill('#email', credentials.faculty_ccs.email);
       await page.fill('#password', 'password123');
       await page.fill('#password_confirmation', 'password123');

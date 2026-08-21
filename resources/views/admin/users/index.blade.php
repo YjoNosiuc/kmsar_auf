@@ -11,14 +11,19 @@
         return match ($roleName) {
             'super_admin' => 'solid-primary',
             'ovpri_admin', 'cdaic_admin' => 'info',
-            'college_dean', 'unit_head' => 'pending',
+            'college_dean' => 'pending',
             'faculty' => 'approved',
-            'co_author' => 'info',
-            'registrar' => 'gold',
             'viewer' => 'draft',
             default => 'draft',
         };
     };
+
+    $userTypeLabels = [
+        'faculty' => __('Faculty'),
+        'staff' => __('Staff'),
+        'student' => __('Student'),
+        'external_affiliate' => __('External Affiliate'),
+    ];
 
     $editUserInitial =
         $errors->any() && old('_form') === 'edit'
@@ -48,6 +53,7 @@
             'role' => $primaryRole?->name ?? '',
             'college_id' => $user->college_id,
             'office' => $user->office,
+            'user_type' => $user->user_type,
             'is_active' => (bool) $user->is_active,
         ];
     })->values()->all();
@@ -244,6 +250,7 @@
                             <th scope="col">{{ __('Employee No.') }}</th>
                             <th scope="col">{{ __('Name') }}</th>
                             <th scope="col">{{ __('Role') }}</th>
+                            <th scope="col">{{ __('User Type') }}</th>
                             <th scope="col">{{ __('College/Office') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
                             <th scope="col" class="kmsar-col-hide-mobile">{{ __('Last login') }}</th>
@@ -287,6 +294,9 @@
                                     @endif
                                 </td>
                                 <td class="px-4 py-3 align-middle text-sm">
+                                    {{ $userTypeLabels[$user->user_type] ?? '—' }}
+                                </td>
+                                <td class="px-4 py-3 align-middle text-sm">
                                     @if ($user->college)
                                         <span class="kmsar-table-cell-title">{{ $user->college->code }}</span>
                                         <span class="kmsar-table-cell-sub block">{{ $user->college->name }}</span>
@@ -320,14 +330,14 @@
                             </tr>
                         @empty
                             <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                <td colspan="7" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
+                                <td colspan="8" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
                                     {{ __('No users found.') }}
                                 </td>
                             </tr>
                         @endforelse
                         @if ($users->isNotEmpty())
                             <tr x-show="visibleCount === 0" x-cloak class="border-b border-slate-100">
-                                <td colspan="7" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
+                                <td colspan="8" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
                                     {{ __('No users match your filters.') }}
                                 </td>
                             </tr>

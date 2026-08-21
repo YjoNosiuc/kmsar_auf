@@ -144,12 +144,12 @@ describe('Admin user management', function () {
                 'password' => '',
                 'password_confirmation' => '',
                 'college_id' => $target->college_id,
-                'role' => 'registrar',
+                'role' => 'faculty',
                 'is_active' => true,
             ])
             ->assertRedirect(route('admin.users.index'));
 
-        expect($target->fresh()->hasRole('registrar'))->toBeTrue();
+        expect($target->fresh()->hasRole('faculty'))->toBeTrue();
     });
 
     it('super_admin can deactivate a user (is_active = false)', function () {
@@ -211,7 +211,7 @@ describe('Admin user management', function () {
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
                 'college_id' => null,
-                'role' => 'co_author',
+                'role' => 'viewer',
                 'is_active' => true,
             ])
             ->assertRedirect(route('admin.users.index'));

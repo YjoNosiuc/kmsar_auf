@@ -16,7 +16,9 @@
         <div class="flex-1 min-w-0">
             <h1 class="kmsar-h1">{{ __('College Dashboard') }}</h1>
             <p class="kmsar-body mt-2">
-                @if ($college)
+                @if (! empty($scopeAllColleges))
+                    {{ __('All Colleges') }}
+                @elseif ($college)
                     {{ $college->name }}
                 @else
                     {{ __('No college assigned to your account.') }}
@@ -25,7 +27,7 @@
         </div>
     </div>
 
-    @if ($college)
+    @if ($college || ! empty($scopeAllColleges))
         <form method="get" action="{{ route('dean.dashboard') }}" class="kmsar-card" style="margin-bottom:16px;padding:16px 20px;">
             <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;">
                 <div style="min-width:200px;">
@@ -66,7 +68,7 @@
         </div>
     </div>
 
-    @if ($college)
+    @if ($college || ! empty($scopeAllColleges))
         {{-- Section 3 — Submitted line chart + faculty table --}}
         <div style="display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px;">
             <div class="kmsar-chart-card">
@@ -268,7 +270,7 @@
 @endsection
 
 @push('scripts')
-    @if ($college)
+    @if ($college || ! empty($scopeAllColleges))
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 const facultySearchEl = document.getElementById('facultySearch');

@@ -33,6 +33,7 @@ class User extends Authenticatable
         'employee_number',
         'college_id',
         'office',
+        'user_type',
         'program_id',
         'is_active',
         'last_login_at',

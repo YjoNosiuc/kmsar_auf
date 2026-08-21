@@ -18,7 +18,9 @@ class DeanController extends Controller
 
     public function dashboard(Request $request): View
     {
-        $collegeId = auth()->user()->college_id;
+        $user = $request->user();
+        $scopeAllColleges = $user->hasRole('super_admin');
+        $collegeId = $scopeAllColleges ? null : $user->college_id;
         $academicYear = $request->filled('academic_year') ? $request->integer('academic_year') : null;
         $academicYearOptions = $this->academicYearOptions();
 
@@ -26,7 +28,7 @@ class DeanController extends Controller
             ? College::query()->find($collegeId)
             : null;
 
-        $base = $this->collegeResearchQuery($college, $academicYear);
+        $base = $this->collegeResearchQuery($college, $academicYear, $scopeAllColleges);
 
         $recentResearch = (clone $base)
             ->with(['primaryAuthor'])
@@ -36,8 +38,8 @@ class DeanController extends Controller
 
         $cacheKey = 'dean_stats_'.auth()->id().'_'.($academicYear ?? 'all').'_'.now()->format('Y-m-d');
 
-        $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $academicYear) {
-            $base = $this->collegeResearchQuery($college, $academicYear);
+        $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $academicYear, $scopeAllColleges) {
+            $base = $this->collegeResearchQuery($college, $academicYear, $scopeAllColleges);
 
             $totalResearch = (clone $base)->count();
 
@@ -135,15 +137,18 @@ class DeanController extends Controller
             'facultyStats' => $cached['facultyStats'],
             'academicYear' => $academicYear,
             'academicYearOptions' => $academicYearOptions,
+            'scopeAllColleges' => $scopeAllColleges,
         ]);
     }
 
-    private function collegeResearchQuery(?College $college, ?int $academicYear = null): Builder
+    private function collegeResearchQuery(?College $college, ?int $academicYear = null, bool $allColleges = false): Builder
     {
         $q = Research::query()
             ->whereNotIn('approval_stage', ['draft']);
 
-        if ($college) {
+        if ($allColleges) {
+            // Super admin: university-wide, no college filter.
+        } elseif ($college) {
             $q->where('mother_college_id', $college->id);
         } else {
             $q->whereRaw('1 = 0');

@@ -58,7 +58,7 @@ function documentTestFaculty(College $college): User
 function documentTestCoAuthor(College $college): User
 {
     $user = User::factory()->create(['college_id' => $college->id, 'is_active' => true]);
-    $user->assignRole('co_author');
+    $user->assignRole('viewer');
 
     return $user;
 }

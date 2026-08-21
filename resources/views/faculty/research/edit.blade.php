@@ -242,7 +242,7 @@
                     'presented_internal' => __('Presented (internal)'),
                     'presented_external' => __('Presented (external)'),
                     'published_non_indexed' => __('Published (non-indexed)'),
-                    'published_scopus' => __('Published (Scopus / ISI)'),
+                    'published_scopus' => __('Published (Scopus/WoS Indexed)'),
                     'patent_submitted' => __('Patent submitted'),
                     'patent_granted' => __('Patent granted'),
                 ]"

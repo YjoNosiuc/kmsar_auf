@@ -68,7 +68,7 @@
             <div class="kmsar-stat-card-value kmsar-stat-card-value--approved">{{ number_format($publishedCount) }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-gold">
-            <div class="kmsar-stat-card-label">{{ __('Scopus / indexed') }}</div>
+            <div class="kmsar-stat-card-label">{{ __('Scopus/WoS Indexed') }}</div>
             <div class="kmsar-stat-card-value" style="color: var(--color-gold);">{{ number_format($scopusCount) }}</div>
         </div>
     </div>
@@ -78,13 +78,13 @@
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
-                    <h2 class="kmsar-chart-title">{{ __('Research by college') }}</h2>
+                    <h2 class="kmsar-chart-title">{{ __('Research by College/Office') }}</h2>
                     <p class="kmsar-chart-subtitle">{{ __('Total registered research by mother college') }}</p>
                 </div>
             </div>
             <div class="kmsar-chart-body">
                 <div style="position:relative;height:280px;width:100%;">
-                    <canvas id="kmsarOvpriByCollege" aria-label="{{ __('Research by college') }}"></canvas>
+                    <canvas id="kmsarOvpriByCollege" aria-label="{{ __('Research by College/Office') }}"></canvas>
                 </div>
             </div>
         </div>
@@ -103,33 +103,18 @@
         </div>
     </div>
 
-    {{-- Workflow / approval status --}}
-    <div class="kmsar-chart-card" style="margin-bottom:16px;">
-        <div class="kmsar-chart-header">
-            <div>
-                <h2 class="kmsar-chart-title">{{ __('Research by approval stage') }}</h2>
-                <p class="kmsar-chart-subtitle">{{ __('Workflow status across dean review, OVPRI review, approved, and rejected') }}</p>
-            </div>
-        </div>
-        <div class="kmsar-chart-body">
-            <div style="position:relative;height:220px;width:100%;">
-                <canvas id="kmsarOvpriWorkflow" aria-label="{{ __('Research by approval stage') }}"></canvas>
-            </div>
-        </div>
-    </div>
-
-    {{-- Section 4 — Scopus, Presented, Classification --}}
+    {{-- Section 4 — Scopus/WoS, Presented, Classification --}}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
-                    <h2 class="kmsar-chart-title">{{ __('Scopus indexed per college') }}</h2>
-                    <p class="kmsar-chart-subtitle">{{ __('Records flagged as Scopus indexed') }}</p>
+                    <h2 class="kmsar-chart-title">{{ __('Scopus/WoS Indexed by College/Office') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Records flagged as Scopus/WoS Indexed') }}</p>
                 </div>
             </div>
             <div class="kmsar-chart-body">
                 <div style="position:relative;height:200px;width:100%;">
-                    <canvas id="kmsarOvpriScopus" aria-label="{{ __('Scopus indexed per college') }}"></canvas>
+                    <canvas id="kmsarOvpriScopus" aria-label="{{ __('Scopus/WoS Indexed by College/Office') }}"></canvas>
                 </div>
             </div>
         </div>
@@ -168,6 +153,21 @@
                         @endforeach
                     </div>
                 @endif
+            </div>
+        </div>
+    </div>
+
+    {{-- Workflow / approval status --}}
+    <div class="kmsar-chart-card" style="margin-bottom:16px;">
+        <div class="kmsar-chart-header">
+            <div>
+                    <h2 class="kmsar-chart-title">{{ __('Research by Approval Stage') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Workflow status across dean review, OVPRI review, approved, and rejected') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div style="position:relative;height:220px;width:100%;">
+                <canvas id="kmsarOvpriWorkflow" aria-label="{{ __('Research by Approval Stage') }}"></canvas>
             </div>
         </div>
     </div>
@@ -375,7 +375,7 @@
                     data: {
                         labels: allCollegeRows.map((row) => row.label),
                         datasets: [{
-                            label: @json(__('Scopus indexed')),
+                            label: @json(__('Scopus/WoS Indexed')),
                             data: allScopusRows.map((row) => row.count),
                             backgroundColor: gold,
                             borderColor: gold,

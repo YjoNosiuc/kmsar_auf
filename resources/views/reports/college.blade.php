@@ -40,7 +40,7 @@
             'presented_internal' => __('Presented (internal)'),
             'presented_external' => __('Presented (external)'),
             'published_non_indexed' => __('Published (non-indexed)'),
-            'published_scopus' => __('Published (Scopus / ISI)'),
+            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
             'patent_submitted' => __('Patent submitted'),
             'patent_granted' => __('Patent granted'),
         ];
@@ -55,8 +55,8 @@
         ];
         $approvalStageOpts = [
             'draft' => __('Draft'),
-            'dean_review' => __('Dean review'),
-            'ovpri_review' => __('OVPRI review'),
+            'dean_review' => __('Dean Review'),
+            'ovpri_review' => __('OVPRI Review'),
             'approved' => __('Approved'),
             'rejected' => __('Rejected'),
         ];
@@ -132,7 +132,7 @@
                         <th scope="col">{{ __('Title') }}</th>
                         <th scope="col">{{ __('Primary author') }}</th>
                         <th scope="col">{{ __('Research Progress') }}</th>
-                        <th scope="col">{{ __('Approval') }}</th>
+                        <th scope="col">{{ __('Approval Status') }}</th>
                         <th scope="col">{{ __('Created') }}</th>
                     </tr>
                 </thead>

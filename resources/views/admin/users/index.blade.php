@@ -215,8 +215,8 @@
                 <option value="{{ $slug }}">{{ $label }}</option>
             @endforeach
         </select>
-        <select x-model="filterCollege" aria-label="{{ __('Filter by college') }}" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;background:#fff;">
-            <option value="">{{ __('All Colleges') }}</option>
+        <select x-model="filterCollege" aria-label="{{ __('Filter by college/office') }}" style="flex:1;min-width:160px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;background:#fff;">
+            <option value="">{{ __('All Colleges/Offices') }}</option>
             @foreach ($colleges as $college)
                 <option value="{{ (string) $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
             @endforeach
@@ -244,7 +244,7 @@
                             <th scope="col">{{ __('Employee No.') }}</th>
                             <th scope="col">{{ __('Name') }}</th>
                             <th scope="col">{{ __('Role') }}</th>
-                            <th scope="col">{{ __('College / Office') }}</th>
+                            <th scope="col">{{ __('College/Office') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
                             <th scope="col" class="kmsar-col-hide-mobile">{{ __('Last login') }}</th>
                             <th scope="col"><span class="sr-only">{{ __('Actions') }}</span></th>
@@ -471,9 +471,9 @@
 
                     <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="add-college_id">{{ __('College') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
+                            <label class="kmsar-form-label" for="add-college_id">{{ __('College/Office') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
                             <select id="add-college_id" name="college_id" class="kmsar-select">
-                                <option value="">{{ __('— Select college —') }}</option>
+                                <option value="">{{ __('— Select college/office —') }}</option>
                                 @foreach ($colleges as $college)
                                     <option value="{{ $college->id }}" @selected((string) old('college_id') === (string) $college->id)>{{ $college->code }} — {{ $college->name }}</option>
                                 @endforeach
@@ -498,7 +498,7 @@
                     </div>
 
                     <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="add-office">{{ __('Office / department') }}</label>
+                        <label class="kmsar-form-label" for="add-office">{{ __('Program/Dept') }}</label>
                         <input
                             id="add-office"
                             type="text"
@@ -680,9 +680,9 @@
 
                     <div class="kmsar-form-row-3">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-college_id">{{ __('College') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
+                            <label class="kmsar-form-label" for="edit-college_id">{{ __('College/Office') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
                             <select id="edit-college_id" name="college_id" class="kmsar-select" x-model="editUser.college_id">
-                                <option value="">{{ __('— Select college —') }}</option>
+                                <option value="">{{ __('— Select college/office —') }}</option>
                                 @foreach ($colleges as $college)
                                     <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
                                 @endforeach
@@ -693,7 +693,7 @@
                         </div>
 
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-office">{{ __('Office / department') }}</label>
+                            <label class="kmsar-form-label" for="edit-office">{{ __('Program/Dept') }}</label>
                             <input
                                 id="edit-office"
                                 type="text"

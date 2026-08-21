@@ -24,7 +24,7 @@
             'presented_internal' => __('Presented (internal)'),
             'presented_external' => __('Presented (external)'),
             'published_non_indexed' => __('Published (non-indexed)'),
-            'published_scopus' => __('Published (Scopus / ISI)'),
+            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
             'patent_submitted' => __('Patent submitted'),
             'patent_granted' => __('Patent granted'),
         ];
@@ -96,7 +96,7 @@
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;align-items:flex-end;">
                 <div>
                     <label for="college" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">
-                        {{ __('College') }}
+                        {{ __('College/Office') }}
                     </label>
                     <select id="college" name="college" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
                         <option value="">{{ __('All') }}</option>
@@ -138,7 +138,7 @@
             :headers="[
                 'title' => __('Title'),
                 'primary_author' => __('Primary Author'),
-                'college' => __('College'),
+                'college' => __('College/Office'),
                 'classification' => __('Classification'),
                 'approval_stage' => __('Approval Stage'),
                 'date_submitted' => __('Date Submitted'),

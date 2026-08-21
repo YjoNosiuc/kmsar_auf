@@ -113,7 +113,7 @@
                 </div>
             </div>
             <div>
-                <div class="kmsar-label">{{ __('Scopus indexed') }}</div>
+                <div class="kmsar-label">{{ __('Scopus/WoS Indexed') }}</div>
                 <div style="margin-top:0.35rem;">
                     @if ($research->is_scopus_indexed)
                         <span class="kmsar-badge kmsar-badge--approved kmsar-badge--square">{{ __('Yes') }}</span>

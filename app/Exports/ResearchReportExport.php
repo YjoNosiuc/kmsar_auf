@@ -53,7 +53,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
 
         return [
             __("Author's Name"),
-            __('College'),
+            __('College/Office'),
             __('Other College/Unit Affiliations'),
             __('Co-Authors'),
             __('Title of Research'),

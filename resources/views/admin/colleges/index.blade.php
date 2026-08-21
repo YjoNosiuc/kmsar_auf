@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', __('Colleges & programs — ') . config('app.name', 'KMSAR'))
+@section('title', __('Colleges/Offices & programs — ') . config('app.name', 'KMSAR'))
 
 @section('navbar-context')
     {{ __('Admin') }}
@@ -121,9 +121,9 @@
                     {{ __('Admin') }}
                 @endif
                 <span style="margin:0 4px;">/</span>
-                {{ __('Colleges & programs') }}
+                {{ __('Colleges/Offices & programs') }}
             </nav>
-            <h1 style="font-size:22px;font-weight:700;color:#1E3A8A;margin:0 0 4px;">{{ __('Colleges & programs') }}</h1>
+            <h1 style="font-size:22px;font-weight:700;color:#1E3A8A;margin:0 0 4px;">{{ __('Colleges/Offices & programs') }}</h1>
             <p style="font-size:13px;color:#475569;margin:0;">{{ __('Manage AUF colleges and their academic programs.') }}</p>
         </div>
     </div>
@@ -136,11 +136,11 @@
 
     <div class="kmsar-stats-grid kmsar-animate-in" style="margin-bottom: var(--space-6);" role="region" aria-label="{{ __('Summary') }}">
         <div class="kmsar-stat-card kmsar-card--accent-primary">
-            <div class="kmsar-stat-card-label">{{ __('Colleges') }}</div>
+            <div class="kmsar-stat-card-label">{{ __('Colleges/Offices') }}</div>
             <div class="kmsar-stat-card-value">{{ number_format($colleges->count()) }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-gold">
-            <div class="kmsar-stat-card-label">{{ __('Programs') }}</div>
+            <div class="kmsar-stat-card-label">{{ __('Programs/Depts') }}</div>
             <div class="kmsar-stat-card-value" style="color: var(--color-gold);">{{ number_format($programs->count()) }}</div>
         </div>
     </div>
@@ -148,16 +148,16 @@
     <div id="section-colleges" class="kmsar-card kmsar-card--accent-primary" style="margin-bottom: var(--space-6);">
         <div class="kmsar-card-header">
             <div>
-                <h3 class="kmsar-card-title">Colleges</h3>
+                <h3 class="kmsar-card-title">Colleges/Offices</h3>
                 <span class="kmsar-hint">
-                    {{ $colleges->count() }} colleges
+                    {{ $colleges->count() }} colleges/offices
                 </span>
             </div>
             <div class="kmsar-page-header-actions">
                 <button type="button"
                         class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
                         @@click="showAddCollege = true">
-                    + Add College
+                    + Add College/Office
                 </button>
             </div>
         </div>
@@ -166,9 +166,9 @@
                 <input
                     type="text"
                     x-model="collegeSearch"
-                    placeholder="{{ __('Search by college name or code...') }}"
+                    placeholder="{{ __('Search by college/office name or code...') }}"
                     autocomplete="off"
-                    aria-label="{{ __('Search colleges') }}"
+                    aria-label="{{ __('Search colleges/offices') }}"
                     style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
                 >
             </div>
@@ -177,8 +177,8 @@
                     <thead>
                         <tr>
                             <th scope="col">{{ __('Code') }}</th>
-                            <th scope="col">{{ __('College name') }}</th>
-                            <th scope="col">{{ __('Programs') }}</th>
+                            <th scope="col">{{ __('College/Office name') }}</th>
+                            <th scope="col">{{ __('Programs/Depts') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
                             <th scope="col"><span class="sr-only">{{ __('Actions') }}</span></th>
                         </tr>
@@ -255,16 +255,16 @@
     <div id="section-programs" class="kmsar-card kmsar-card--accent-primary">
         <div class="kmsar-card-header">
             <div>
-                <h3 class="kmsar-card-title">Programs</h3>
+                <h3 class="kmsar-card-title">Programs/Depts</h3>
                 <span class="kmsar-hint">
-                    {{ $programs->count() }} programs
+                    {{ $programs->count() }} programs/depts
                 </span>
             </div>
             <div class="kmsar-page-header-actions">
                 <button type="button"
                         class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
                         @@click="showAddProgram = true">
-                    + Add Program
+                    + Add Program/Dept
                 </button>
             </div>
         </div>
@@ -274,9 +274,9 @@
                     type="text"
                     x-model="programSearch"
                     x-on:input="programPage = 1"
-                    placeholder="{{ __('Search by program name or code...') }}"
+                    placeholder="{{ __('Search by program/dept name or code...') }}"
                     autocomplete="off"
-                    aria-label="{{ __('Search programs') }}"
+                    aria-label="{{ __('Search programs/depts') }}"
                     style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
                 >
             </div>
@@ -284,9 +284,9 @@
                 <table class="kmsar-table">
                     <thead>
                         <tr>
-                            <th scope="col">{{ __('Code') }}</th>
-                            <th scope="col">{{ __('Program name') }}</th>
-                            <th scope="col">{{ __('College') }}</th>
+                            <th scope="col">{{ __('Program/Dept Code') }}</th>
+                            <th scope="col">{{ __('Program/Dept') }}</th>
+                            <th scope="col">{{ __('College/Office') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
                             <th scope="col"><span class="sr-only">{{ __('Actions') }}</span></th>
                         </tr>
@@ -401,7 +401,7 @@
     >
         <div class="kmsar-modal kmsar-modal--lg" style="max-width:56rem;" x-on:click.stop>
             <div class="kmsar-modal-header">
-                <h2 id="modal-edit-college-title" class="kmsar-modal-title">{{ __('Edit college') }}</h2>
+                <h2 id="modal-edit-college-title" class="kmsar-modal-title">{{ __('Edit college/office') }}</h2>
                 <button type="button" class="kmsar-modal-close" aria-label="{{ __('Close') }}" x-on:click="showEditCollege = false">&times;</button>
             </div>
             <form
@@ -430,7 +430,7 @@
                 <div style="display:flex;flex-direction:column;gap:16px;">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-college-name">{{ __('College name') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
+                            <label class="kmsar-form-label" for="edit-college-name">{{ __('College/Office name') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
                             <input id="edit-college-name" type="text" name="name" class="kmsar-input @error('name') kmsar-input--error @enderror" required maxlength="150" autocomplete="organization" x-model="editCollege.name" style="text-transform: uppercase">
                             @error('name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
@@ -454,7 +454,7 @@
                             </div>
                             <label class="kmsar-switch">
                                 <input type="hidden" name="is_active" value="0">
-                                <input type="checkbox" name="is_active" value="1" class="sr-only-check" x-bind:checked="editCollege.is_active" x-on:change="editCollege.is_active = $event.target.checked" aria-label="{{ __('College active') }}">
+                                <input type="checkbox" name="is_active" value="1" class="sr-only-check" x-bind:checked="editCollege.is_active" x-on:change="editCollege.is_active = $event.target.checked" aria-label="{{ __('College/Office active') }}">
                                 <span class="kmsar-switch-track" aria-hidden="true">
                                     <span class="kmsar-switch-thumb"></span>
                                 </span>
@@ -483,7 +483,7 @@
     >
         <div class="kmsar-modal kmsar-modal--lg" style="max-width:56rem;" x-on:click.stop>
             <div class="kmsar-modal-header">
-                <h2 id="modal-edit-program-title" class="kmsar-modal-title">{{ __('Edit program') }}</h2>
+                <h2 id="modal-edit-program-title" class="kmsar-modal-title">{{ __('Edit program/dept') }}</h2>
                 <button type="button" class="kmsar-modal-close" aria-label="{{ __('Close') }}" x-on:click="showEditProgram = false">&times;</button>
             </div>
             <form
@@ -512,14 +512,14 @@
                 <div style="display:flex;flex-direction:column;gap:16px;">
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-program-name">{{ __('Program name') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
+                            <label class="kmsar-form-label" for="edit-program-name">{{ __('Program/Dept') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
                             <input id="edit-program-name" type="text" name="name" class="kmsar-input @error('name') kmsar-input--error @enderror" required maxlength="200" autocomplete="off" x-model="editProgram.name" style="text-transform: uppercase">
                             @error('name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-program-code">{{ __('Code') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
+                            <label class="kmsar-form-label" for="edit-program-code">{{ __('Program/Dept Code') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
                             <input id="edit-program-code" type="text" name="code" class="kmsar-input @error('code') kmsar-input--error @enderror" required maxlength="30" autocomplete="off" x-model="editProgram.code" style="text-transform: uppercase">
                             @error('code')
                                 <p class="kmsar-form-error">{{ $message }}</p>
@@ -528,9 +528,9 @@
                     </div>
 
                     <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="edit-program-college_id">{{ __('College') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
+                        <label class="kmsar-form-label" for="edit-program-college_id">{{ __('College/Office') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
                         <select id="edit-program-college_id" name="college_id" class="kmsar-select @error('college_id') kmsar-input--error @enderror" required x-model="editProgram.college_id">
-                            <option value="">{{ __('— Select college —') }}</option>
+                            <option value="">{{ __('— Select college/office —') }}</option>
                             @foreach ($colleges as $c)
                                 <option value="{{ $c->id }}">{{ $c->code }} — {{ $c->name }}</option>
                             @endforeach
@@ -576,7 +576,7 @@
         >
             <div class="kmsar-modal kmsar-modal--sm">
                 <div class="kmsar-modal-header">
-                    <h3 class="kmsar-modal-title">{{ __('Add College') }}</h3>
+                    <h3 class="kmsar-modal-title">{{ __('Add College/Office') }}</h3>
                     <button type="button" class="kmsar-modal-close" x-on:click="showAddCollege = false">&times;</button>
                 </div>
                 <form method="POST" action="{{ route('admin.colleges.store') }}">
@@ -584,7 +584,7 @@
                     <div class="kmsar-modal-body">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label">
-                                {{ __('College Code') }}
+                                {{ __('College/Office Code') }}
                                 <span class="kmsar-form-required">*</span>
                             </label>
                             <input
@@ -598,7 +598,7 @@
                         </div>
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label">
-                                {{ __('College Name') }}
+                                {{ __('College/Office Name') }}
                                 <span class="kmsar-form-required">*</span>
                             </label>
                             <input
@@ -615,7 +615,7 @@
                             {{ __('Cancel') }}
                         </button>
                         <button type="submit" class="kmsar-btn kmsar-btn--primary">
-                            {{ __('Add College') }}
+                            {{ __('Add College/Office') }}
                         </button>
                     </div>
                 </form>
@@ -633,7 +633,7 @@
         >
             <div class="kmsar-modal kmsar-modal--sm">
                 <div class="kmsar-modal-header">
-                    <h3 class="kmsar-modal-title">{{ __('Add Program') }}</h3>
+                    <h3 class="kmsar-modal-title">{{ __('Add Program/Dept') }}</h3>
                     <button type="button" class="kmsar-modal-close" x-on:click="showAddProgram = false">&times;</button>
                 </div>
                 <form method="POST" action="{{ route('admin.programs.store') }}">
@@ -641,11 +641,11 @@
                     <div class="kmsar-modal-body">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label">
-                                {{ __('College') }}
+                                {{ __('College/Office') }}
                                 <span class="kmsar-form-required">*</span>
                             </label>
                             <select name="college_id" class="kmsar-select" required>
-                                <option value="">{{ __('— Select college —') }}</option>
+                                <option value="">{{ __('— Select college/office —') }}</option>
                                 @foreach ($colleges as $college)
                                     <option value="{{ $college->id }}">
                                         {{ $college->code }} — {{ $college->name }}
@@ -655,7 +655,7 @@
                         </div>
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label">
-                                {{ __('Program Code') }}
+                                {{ __('Program/Dept Code') }}
                                 <span class="kmsar-form-required">*</span>
                             </label>
                             <input
@@ -669,7 +669,7 @@
                         </div>
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label">
-                                {{ __('Program Name') }}
+                                {{ __('Program/Dept') }}
                                 <span class="kmsar-form-required">*</span>
                             </label>
                             <input
@@ -686,7 +686,7 @@
                             {{ __('Cancel') }}
                         </button>
                         <button type="submit" class="kmsar-btn kmsar-btn--primary">
-                            {{ __('Add Program') }}
+                            {{ __('Add Program/Dept') }}
                         </button>
                     </div>
                 </form>

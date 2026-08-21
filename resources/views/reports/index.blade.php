@@ -32,8 +32,8 @@
         ];
         $approvalStageKeys = [
             'draft' => __('Draft'),
-            'dean_review' => __('Dean review'),
-            'ovpri_review' => __('OVPRI review'),
+            'dean_review' => __('Dean Review'),
+            'ovpri_review' => __('OVPRI Review'),
             'approved' => __('Approved'),
             'rejected' => __('Rejected'),
         ];
@@ -83,9 +83,9 @@
             <div class="kmsar-reports-filter-grid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:flex-end;">
                 @if ($reportScope === 'ovpri')
                     <div>
-                        <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="college_id">{{ __('College') }}</label>
+                        <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="college_id">{{ __('College/Office') }}</label>
                         <select id="college_id" name="college_id" class="kmsar-select" style="width:100%;">
-                            <option value="">{{ __('All Colleges') }}</option>
+                            <option value="">{{ __('All Colleges/Offices') }}</option>
                             @foreach ($colleges as $c)
                                 <option value="{{ $c->id }}" @selected(($filters['college_id'] ?? '') == (string) $c->id)>{{ $c->name }}</option>
                             @endforeach
@@ -199,11 +199,11 @@
                 <div style="font-size:28px;font-weight:700;color:#1E3A8A;">{{ number_format($stats['matching']) }}</div>
             </div>
             <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px;border-top:3px solid #D4AF37;">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-bottom:4px;">{{ __('Scopus indexed') }}</div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-bottom:4px;">{{ __('Scopus/WoS Indexed') }}</div>
                 <div style="font-size:28px;font-weight:700;color:#D4AF37;">{{ number_format($stats['scopus']) }}</div>
             </div>
             <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px;border-top:3px solid #059669;">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-bottom:4px;">{{ __('Colleges represented') }}</div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-bottom:4px;">{{ __('College/Office Represented') }}</div>
                 <div style="font-size:28px;font-weight:700;color:#059669;">{{ number_format($stats['colleges_or_faculty']) }}</div>
             </div>
         @else
@@ -264,7 +264,7 @@
                         @endif
                         <th scope="col">{{ __("Author's Name") }}</th>
                         @if ($reportScope === 'ovpri')
-                            <th scope="col">{{ __('College') }}</th>
+                            <th scope="col">{{ __('College/Office') }}</th>
                         @endif
                         <th scope="col">{{ __('Co-Authors') }}</th>
                         @if ($reportScope === 'ovpri')
@@ -275,7 +275,7 @@
                             <th scope="col">{{ __('Title of Research') }}</th>
                             <th scope="col">{{ __('Research Progress') }}</th>
                         @endif
-                        <th scope="col">{{ __('Approval') }}</th>
+                        <th scope="col">{{ __('Approval Status') }}</th>
                     </tr>
                 </thead>
                 <tbody>

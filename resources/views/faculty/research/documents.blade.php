@@ -51,7 +51,7 @@
                 ['status' => 'presented_internal', 'status_label' => __('Presented inside AUF'), 'documents' => __('Certificate + Conference Program')],
                 ['status' => 'presented_external', 'status_label' => __('Presented outside AUF'), 'documents' => __('Certificate + Conference Program')],
                 ['status' => 'published_non_indexed', 'status_label' => __('Published, not Scopus'), 'documents' => __('Full Published Article')],
-                ['status' => 'published_scopus', 'status_label' => __('Scopus/ISI indexed'), 'documents' => __('Published Article')],
+                ['status' => 'published_scopus', 'status_label' => __('Scopus/WoS Indexed'), 'documents' => __('Published Article')],
                 ['status' => 'patent_submitted', 'status_label' => __('Submitted to IPOPHL'), 'documents' => __('Acknowledgement Receipt')],
                 ['status' => 'patent_granted', 'status_label' => __('Patent granted'), 'documents' => __('Patent Certificate')],
             ];
@@ -159,7 +159,7 @@
                                     {{ __('Your work is published (non-indexed). Upload the full published article.') }}
                                     @break
                                 @case('published_scopus')
-                                    {{ __('Your work is published in a Scopus/ISI venue. Upload the published article.') }}
+                                    {{ __('Your work is published in a Scopus/WoS Indexed venue. Upload the published article.') }}
                                     @break
                                 @case('patent_submitted')
                                     {{ __('Your patent is submitted to IPOPHL. Upload the acknowledgement receipt.') }}

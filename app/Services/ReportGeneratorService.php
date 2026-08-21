@@ -129,7 +129,7 @@ class ReportGeneratorService
     public function statusLabel(string $status): string
     {
         return match ($status) {
-            'published_scopus' => 'Scopus / ISI Indexed',
+            'published_scopus' => 'Scopus/WoS Indexed',
             'published_non_indexed' => 'Published (Non-Indexed)',
             'presented_external' => 'Conference Presentation — External',
             'presented_internal' => 'Conference Presentation — Internal',

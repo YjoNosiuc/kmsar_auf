@@ -46,7 +46,7 @@
                 <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700; width: 88px;">{{ __('Reference No.') }}</th>
                 @if ($isOvpri)
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __("Author's Name") }}</th>
-                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('College') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('College/Office') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Other Affiliations') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Co-Authors') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Title of Research') }}</th>

@@ -61,7 +61,7 @@
             <div class="kmsar-stat-card-value kmsar-stat-card-value--approved">{{ number_format($publishedCount) }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-gold">
-            <div class="kmsar-stat-card-label">{{ __('Scopus Indexed') }}</div>
+            <div class="kmsar-stat-card-label">{{ __('Scopus/WoS Indexed') }}</div>
             <div class="kmsar-stat-card-value" style="color: var(--color-gold);">{{ number_format($scopusIndexedCount) }}</div>
         </div>
     </div>

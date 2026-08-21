@@ -182,9 +182,9 @@
         <form method="get" action="{{ route('ovpri.queue') }}" id="queueCollegeFilter" style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin-bottom:20px;">
             <input type="hidden" name="tab" id="queueActiveTab" value="{{ $activeTab }}">
             <div style="min-width:220px;flex:1;">
-                <label for="college_id" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('College') }}</label>
+                <label for="college_id" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('College/Office') }}</label>
                 <select id="college_id" name="college_id" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
-                    <option value="">{{ __('All colleges') }}</option>
+                    <option value="">{{ __('All Colleges/Offices') }}</option>
                     @foreach ($colleges as $college)
                         <option value="{{ $college->id }}" @selected($selectedCollege === $college->id)>{{ $college->code }} — {{ $college->name }}</option>
                     @endforeach
@@ -242,7 +242,7 @@
                             <div class="queue-card-title">{{ str($research->title)->limit(90) }}</div>
                             <div class="queue-card-meta">
                                 <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('College:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
+                                <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('Submitted:') }}</span> {{ $research->created_at->format('M d, Y') }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('Classification:') }}</span> {{ ucwords(str_replace('_', ' ', $research->research_classification)) }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
@@ -274,7 +274,7 @@
                             <div class="queue-card-title">{{ str($research->title)->limit(90) }}</div>
                             <div class="queue-card-meta">
                                 <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('College:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
+                                <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
                                 <span style="color:#059669;font-weight:600;">✓ {{ __('Approved') }}</span>
                             </div>
@@ -304,7 +304,7 @@
                             <div class="queue-card-title">{{ str($research->title)->limit(90) }}</div>
                             <div class="queue-card-meta">
                                 <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('College:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
+                                <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
                                 @if ($research->approval_stage === 'rejected')
                                     <span style="color:#DC2626;font-weight:600;">{{ __('Rejected') }}</span>

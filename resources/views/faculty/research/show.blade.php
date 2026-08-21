@@ -538,7 +538,7 @@
                                         <option value="presented_internal" @selected($research->status === 'presented_internal')>{{ __('Presented Internally') }}</option>
                                         <option value="presented_external" @selected($research->status === 'presented_external')>{{ __('Presented Externally') }}</option>
                                         <option value="published_non_indexed" @selected($research->status === 'published_non_indexed')>{{ __('Published (Non-indexed)') }}</option>
-                                        <option value="published_scopus" @selected($research->status === 'published_scopus')>{{ __('Published (Scopus / ISI)') }}</option>
+                                        <option value="published_scopus" @selected($research->status === 'published_scopus')>{{ __('Published (Scopus/WoS Indexed)') }}</option>
                                         <option value="patent_submitted" @selected($research->status === 'patent_submitted')>{{ __('Patent Submitted') }}</option>
                                         <option value="patent_granted" @selected($research->status === 'patent_granted')>{{ __('Patent Granted') }}</option>
                                     </select>

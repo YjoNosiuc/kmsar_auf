@@ -44,6 +44,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
             return [
                 __('Faculty'),
                 __("Author's Name"),
+                __('Program/Dept'),
                 __('Co-Authors'),
                 __('Registration Type'),
                 __('Title of Research'),
@@ -54,6 +55,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
         return [
             __("Author's Name"),
             __('College/Office'),
+            __('Program/Dept'),
             __('Other College/Unit Affiliations'),
             __('Co-Authors'),
             __('Title of Research'),
@@ -79,6 +81,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
             return [
                 $facultyColumn,
                 $authorName,
+                $r->primaryAuthor?->program?->code ?? '—',
                 $this->service->coAuthorsCommaSeparated($r),
                 $this->service->registrationTypeLabel($r->registration_type),
                 $r->title,
@@ -93,6 +96,7 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
         return [
             $authorName,
             $secondColumn,
+            $r->primaryAuthor?->program?->code ?? '—',
             $this->service->otherCollegeAffiliations($r),
             $this->service->coAuthorsLine($r),
             $r->title,

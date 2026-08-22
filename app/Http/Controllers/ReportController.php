@@ -389,7 +389,8 @@ class ReportController extends Controller
     protected function reportQuery(array $filters, bool $collegeScoped, ?int $scopedCollegeId): Builder
     {
         $query = Research::query()->with([
-            'primaryAuthor',
+            'primaryAuthor.college',
+            'primaryAuthor.program',
             'motherCollege',
             'researchAuthors',
         ]);

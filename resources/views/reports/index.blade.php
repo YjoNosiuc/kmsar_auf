@@ -255,6 +255,7 @@
                         @if ($reportScope === 'ovpri')
                             <th scope="col">{{ __('College/Office') }}</th>
                         @endif
+                        <th scope="col">{{ __('Program/Dept') }}</th>
                         <th scope="col">{{ __('Co-Authors') }}</th>
                         @if ($reportScope === 'ovpri')
                             <th scope="col">{{ __('Title') }}</th>
@@ -277,6 +278,7 @@
                             @if ($reportScope === 'ovpri')
                                 <td>{{ $row->motherCollege ? trim(($row->motherCollege->code ?? '').' — '.($row->motherCollege->name ?? '')) : '—' }}</td>
                             @endif
+                            <td>{{ $row->primaryAuthor?->program?->code ?? '—' }}</td>
                             <td class="kmsar-table-cell-sub">{{ $reportScope === 'college' ? $reportGenerator->coAuthorsCommaSeparated($row) : $reportGenerator->coAuthorsLine($row) }}</td>
                             @if ($reportScope === 'ovpri')
                                 <td>{{ str($row->title)->limit(60) }}</td>
@@ -296,7 +298,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $reportScope === 'ovpri' ? 8 : 5 }}" class="kmsar-body" style="text-align:center;padding:var(--space-6);">{{ __('No records to preview.') }}</td>
+                            <td colspan="{{ $reportScope === 'ovpri' ? 9 : 6 }}" class="kmsar-body" style="text-align:center;padding:var(--space-6);">{{ __('No records to preview.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

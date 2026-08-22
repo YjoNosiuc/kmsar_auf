@@ -129,6 +129,7 @@
                         <th scope="col">{{ __('Reference') }}</th>
                         <th scope="col">{{ __('Title') }}</th>
                         <th scope="col">{{ __('Primary author') }}</th>
+                        <th scope="col">{{ __('Program/Dept') }}</th>
                         <th scope="col">{{ __('Research Progress') }}</th>
                         <th scope="col">{{ __('Approval Status') }}</th>
                         <th scope="col">{{ __('Created') }}</th>
@@ -140,6 +141,7 @@
                             <td class="font-medium">{{ $row->reference_number }}</td>
                             <td class="max-w-xs">{{ str($row->title)->limit(64) }}</td>
                             <td>{{ $row->primaryAuthor?->name ?? '—' }}</td>
+                            <td>{{ $row->primaryAuthor?->program?->code ?? '—' }}</td>
                             <td class="kmsar-table-cell-sub">{{ $reportGenerator->statusLabel($row->status) }}</td>
                             <td>
                                 @if ($row->approval_stage === 'rejected')
@@ -152,7 +154,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="text-center kmsar-body" style="padding: var(--space-6);">{{ __('No records match the current filters.') }}</td>
+                            <td colspan="7" class="text-center kmsar-body" style="padding: var(--space-6);">{{ __('No records match the current filters.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

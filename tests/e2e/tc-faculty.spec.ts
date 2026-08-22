@@ -436,7 +436,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.goto(`/research/${researchId}`);
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
     await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(/\/research\/\d+\/edit/);
+    await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`));
   });
 
   test('TC-028b: after OVPRI return (returned_to_faculty) Revise button appears with Returned by OVPRI badge', async ({
@@ -461,7 +461,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await expect(page.getByRole('button', { name: 'Revise', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
     await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(/\/research\/\d+\/edit/);
+    await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`));
   });
 
   test('TC-029: after approval submit progress update — stage moves to Dean Review', async ({

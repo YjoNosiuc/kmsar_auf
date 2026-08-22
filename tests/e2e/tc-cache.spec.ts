@@ -241,12 +241,10 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto(`/research/${researchId}`);
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
-    await expect(page).toHaveURL(/\/research\/\d+\/edit/, { timeout: 20_000 });
+    await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`), { timeout: 20_000 });
 
-    await page.goto(`/research/${researchId}`);
-    const resubmit = page
-      .locator('.kmsar-page-header-actions')
-      .getByRole('button', { name: 'Submit for Review', exact: true });
+    await page.goto(`/research/${researchId}/documents`);
+    const resubmit = page.getByRole('button', { name: 'Submit for Dean Review', exact: true });
     await expect(resubmit).toBeVisible({ timeout: 15_000 });
     await resubmit.click();
     await expect(page.getByRole('alert').filter({ hasText: /submitted for dean review/i })).toBeVisible({

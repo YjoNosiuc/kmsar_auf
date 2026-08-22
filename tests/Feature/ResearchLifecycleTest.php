@@ -507,7 +507,7 @@ describe('Post-Approval: revise & progress update', function () {
 
         $this->actingAs($faculty)
             ->post(route('research.revise', $research))
-            ->assertRedirect(route('research.edit', $research));
+            ->assertRedirect(route('research.show', $research));
 
         expect($research->fresh()->approval_stage)->toBe('draft');
     });

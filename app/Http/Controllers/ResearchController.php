@@ -425,8 +425,8 @@ class ResearchController extends Controller
         $this->forgetResearchDashboardCaches($research);
 
         return redirect()
-            ->route('research.edit', $research)
-            ->with('success', __('Research returned to draft. Update the record and submit again when ready.'));
+            ->route('research.show', $research)
+            ->with('info', __('Your research has been returned to draft. You can now edit the details, update authors and documents, then submit for Dean review.'));
     }
 
     public function destroy(Research $research): RedirectResponse

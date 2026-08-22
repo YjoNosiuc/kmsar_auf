@@ -96,27 +96,9 @@
                 @endif
                 @if ($research->approval_stage === 'draft')
                     @can('update', $research)
-                        <x-button variant="secondary" href="{{ route('research.wizard.details', $research) }}">{{ __('Edit') }}</x-button>
+                        <x-button variant="primary" href="{{ route('research.wizard.details', $research) }}">{{ __('Edit Details') }}</x-button>
                         <x-button variant="outline" href="{{ route('research.wizard.documents', $research) }}">{{ __('Continue to documents') }}</x-button>
                     @endcan
-
-                    @can('submit', $research)
-                        @if ($research->revision_count === 0)
-                            <form method="post" action="{{ route('research.submit', $research) }}" class="inline">
-                                @csrf
-                                <x-button type="submit" variant="primary">{{ __('Submit for Review') }}</x-button>
-                            </form>
-                        @endif
-                    @endcan
-
-                    @if ($research->revision_count > 0)
-                        @can('submit', $research)
-                            <form method="post" action="{{ route('research.submit', $research) }}" class="inline">
-                                @csrf
-                                <x-button type="submit" variant="primary">{{ __('Revise & Resubmit') }}</x-button>
-                            </form>
-                        @endcan
-                    @endif
                 @endif
 
                 @if (in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true))
@@ -132,6 +114,10 @@
 
         @if (session('success'))
             <x-alert type="success" :message="session('success')" class="mb-6" />
+        @endif
+
+        @if (session('info'))
+            <x-alert type="info" :message="session('info')" class="mb-6" />
         @endif
 
         @if ($research->approval_stage === 'draft' && $research->revision_count > 0)
@@ -442,31 +428,16 @@
                 @if ($research->approval_stage === 'draft')
                     <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;border-top:3px solid #1E3A8A;">
                         <h2 class="kmsar-card-title" style="margin:0 0 8px 0;">{{ __('Ready to submit?') }}</h2>
-                        <p class="kmsar-body" style="margin:0 0 16px;font-size:13px;color:#64748B;">{{ __('Ensure documents and details are complete before sending this record for dean review.') }}</p>
+                        <p class="kmsar-body" style="margin:0 0 16px;font-size:13px;color:#64748B;">{{ __('Update details and documents in the registration wizard, then submit for dean review from the Documents step.') }}</p>
                         <div style="display:flex;flex-wrap:wrap;gap:10px;">
-                            @can('submit', $research)
-                                <form method="post" action="{{ route('research.submit', $research) }}" class="inline">
-                                    @csrf
-                                    <button
-                                        type="submit"
-                                        style="padding:10px 20px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;"
-                                    >
-                                        @if ($research->revision_count > 0)
-                                            {{ __('Revise & resubmit') }}
-                                        @else
-                                            {{ __('Submit for review') }}
-                                        @endif
-                                    </button>
-                                </form>
-                            @endcan
                             @can('update', $research)
                                 <a
                                     href="{{ route('research.wizard.details', $research) }}"
-                                    style="display:inline-flex;align-items:center;padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;background:#fff;"
-                                >{{ __('Edit') }}</a>
+                                    class="kmsar-btn kmsar-btn--primary"
+                                >{{ __('Edit Details') }}</a>
                                 <a
                                     href="{{ route('research.wizard.documents', $research) }}"
-                                    style="display:inline-flex;align-items:center;padding:10px 20px;border:1px solid #CBD5E1;color:#475569;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;background:#fff;"
+                                    class="kmsar-btn kmsar-btn--outline"
                                 >{{ __('Continue to documents') }}</a>
                             @endcan
                         </div>

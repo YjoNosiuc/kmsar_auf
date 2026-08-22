@@ -1,7 +1,8 @@
 {{--
     NOTE: Primary editing for draft research is the registration wizard (Step 1: research.wizard.details,
-    then authors, then documents). This standalone edit view remains for the research.edit route and
-    POST research.update until that flow is fully retired — do not remove without updating routes/controllers.
+    then authors, then documents). Revise now redirects to research.show, not this page.
+    This standalone edit view remains for the research.edit route and POST research.update until
+    that flow is fully retired — do not remove without updating routes/controllers.
 --}}
 @extends('layouts.app')
 

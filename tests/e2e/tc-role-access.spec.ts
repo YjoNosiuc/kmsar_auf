@@ -210,7 +210,7 @@ test.describe('Role Access — UAT Test Suite', () => {
       const researchId = seedCoAuthorResearch('draft', 1);
       await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
       await page.goto(`/research/${researchId}`);
-      await expect(page.getByRole('button', { name: 'Revise & Resubmit', exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toBeVisible();
     });
 
     test('RA-032: Co-author CANNOT delete research → delete not available', async ({ page }) => {

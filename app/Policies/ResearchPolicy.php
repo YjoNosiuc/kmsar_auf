@@ -65,7 +65,7 @@ class ResearchPolicy
 
     public function update(User $user, Research $research): bool
     {
-        if (! in_array($research->approval_stage, ['draft', 'rejected'], true)) {
+        if (! in_array($research->approval_stage, ['draft', 'rejected', 'returned_to_faculty'], true)) {
             return false;
         }
 

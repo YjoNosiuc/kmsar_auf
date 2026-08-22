@@ -679,17 +679,14 @@ class ResearchController extends Controller
     {
         foreach ([now(), now()->subHour()] as $moment) {
             $hourKey = $moment->format('Y-m-d-H');
+            Cache::forget('ovpri_stats_all_all_'.$hourKey);
             Cache::forget('ovpri_stats_all_'.$hourKey);
-            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
-            }
         }
+        Cache::forget('admin_monthly_stats_all_all_'.now()->format('Y-m'));
         Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
         Cache::forget('sdg_counts');
         Cache::forget('sdg_counts_all');
-        for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-            Cache::forget('sdg_counts_'.$year);
-        }
+        Cache::forget('sdg_counts_all_all');
 
         $collegeIds = array_unique(array_filter([
             $research->mother_college_id,
@@ -700,10 +697,8 @@ class ResearchController extends Controller
             foreach ($this->deanUserIdsForCollege((int) $collegeId) as $id) {
                 foreach ([now(), now()->subDay()] as $day) {
                     $dayKey = $day->format('Y-m-d');
+                    Cache::forget('dean_stats_'.$id.'_all_all_'.$dayKey);
                     Cache::forget('dean_stats_'.$id.'_all_'.$dayKey);
-                    for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                        Cache::forget('dean_stats_'.$id.'_'.$year.'_'.$dayKey);
-                    }
                 }
             }
         }

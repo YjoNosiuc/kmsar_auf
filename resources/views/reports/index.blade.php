@@ -37,7 +37,6 @@
             'approved' => __('Approved'),
             'rejected' => __('Rejected'),
         ];
-        $academicYears = range((int) now()->year + 1, (int) now()->year - 14);
         $stats = $reportStats ?? (
             $reportScope === 'college'
                 ? ['matching' => $totalCount, 'published' => 0, 'presented' => 0]
@@ -146,16 +145,6 @@
                 <div>
                     <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="funding_agency">{{ __('Funding agency') }}</label>
                     <input id="funding_agency" type="text" name="funding_agency" class="kmsar-input" style="width:100%;" value="{{ $filters['funding_agency'] ?? '' }}" placeholder="{{ __('e.g. DOST, CHED') }}">
-                </div>
-
-                <div>
-                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="academic_year">{{ __('Academic year') }}</label>
-                    <select id="academic_year" name="academic_year" class="kmsar-select" style="width:100%;">
-                        <option value="">{{ __('All years') }}</option>
-                        @foreach ($academicYears as $year)
-                            <option value="{{ $year }}" @selected(($filters['academic_year'] ?? '') == (string) $year)>{{ $year }}</option>
-                        @endforeach
-                    </select>
                 </div>
 
                 <div>

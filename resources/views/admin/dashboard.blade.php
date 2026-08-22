@@ -25,6 +25,45 @@
         </div>
     </div>
 
+    <form method="get" action="{{ route('admin.dashboard') }}" class="kmsar-card" style="margin-bottom:16px;padding:16px 20px;">
+        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+            <div>
+                <label for="date_from" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
+                    {{ __('Date From') }}
+                </label>
+                <input type="date"
+                       id="date_from"
+                       name="date_from"
+                       value="{{ $dateFrom ?? '' }}"
+                       class="kmsar-input"
+                       style="width:160px;">
+            </div>
+            <div>
+                <label for="date_to" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
+                    {{ __('Date To') }}
+                </label>
+                <input type="date"
+                       id="date_to"
+                       name="date_to"
+                       value="{{ $dateTo ?? '' }}"
+                       class="kmsar-input"
+                       style="width:160px;">
+            </div>
+            <div>
+                <button type="submit" class="kmsar-btn kmsar-btn--primary" style="padding:8px 20px;">
+                    {{ __('Apply') }}
+                </button>
+                @if (! empty($dateFrom) || ! empty($dateTo))
+                    <a href="{{ route('admin.dashboard') }}"
+                       class="kmsar-btn kmsar-btn--outline"
+                       style="padding:8px 20px; margin-left:8px;">
+                        {{ __('Clear') }}
+                    </a>
+                @endif
+            </div>
+        </div>
+    </form>
+
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px;" role="region" aria-label="Dashboard statistics">
         <div class="kmsar-stat-card" style="position:relative;padding-top:2.75rem;">
             <div style="position:absolute;top:1rem;right:1rem;width:44px;height:44px;border-radius:50%;background:rgba(30,58,138,0.12);display:flex;align-items:center;justify-content:center;color:#1E3A8A;" aria-hidden="true">

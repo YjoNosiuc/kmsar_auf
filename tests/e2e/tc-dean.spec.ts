@@ -411,7 +411,7 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
 
   test('TC-022: College report does not include other colleges data', async ({ page }) => {
     await deanLogin(page);
-    await page.goto('/reports?academic_year=2024');
+    await page.goto('/reports');
 
     await expect(page.getByText(/COLLEGE OF COMPUTER STUDIES/i)).toBeVisible();
     await expect(page.locator('table.kmsar-table tbody').getByText(/BLOCKCHAIN-BASED ACADEMIC/i)).toBeVisible();

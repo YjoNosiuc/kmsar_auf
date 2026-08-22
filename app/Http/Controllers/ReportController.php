@@ -161,7 +161,6 @@ class ReportController extends Controller
             'faculty' => ['nullable', 'integer', 'exists:users,id'],
             'sdg' => ['nullable', 'integer', 'between:1,17'],
             'funding_agency' => ['nullable', 'string', 'max:100'],
-            'academic_year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'include_rejected' => ['nullable', Rule::in(['0', '1'])],
         ]);
 
@@ -324,10 +323,6 @@ class ReportController extends Controller
             $lines[] = __('Funding agency: :a', ['a' => $filters['funding_agency']]);
         }
 
-        if (! empty($filters['academic_year'])) {
-            $lines[] = __('Academic year: :y', ['y' => (int) $filters['academic_year']]);
-        }
-
         if (! empty($filters['faculty'])) {
             $facultyUser = User::query()->find((int) $filters['faculty']);
             $lines[] = __('Primary author: :name', [
@@ -357,7 +352,6 @@ class ReportController extends Controller
             'approval_stage',
             'sdg',
             'funding_agency',
-            'academic_year',
             'include_rejected',
             'registration_type',
         ];
@@ -440,10 +434,6 @@ class ReportController extends Controller
 
         if (! empty($filters['funding_agency'])) {
             $query->where('funding_agency', 'like', '%'.$filters['funding_agency'].'%');
-        }
-
-        if (! empty($filters['academic_year'])) {
-            $query->whereYear('start_date', (int) $filters['academic_year']);
         }
 
         if (($filters['include_rejected'] ?? '0') !== '1') {

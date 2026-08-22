@@ -10,7 +10,9 @@ use App\Models\Research;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Http\Request;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\ApprovalFileController;
 use App\Http\Controllers\Auth\LoginController;
@@ -25,7 +27,6 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResearchController;
 use App\Http\Controllers\UserSearchController;
-use Illuminate\Support\Facades\Route;
 
 // To process queued emails run: php artisan queue:work --sleep=3 --tries=3
 
@@ -187,9 +188,18 @@ Route::middleware(['auth', 'nocache', 'role:ovpri_admin|cdaic_admin|super_admin|
 Route::middleware(['auth', 'nocache', 'role:super_admin'])
     ->prefix('admin')
     ->group(function () {
-        Route::get('dashboard', function () {
+        Route::get('dashboard', function (Request $request) {
+            $dateFrom = $request->filled('date_from') ? $request->input('date_from') : null;
+            $dateTo = $request->filled('date_to') ? $request->input('date_to') : null;
+
             $totalUsers = User::count();
             $totalColleges = College::where('is_active', true)->count();
+
+            $applyDates = function ($query) use ($dateFrom, $dateTo) {
+                return $query
+                    ->when($dateFrom, fn ($q) => $q->whereDate('start_date', '>=', $dateFrom))
+                    ->when($dateTo, fn ($q) => $q->whereDate('start_date', '<=', $dateTo));
+            };
 
             if (! Schema::hasTable('research')) {
                 $emptyMonthly = ['labels' => [], 'counts' => []];
@@ -226,41 +236,44 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     ],
                     'researchByClassification' => $classificationEmpty,
                     'monthlySubmissions' => $emptyMonthly,
+                    'dateFrom' => $dateFrom,
+                    'dateTo' => $dateTo,
                 ]);
             }
 
             // Match reports default scope: Eloquent (excludes soft-deletes) and exclude rejected.
-            $activeResearch = fn () => Research::query()->where('approval_stage', '!=', 'rejected');
+            $activeResearch = fn () => $applyDates(Research::query()->where('approval_stage', '!=', 'rejected'));
 
             $totalResearch = (int) $activeResearch()->count();
 
             $researchByStatus = [
-                'draft' => (int) Research::query()->where('approval_stage', 'draft')->count(),
-                'dean_review' => (int) Research::query()->where('approval_stage', 'dean_review')->count(),
-                'ovpri_review' => (int) Research::query()->where('approval_stage', 'ovpri_review')->count(),
-                'approved' => (int) Research::query()->where('approval_stage', 'approved')->count(),
-                'rejected' => (int) Research::query()->where('approval_stage', 'rejected')->count(),
+                'draft' => (int) $applyDates(Research::query()->where('approval_stage', 'draft'))->count(),
+                'dean_review' => (int) $applyDates(Research::query()->where('approval_stage', 'dean_review'))->count(),
+                'ovpri_review' => (int) $applyDates(Research::query()->where('approval_stage', 'ovpri_review'))->count(),
+                'approved' => (int) $applyDates(Research::query()->where('approval_stage', 'approved'))->count(),
+                'rejected' => (int) $applyDates(Research::query()->where('approval_stage', 'rejected'))->count(),
             ];
 
-            $pendingApprovals = (int) Research::query()
-                ->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
-                ->count();
+            $pendingApprovals = (int) $applyDates(
+                Research::query()->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
+            )->count();
 
             $researchByCollege = College::query()
                 ->orderBy('code')
                 ->get()
                 ->map(fn (College $college) => [
                     'label' => $college->code,
-                    'count' => (int) Research::query()
-                        ->where('mother_college_id', $college->id)
-                        ->where('approval_stage', '!=', 'rejected')
-                        ->count(),
+                    'count' => (int) $applyDates(
+                        Research::query()
+                            ->where('mother_college_id', $college->id)
+                            ->where('approval_stage', '!=', 'rejected')
+                    )->count(),
                 ])
                 ->values();
 
             $statusKeys = ['draft', 'dean_review', 'ovpri_review', 'approved', 'rejected'];
             $statusLabels = ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'];
-            $statusCounts = Research::query()
+            $statusCounts = $applyDates(Research::query())
                 ->select('approval_stage', DB::raw('count(*) as total'))
                 ->groupBy('approval_stage')
                 ->pluck('total', 'approval_stage');
@@ -313,38 +326,45 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'colors' => array_map(fn (string $k) => $classificationColorsMap[$k], $classificationKeys),
             ];
 
-            $submissionsThisYear = (int) $activeResearch()
-                ->whereYear('created_at', now()->year)
+            $submissionsThisYear = (int) $applyDates($activeResearch())
+                ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', now()->year))
                 ->count();
 
-            $monthlySubmissions = Cache::remember('admin_monthly_stats_'.now()->format('Y-m'), 3600, function () {
-                $isSqlite = DB::connection()->getDriverName() === 'sqlite';
-                $base = Research::query()->where('approval_stage', '!=', 'rejected');
-                $byMonth = $isSqlite
-                    ? (clone $base)
-                        ->selectRaw('CAST(strftime(\'%m\', created_at) AS INTEGER) as month, count(*) as total')
-                        ->whereYear('created_at', date('Y'))
-                        ->groupByRaw('CAST(strftime(\'%m\', created_at) AS INTEGER)')
-                        ->pluck('total', 'month')
-                    : (clone $base)
-                        ->selectRaw('MONTH(created_at) as month, count(*) as total')
-                        ->whereYear('created_at', date('Y'))
-                        ->groupByRaw('MONTH(created_at)')
-                        ->pluck('total', 'month');
+            $monthlySubmissions = Cache::remember(
+                'admin_monthly_stats_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m'),
+                3600,
+                function () use ($applyDates, $dateFrom, $dateTo) {
+                    $isSqlite = DB::connection()->getDriverName() === 'sqlite';
+                    $base = $applyDates(Research::query()->where('approval_stage', '!=', 'rejected'));
+                    $dateColumn = ($dateFrom || $dateTo) ? 'start_date' : 'created_at';
+                    $byMonth = $isSqlite
+                        ? (clone $base)
+                            ->selectRaw("CAST(strftime('%m', {$dateColumn}) AS INTEGER) as month, count(*) as total")
+                            ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', date('Y')))
+                            ->groupByRaw("CAST(strftime('%m', {$dateColumn}) AS INTEGER)")
+                            ->pluck('total', 'month')
+                        : (clone $base)
+                            ->selectRaw("MONTH({$dateColumn}) as month, count(*) as total")
+                            ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', date('Y')))
+                            ->groupByRaw("MONTH({$dateColumn})")
+                            ->pluck('total', 'month');
 
-                $year = (int) date('Y');
-                $monthlyLabels = [];
-                $monthlyCounts = [];
-                for ($m = 1; $m <= 12; $m++) {
-                    $monthlyLabels[] = date('M Y', mktime(0, 0, 0, $m, 1, $year));
-                    $monthlyCounts[] = (int) ($byMonth[$m] ?? $byMonth[(string) $m] ?? 0);
+                    $year = $dateFrom
+                        ? (int) date('Y', strtotime((string) $dateFrom))
+                        : (int) date('Y');
+                    $monthlyLabels = [];
+                    $monthlyCounts = [];
+                    for ($m = 1; $m <= 12; $m++) {
+                        $monthlyLabels[] = date('M Y', mktime(0, 0, 0, $m, 1, $year));
+                        $monthlyCounts[] = (int) ($byMonth[$m] ?? $byMonth[(string) $m] ?? 0);
+                    }
+
+                    return [
+                        'labels' => $monthlyLabels,
+                        'counts' => $monthlyCounts,
+                    ];
                 }
-
-                return [
-                    'labels' => $monthlyLabels,
-                    'counts' => $monthlyCounts,
-                ];
-            });
+            );
 
             return view('admin.dashboard', [
                 'totalUsers' => $totalUsers,
@@ -357,6 +377,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'researchByStage' => $researchByStage,
                 'researchByClassification' => $researchByClassification,
                 'monthlySubmissions' => $monthlySubmissions,
+                'dateFrom' => $dateFrom,
+                'dateTo' => $dateTo,
             ]);
         })->name('admin.dashboard');
 

@@ -21,14 +21,14 @@ class DeanController extends Controller
         $user = $request->user();
         $scopeAllColleges = $user->hasRole('super_admin');
         $collegeId = $scopeAllColleges ? null : $user->college_id;
-        $academicYear = $request->filled('academic_year') ? $request->integer('academic_year') : null;
-        $academicYearOptions = $this->academicYearOptions();
+        $dateFrom = $request->filled('date_from') ? $request->input('date_from') : null;
+        $dateTo = $request->filled('date_to') ? $request->input('date_to') : null;
 
         $college = $collegeId
             ? College::query()->find($collegeId)
             : null;
 
-        $base = $this->collegeResearchQuery($college, $academicYear, $scopeAllColleges);
+        $base = $this->collegeResearchQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
 
         $recentResearch = (clone $base)
             ->with(['primaryAuthor'])
@@ -36,10 +36,10 @@ class DeanController extends Controller
             ->limit(15)
             ->get();
 
-        $cacheKey = 'dean_stats_'.auth()->id().'_'.($academicYear ?? 'all').'_'.now()->format('Y-m-d');
+        $cacheKey = 'dean_stats_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m-d');
 
-        $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $academicYear, $scopeAllColleges) {
-            $base = $this->collegeResearchQuery($college, $academicYear, $scopeAllColleges);
+        $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $dateFrom, $dateTo, $scopeAllColleges) {
+            $base = $this->collegeResearchQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
 
             $totalResearch = (clone $base)->count();
 
@@ -55,9 +55,7 @@ class DeanController extends Controller
                 ->where('is_scopus_indexed', true)
                 ->count();
 
-            $yearList = $academicYear !== null
-                ? [$academicYear]
-                : $this->lastNYears(5);
+            $yearList = $this->chartYearList($dateFrom, $dateTo);
 
             $isSqlite = (clone $base)->getConnection()->getDriverName() === 'sqlite';
             $yearSelect = $isSqlite
@@ -109,7 +107,7 @@ class DeanController extends Controller
             });
 
             $facultyStats = $collegeId
-                ? $this->facultyResearchBreakdown((int) $collegeId, $academicYear)
+                ? $this->facultyResearchBreakdown((int) $collegeId, $dateFrom, $dateTo)
                 : [];
 
             return [
@@ -135,13 +133,13 @@ class DeanController extends Controller
             'publishedByYear' => $cached['publishedByYear'],
             'presentedByYear' => $cached['presentedByYear'],
             'facultyStats' => $cached['facultyStats'],
-            'academicYear' => $academicYear,
-            'academicYearOptions' => $academicYearOptions,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
             'scopeAllColleges' => $scopeAllColleges,
         ]);
     }
 
-    private function collegeResearchQuery(?College $college, ?int $academicYear = null, bool $allColleges = false): Builder
+    private function collegeResearchQuery(?College $college, ?string $dateFrom = null, ?string $dateTo = null, bool $allColleges = false): Builder
     {
         $q = Research::query()
             ->whereNotIn('approval_stage', ['draft']);
@@ -154,23 +152,7 @@ class DeanController extends Controller
             $q->whereRaw('1 = 0');
         }
 
-        if ($academicYear !== null) {
-            $q->whereYear('start_date', $academicYear);
-        } else {
-            // Match the dashboard filter label "All years (last 5)" and the chart year list.
-            $years = $this->lastNYears(5);
-            $isSqlite = $q->getConnection()->getDriverName() === 'sqlite';
-            if ($isSqlite) {
-                $q->whereRaw(
-                    "CAST(strftime('%Y', start_date) AS INTEGER) BETWEEN ? AND ?",
-                    [min($years), max($years)]
-                );
-            } else {
-                $q->whereRaw('YEAR(start_date) BETWEEN ? AND ?', [min($years), max($years)]);
-            }
-        }
-
-        return $q;
+        return $this->applyStartDateRange($q, $dateFrom, $dateTo);
     }
 
     /**
@@ -187,17 +169,38 @@ class DeanController extends Controller
     /**
      * @return list<int>
      */
-    private function academicYearOptions(): array
+    private function chartYearList(?string $dateFrom, ?string $dateTo): array
     {
-        $current = (int) date('Y');
+        if ($dateFrom || $dateTo) {
+            $start = $dateFrom ? (int) date('Y', strtotime((string) $dateFrom)) : (int) date('Y') - 4;
+            $end = $dateTo ? (int) date('Y', strtotime((string) $dateTo)) : (int) date('Y');
+            if ($start > $end) {
+                [$start, $end] = [$end, $start];
+            }
 
-        return range($current, $current - 10);
+            return range($start, $end);
+        }
+
+        return $this->lastNYears(5);
+    }
+
+    private function applyStartDateRange(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
+    {
+        if ($dateFrom) {
+            $query->whereDate('start_date', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('start_date', '<=', $dateTo);
+        }
+
+        return $query;
     }
 
     /**
      * @return list<array{name: string, total: int, published: int, presented: int, scopus: int}>
      */
-    private function facultyResearchBreakdown(int $collegeId, ?int $academicYear = null): array
+    private function facultyResearchBreakdown(int $collegeId, ?string $dateFrom = null, ?string $dateTo = null): array
     {
         $facultyUsers = User::query()
             ->role('faculty')
@@ -219,20 +222,7 @@ class DeanController extends Controller
                     ->orWhereHas('researchAuthors', fn (Builder $a) => $a->whereIn('user_id', $facultyIds));
             });
 
-        if ($academicYear !== null) {
-            $researchQuery->whereYear('start_date', $academicYear);
-        } else {
-            $years = $this->lastNYears(5);
-            $isSqlite = $researchQuery->getConnection()->getDriverName() === 'sqlite';
-            if ($isSqlite) {
-                $researchQuery->whereRaw(
-                    "CAST(strftime('%Y', start_date) AS INTEGER) BETWEEN ? AND ?",
-                    [min($years), max($years)]
-                );
-            } else {
-                $researchQuery->whereRaw('YEAR(start_date) BETWEEN ? AND ?', [min($years), max($years)]);
-            }
-        }
+        $this->applyStartDateRange($researchQuery, $dateFrom, $dateTo);
 
         $allResearch = $researchQuery
             ->with(['researchAuthors:id,research_id,user_id'])

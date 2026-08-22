@@ -67,7 +67,6 @@
         $rangeStart = $totalCount > 0 ? (($page - 1) * $perPage) + 1 : 0;
         $rangeEnd = min($page * $perPage, $totalCount);
         $paginationQuery = collect(request()->query())->except('page')->all();
-        $academicYears = range((int) now()->year + 1, (int) now()->year - 14);
     @endphp
 
     <x-card :title="__('Filters')" accent="primary" class="mb-8">
@@ -85,7 +84,6 @@
                 <x-form.select name="approval_stage" :label="__('Approval status')" :placeholder="__('Any')" :options="$approvalStageOpts" :value="$filters['approval_stage'] ?? ''" />
                 <x-form.select name="sdg" :label="__('SDG')" :placeholder="__('Any SDG')" :options="collect(range(1, 17))->mapWithKeys(fn ($n) => [$n => __('SDG :n', ['n' => $n])])->all()" :value="$filters['sdg'] ?? ''" />
                 <x-form.input name="funding_agency" :label="__('Funding agency')" :value="$filters['funding_agency'] ?? ''" :hint="__('Partial match')" />
-                <x-form.select name="academic_year" :label="__('Academic year')" :placeholder="__('Any year')" :options="collect($academicYears)->mapWithKeys(fn ($y) => [$y => (string) $y])->all()" :value="$filters['academic_year'] ?? ''" />
                 <x-form.input name="date_from" type="date" :label="__('Created from')" :value="$filters['date_from'] ?? ''" />
                 <x-form.input name="date_to" type="date" :label="__('Created to')" :value="$filters['date_to'] ?? ''" />
                 <x-form.select name="per_page" :label="__('Per page')" :options="['10' => '10', '25' => '25', '50' => '50']" :value="(string) $perPage" />

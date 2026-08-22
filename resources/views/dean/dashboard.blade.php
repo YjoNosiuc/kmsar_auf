@@ -29,21 +29,41 @@
 
     @if ($college || ! empty($scopeAllColleges))
         <form method="get" action="{{ route('dean.dashboard') }}" class="kmsar-card" style="margin-bottom:16px;padding:16px 20px;">
-            <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;">
-                <div style="min-width:200px;">
-                    <label for="academic_year" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">{{ __('Academic year') }}</label>
-                    <select id="academic_year" name="academic_year" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
-                        <option value="">{{ __('All years (last 5)') }}</option>
-                        @foreach ($academicYearOptions as $year)
-                            <option value="{{ $year }}" @selected($academicYear === $year)>{{ $year }}</option>
-                        @endforeach
-                    </select>
+            <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+                <div>
+                    <label for="date_from" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
+                        {{ __('Date From') }}
+                    </label>
+                    <input type="date"
+                           id="date_from"
+                           name="date_from"
+                           value="{{ $dateFrom }}"
+                           class="kmsar-input"
+                           style="width:160px;">
                 </div>
-                @if ($academicYear)
-                    <p class="kmsar-body" style="margin:0;font-size:13px;color:#475569;align-self:center;">
-                        {{ __('Showing data for academic year :year', ['year' => $academicYear]) }}
-                    </p>
-                @endif
+                <div>
+                    <label for="date_to" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
+                        {{ __('Date To') }}
+                    </label>
+                    <input type="date"
+                           id="date_to"
+                           name="date_to"
+                           value="{{ $dateTo }}"
+                           class="kmsar-input"
+                           style="width:160px;">
+                </div>
+                <div>
+                    <button type="submit" class="kmsar-btn kmsar-btn--primary" style="padding:8px 20px;">
+                        {{ __('Apply') }}
+                    </button>
+                    @if ($dateFrom || $dateTo)
+                        <a href="{{ route('dean.dashboard') }}"
+                           class="kmsar-btn kmsar-btn--outline"
+                           style="padding:8px 20px; margin-left:8px;">
+                            {{ __('Clear') }}
+                        </a>
+                    @endif
+                </div>
             </div>
         </form>
     @endif
@@ -75,8 +95,8 @@
                 <div class="kmsar-chart-header">
                     <div>
                         <h2 class="kmsar-chart-title">
-                            @if ($academicYear)
-                                {{ __('Research submitted — :year', ['year' => $academicYear]) }}
+                            @if ($dateFrom || $dateTo)
+                                {{ __('Research submitted — selected dates') }}
                             @else
                                 {{ __('Research submitted — last 5 years') }}
                             @endif
@@ -147,8 +167,8 @@
                 <div class="kmsar-chart-header">
                     <div>
                         <h2 class="kmsar-chart-title">
-                            @if ($academicYear)
-                                {{ __('Published research — :year', ['year' => $academicYear]) }}
+                            @if ($dateFrom || $dateTo)
+                                {{ __('Published research — selected dates') }}
                             @else
                                 {{ __('Published research — last 5 years') }}
                             @endif
@@ -166,8 +186,8 @@
                 <div class="kmsar-chart-header">
                     <div>
                         <h2 class="kmsar-chart-title">
-                            @if ($academicYear)
-                                {{ __('Presented research — :year', ['year' => $academicYear]) }}
+                            @if ($dateFrom || $dateTo)
+                                {{ __('Presented research — selected dates') }}
                             @else
                                 {{ __('Presented research — last 5 years') }}
                             @endif

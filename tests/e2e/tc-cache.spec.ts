@@ -197,7 +197,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     page,
   }) => {
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-    await page.goto('/dean/dashboard?academic_year=2026');
+    await page.goto('/dean/dashboard');
     const before = await getStatCardValue(page, /Pending Endorsement/i);
 
     const title = `CACHE-006 ${Date.now()}`;
@@ -205,7 +205,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     expect(researchId).toBeTruthy();
 
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-    await page.goto('/dean/dashboard?academic_year=2026');
+    await page.goto('/dean/dashboard');
     const after = await getStatCardValue(page, /Pending Endorsement/i);
     expect(after).toBe(before + 1);
   });

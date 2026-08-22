@@ -30,13 +30,14 @@ class OvpriController extends Controller
 
     public function dashboard(Request $request): View
     {
-        $academicYear = $request->filled('academic_year') ? $request->integer('academic_year') : null;
-        $academicYearOptions = $this->academicYearOptions();
+        $dateFrom = $request->filled('date_from') ? $request->input('date_from') : null;
+        $dateTo = $request->filled('date_to') ? $request->input('date_to') : null;
+        $cacheSuffix = ($dateFrom ?? 'all').'_'.($dateTo ?? 'all');
 
         $stats = Cache::remember(
-            'ovpri_stats_'.($academicYear ?? 'all').'_'.now()->format('Y-m-d-H'),
+            'ovpri_stats_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
             3600,
-            fn () => $this->buildDashboardStats($academicYear)
+            fn () => $this->buildDashboardStats($dateFrom, $dateTo)
         );
 
         $sdgNames = [
@@ -49,9 +50,9 @@ class OvpriController extends Controller
         ];
 
         $sdgDistribution = Cache::remember(
-            'sdg_counts_'.($academicYear ?? 'all'),
+            'sdg_counts_'.$cacheSuffix,
             3600,
-            fn () => $this->buildSdgDistribution($academicYear, $sdgNames)
+            fn () => $this->buildSdgDistribution($dateFrom, $dateTo, $sdgNames)
         );
 
         return view('ovpri.dashboard', [
@@ -66,17 +67,17 @@ class OvpriController extends Controller
             'workflowStatus' => $stats['workflowStatus'],
             'sdgDistribution' => $sdgDistribution,
             'monthlyTrend' => $stats['monthlyTrend'],
-            'academicYear' => $academicYear,
-            'academicYearOptions' => $academicYearOptions,
+            'dateFrom' => $dateFrom,
+            'dateTo' => $dateTo,
         ]);
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function buildDashboardStats(?int $academicYear): array
+    private function buildDashboardStats(?string $dateFrom, ?string $dateTo): array
     {
-        $base = $this->baseResearchQuery($academicYear);
+        $base = $this->baseResearchQuery($dateFrom, $dateTo);
 
         $totalResearch = (clone $base)->count();
 
@@ -143,12 +144,13 @@ class OvpriController extends Controller
             ['key' => 'rejected', 'label' => __('Rejected'), 'count' => (clone $base)->where('approval_stage', 'rejected')->count()],
         ]);
 
-        $trendYear = $academicYear ?? (int) now()->year;
+        $trendYear = $dateFrom
+            ? (int) date('Y', strtotime((string) $dateFrom))
+            : (int) now()->year;
         $isSqlite = Research::query()->getConnection()->getDriverName() === 'sqlite';
         $monthlyQuery = clone $base;
 
-        if ($academicYear !== null) {
-            $monthlyQuery->whereYear('start_date', $academicYear);
+        if ($dateFrom || $dateTo) {
             $monthlyTotals = $isSqlite
                 ? $monthlyQuery
                     ->selectRaw('CAST(strftime(\'%m\', start_date) AS INTEGER) as month, count(*) as total')
@@ -198,13 +200,17 @@ class OvpriController extends Controller
         ];
     }
 
-    private function baseResearchQuery(?int $academicYear): Builder
+    private function baseResearchQuery(?string $dateFrom, ?string $dateTo): Builder
     {
         $query = Research::query()
             ->whereNotIn('approval_stage', ['draft', 'dean_review']);
 
-        if ($academicYear !== null) {
-            $query->whereYear('start_date', $academicYear);
+        if ($dateFrom) {
+            $query->whereDate('start_date', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('start_date', '<=', $dateTo);
         }
 
         return $query;
@@ -214,9 +220,9 @@ class OvpriController extends Controller
      * @param  array<int, string>  $sdgNames
      * @return \Illuminate\Support\Collection<int, array{sdg: int, label: string, count: int}>
      */
-    private function buildSdgDistribution(?int $academicYear, array $sdgNames): \Illuminate\Support\Collection
+    private function buildSdgDistribution(?string $dateFrom, ?string $dateTo, array $sdgNames): \Illuminate\Support\Collection
     {
-        $query = $this->baseResearchQuery($academicYear)->whereNotNull('sdg_tags');
+        $query = $this->baseResearchQuery($dateFrom, $dateTo)->whereNotNull('sdg_tags');
         $allSdgTags = $query->pluck('sdg_tags');
         $sdgCounts = array_fill(1, 17, 0);
 
@@ -238,16 +244,6 @@ class OvpriController extends Controller
             ])
             ->sortByDesc('count')
             ->values();
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function academicYearOptions(): array
-    {
-        $current = (int) date('Y');
-
-        return range($current, $current - 10);
     }
 
     /**

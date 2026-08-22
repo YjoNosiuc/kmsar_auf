@@ -9,7 +9,8 @@ test.describe('Research reports', () => {
     await expect(page.locator('h1', { hasText: 'Reports & Analytics' })).toBeVisible();
     await expect(page.locator('select[name="sdg"]')).toBeVisible();
     await expect(page.locator('select[name="research_classification"]')).toBeVisible();
-    await expect(page.locator('select[name="academic_year"]')).toBeVisible();
+    await expect(page.locator('input[name="date_from"]')).toBeVisible();
+    await expect(page.locator('input[name="date_to"]')).toBeVisible();
   });
 
   test('preview shows more than 10 records with pagination', async ({ page }) => {
@@ -74,7 +75,8 @@ test.describe('Research reports', () => {
     await expect(page.locator('h1', { hasText: 'Reports & Analytics' })).toBeVisible();
     await expect(page.locator('select[name="sdg"]')).toBeVisible();
     await expect(page.locator('select[name="research_classification"]')).toBeVisible();
-    await expect(page.locator('select[name="academic_year"]')).toBeVisible();
+    await expect(page.locator('input[name="date_from"]')).toBeVisible();
+    await expect(page.locator('input[name="date_to"]')).toBeVisible();
     await expect(page.locator('select[name="college_id"]')).toBeVisible();
   });
 });

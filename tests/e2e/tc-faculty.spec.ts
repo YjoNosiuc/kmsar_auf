@@ -2,7 +2,13 @@ import { test, expect, Page } from '@playwright/test';
 import { login, logout, credentials } from './helpers/auth';
 import { runTinker } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
-import { createAndSubmitResearch, openFacultyResearchList, facultyResearchCard, facultyResearchCardByStage } from './helpers/research';
+import {
+  createAndSubmitResearch,
+  openFacultyResearchList,
+  facultyResearchCard,
+  facultyResearchCardByStage,
+  selectCurrentUserAsPrimary,
+} from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
 const SAMPLE_TXT = 'tests/e2e/fixtures/sample.txt';
@@ -178,13 +184,70 @@ test.describe('Faculty — UAT Test Suite', () => {
     await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC012 Authors'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
-    await expect(page.getByText('Primary Author', { exact: true })).toBeVisible();
+    await expect(page.locator('.author-selected-card--primary')).toBeVisible();
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await expect(page).toHaveURL(/\/documents/);
     await expect(page.getByText(/Step 3 of 3/i)).toBeVisible();
   });
 
-  test('TC-013: add co-author by employee number — research appears in co-author list', async ({
+  test('TC-012b: Wizard Step 2 is locked until Step 1 is complete', async ({ page }) => {
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    const researchId = await startWizardStep1(page);
+
+    const authorsStep = page.locator('#kmsar-reg-stepper-nav .kmsar-step.locked').filter({ hasText: 'Authors' });
+    await expect(authorsStep).toBeVisible();
+    await expect(authorsStep).toHaveAttribute('aria-disabled', 'true');
+    await expect(authorsStep.locator('svg')).toBeVisible();
+
+    await page.goto(`/research/${researchId}/authors`);
+    await expect(page).toHaveURL(new RegExp(`/research/${researchId}/details`));
+  });
+
+  test('TC-012c: Wizard Step 3 is locked until a primary author is selected', async ({ page }) => {
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    const researchId = await startWizardStep1(page);
+    await fillStep1(page, uniqueTitle('TC012c Step Guard'));
+    await page.getByRole('button', { name: 'Continue to authors' }).click();
+
+    const documentsStep = page.locator('#kmsar-reg-stepper-nav .kmsar-step.locked').filter({ hasText: 'Documents' });
+    await expect(documentsStep).toBeVisible();
+    await expect(documentsStep).toHaveAttribute('aria-disabled', 'true');
+
+    await page.goto(`/research/${researchId}/documents`);
+    await expect(page).toHaveURL(new RegExp(`/research/${researchId}/authors`));
+  });
+
+  test('TC-012d: Primary author search shows matching users', async ({ page }) => {
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await startWizardStep1(page);
+    await fillStep1(page, uniqueTitle('TC012d Search'));
+    await page.getByRole('button', { name: 'Continue to authors' }).click();
+
+    const clearPrimary = page.getByRole('button', { name: 'Clear', exact: true });
+    if (await clearPrimary.isVisible().catch(() => false)) {
+      await clearPrimary.click();
+    }
+    await page.locator('#primary-author-search').fill('faculty.ccs2@yopmail.com');
+    await expect(
+      page.locator('.author-result').filter({ hasText: 'faculty.ccs2@yopmail.com' }),
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('TC-012e: Co-author search excludes selected primary author', async ({ page }) => {
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await startWizardStep1(page);
+    await fillStep1(page, uniqueTitle('TC012e Duplicate Author'));
+    await page.getByRole('button', { name: 'Continue to authors' }).click();
+    await selectCurrentUserAsPrimary(page);
+
+    await page.locator('#coauthor-search').fill(credentials.faculty_ccs.email);
+    await expect(
+      page.locator('#coauthor-search').locator('..').getByText(/No users found matching/i),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.author-result').filter({ hasText: credentials.faculty_ccs.email })).toHaveCount(0);
+  });
+
+  test('TC-013: add co-author using searchable dropdown — research appears in co-author list', async ({
     page,
   }) => {
     const title = uniqueTitle('TC013 CoAuthor');
@@ -193,14 +256,12 @@ test.describe('Faculty — UAT Test Suite', () => {
     await fillStep1(page, title);
     await page.getByRole('button', { name: 'Continue to authors' }).click();
 
-    await page.getByRole('button', { name: '+ Add co-author' }).click();
-    const card = page.locator('.authors-coauthor-card').last();
-    await card.getByRole('tab', { name: 'Employee' }).click();
-    await card.locator('[id^="coauthor_emp_en_"]').fill('AUF-0022');
-    await card.locator('[id^="coauthor_emp_em_"]').fill('faculty.ccs2@yopmail.com');
-    await card.locator('[id^="coauthor_emp_fn_"]').fill('JUAN');
-    await card.locator('[id^="coauthor_emp_ln_"]').fill('DELA CRUZ');
-    await card.locator('[id^="coauthor_emp_mc_"]').selectOption({ index: 1 });
+    await selectCurrentUserAsPrimary(page);
+    await page.locator('#coauthor-search').fill('faculty.ccs2@yopmail.com');
+    const result = page.locator('.author-result').filter({ hasText: 'faculty.ccs2@yopmail.com' });
+    await expect(result).toBeVisible({ timeout: 15_000 });
+    await result.click();
+    await expect(page.locator('.author-selected-card').filter({ hasText: 'faculty.ccs2@yopmail.com' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_PDF);
@@ -224,6 +285,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await expect(page.locator('.kmsar-dropzone, label.kmsar-dropzone').first()).toBeVisible();
     await expect(page.locator('#kmsar-document-file-input')).toBeAttached();
+    await expect(page.getByRole('button', { name: 'Submit for Dean Review', exact: true })).toBeVisible();
     expect(researchId).toBeTruthy();
   });
 
@@ -288,10 +350,10 @@ test.describe('Faculty — UAT Test Suite', () => {
     await fillStep1(page, uniqueTitle('TC019 No Docs'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
     await page.getByRole('button', { name: 'Continue to documents' }).click();
-    await page.goto(`/research/${researchId}`);
-    await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
+    const submit = page.getByRole('button', { name: 'Submit for Dean Review', exact: true });
+    await expect(submit).toBeDisabled();
     await expect(
-      page.getByText(/at least one document is required|document is required/i).first(),
+      page.getByText(/upload at least one document before submitting/i).first(),
     ).toBeVisible({ timeout: 15_000 });
   });
 
@@ -362,10 +424,10 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.getByRole('button', { name: 'Continue to documents' }).click();
 
     const updatedTitle = uniqueTitle('TC024 Updated');
-    await page.goto(`/research/${researchId}/edit`);
+    await page.goto(`/research/${researchId}/details`);
     await page.fill('textarea[name="title"]', updatedTitle);
-    await page.click('button:has-text("Save changes")');
-    await expect(page.getByText(/updated|saved/i).first()).toBeVisible({ timeout: 15_000 });
+    await page.getByRole('button', { name: 'Continue to authors' }).click();
+    await expect(page).toHaveURL(/\/authors/);
     await page.goto('/research');
     await expect(page.getByText(updatedTitle)).toBeVisible();
   });
@@ -393,10 +455,7 @@ test.describe('Faculty — UAT Test Suite', () => {
       page.waitForURL(/\/authors/, { timeout: 90_000 }),
       page.getByRole('button', { name: 'Continue to authors' }).click(),
     ]);
-    const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
-    if (await primaryCheckbox.count()) {
-      await primaryCheckbox.check();
-    }
+    await selectCurrentUserAsPrimary(page);
     await Promise.all([
       page.waitForURL(/\/documents/, { timeout: 90_000 }),
       page.getByRole('button', { name: 'Continue to documents' }).click(),
@@ -437,6 +496,10 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
     await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
     await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`));
+    await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toHaveAttribute(
+      'href',
+      new RegExp(`/research/${researchId}/details$`),
+    );
   });
 
   test('TC-028b: after OVPRI return (returned_to_faculty) Revise button appears with Returned by OVPRI badge', async ({
@@ -462,6 +525,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
     await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
     await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`));
+    await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toBeVisible();
   });
 
   test('TC-029: after approval submit progress update — stage moves to Dean Review', async ({

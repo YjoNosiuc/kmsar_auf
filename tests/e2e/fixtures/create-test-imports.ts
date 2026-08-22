@@ -31,6 +31,7 @@ const USER_HEADERS = [
   'college_code',
   'program_code',
   'office',
+  'user_type',
   'role',
   'password',
 ];
@@ -42,6 +43,7 @@ const USER_INSTRUCTIONS = [
   'REQUIRED. Active college code e.g. CCS',
   'OPTIONAL. Program code belonging to college e.g. BSIT',
   'OPTIONAL. Office name',
+  'REQUIRED. faculty|staff|student|external_affiliate',
   'OPTIONAL. Role (default faculty)',
   'OPTIONAL. Blank = password',
 ];
@@ -112,21 +114,28 @@ function researchRow(values: (string | number)[]): (string | number)[] {
 writeSheet('user_import_valid.xlsx', [
   USER_HEADERS,
   USER_INSTRUCTIONS,
-  ['TEST FACULTY ONE', 'testfaculty1@auf.edu.ph', 'TEST-001', 'CCS', 'BSIT', '', 'faculty', ''],
-  ['TEST FACULTY TWO', 'testfaculty2@auf.edu.ph', 'TEST-002', 'CBA', 'BSA', '', 'faculty', ''],
-  ['TEST FACULTY THREE', 'testfaculty3@auf.edu.ph', 'TEST-003', 'CEA', '', 'OVPRI', 'faculty', ''],
+  ['TEST FACULTY ONE', 'testfaculty1@auf.edu.ph', 'TEST-001', 'CCS', 'BSIT', '', 'faculty', 'faculty', ''],
+  ['TEST FACULTY TWO', 'testfaculty2@auf.edu.ph', 'TEST-002', 'CBA', 'BSA', '', 'faculty', 'faculty', ''],
+  ['TEST FACULTY THREE', 'testfaculty3@auf.edu.ph', 'TEST-003', 'CEA', '', 'OVPRI', 'faculty', 'faculty', ''],
+]);
+
+writeSheet('user_import_user_types.xlsx', [
+  USER_HEADERS,
+  USER_INSTRUCTIONS,
+  ['TEST IMPORTED STUDENT', 'teststudent@auf.edu.ph', 'TEST-STUDENT', 'CCS', 'BSIT', '', 'student', '', ''],
+  ['TEST IMPORTED FACULTY', 'testtypedfaculty@auf.edu.ph', 'TEST-TFAC', 'CCS', 'BSCS', '', 'faculty', '', ''],
 ]);
 
 writeSheet('user_import_duplicate.xlsx', [
   USER_HEADERS,
   USER_INSTRUCTIONS,
-  ['TEST FACULTY DUPLICATE', 'testfaculty1@auf.edu.ph', 'TEST-099', 'CCS', 'BSIT', '', 'faculty', ''],
+  ['TEST FACULTY DUPLICATE', 'testfaculty1@auf.edu.ph', 'TEST-099', 'CCS', 'BSIT', '', 'faculty', 'faculty', ''],
 ]);
 
 writeSheet('user_import_invalid_college.xlsx', [
   USER_HEADERS,
   USER_INSTRUCTIONS,
-  ['TEST INVALID COLLEGE', 'testinvalidcollege@auf.edu.ph', 'TEST-INV', 'INVALID', '', '', 'faculty', ''],
+  ['TEST INVALID COLLEGE', 'testinvalidcollege@auf.edu.ph', 'TEST-INV', 'INVALID', '', '', 'faculty', 'faculty', ''],
 ]);
 
 writeSheet('user_import_invalid_program.xlsx', [
@@ -139,6 +148,7 @@ writeSheet('user_import_invalid_program.xlsx', [
     'CCS',
     'INVALID_PROGRAM',
     '',
+    'faculty',
     'faculty',
     '',
   ],

@@ -2,7 +2,8 @@ import { FullConfig } from '@playwright/test';
 import { execSync } from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { refreshAuthStates } from './helpers/auth';
+import { credentials, refreshAuthStates } from './helpers/auth';
+import { runTinker } from './helpers/db';
 import { releaseSuiteLock } from './helpers/db-lock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +27,13 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     timeout: 60_000,
   });
   console.log('Database ready');
+
+  const seededFaculty = runTinker(
+    `echo \\App\\Models\\User::where('email','${credentials.faculty_ccs.email}')->exists() ? '1' : '0';`,
+  );
+  if (!seededFaculty.includes('1')) {
+    throw new Error(`Seeded faculty account missing: ${credentials.faculty_ccs.email}`);
+  }
 
   releaseSuiteLock();
 

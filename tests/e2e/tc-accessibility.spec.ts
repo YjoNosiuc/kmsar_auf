@@ -166,12 +166,20 @@ test.describe('Accessibility — UAT', () => {
       const svgCount = await svgs.count();
       for (let i = 0; i < Math.min(svgCount, 40); i++) {
         const svg = svgs.nth(i);
+        const inDebugChrome = await svg.evaluate((el) =>
+          Boolean(el.closest('#phpdebugbar, .phpdebugbar, [class*="phpdebugbar"]')),
+        );
+        if (inDebugChrome) {
+          continue;
+        }
         const ariaHidden = await svg.getAttribute('aria-hidden');
         const ariaLabel = await svg.getAttribute('aria-label');
         const role = await svg.getAttribute('role');
         const titled = (await svg.locator('title').count()) > 0;
-        const parentButton = svg.locator('xpath=ancestor::button[@aria-label][1]');
-        const parentHasLabel = (await parentButton.count()) > 0;
+        const parentControl = svg.locator(
+          'xpath=ancestor::*[@aria-label or @aria-labelledby][self::button or self::a or @role="button"][1]',
+        );
+        const parentHasLabel = (await parentControl.count()) > 0;
         const ancestorHidden = await svg.evaluate((el) => {
           let node: Element | null = el.parentElement;
           while (node) {
@@ -391,6 +399,55 @@ test.describe('Accessibility — UAT', () => {
       await page.goto('/admin/import/research');
       await expect(page.getByRole('heading', { name: /Import Research Records/i })).toBeVisible();
       await assertNoCriticalOrSeriousA11y(page);
+    });
+
+    test('A11Y-023b: Dashboard Date From and Date To inputs have accessible labels', async ({
+      page,
+    }) => {
+      await login(page, credentials.admin.email, credentials.admin.password);
+      await page.goto('/admin/dashboard');
+      await expect(page.getByLabel(/Date From/i)).toBeVisible();
+      await expect(page.getByLabel(/Date To/i)).toBeVisible();
+
+      await login(page, credentials.ovpri.email, credentials.ovpri.password);
+      await page.goto('/ovpri/dashboard');
+      await expect(page.getByLabel(/Date From/i)).toBeVisible();
+      await expect(page.getByLabel(/Date To/i)).toBeVisible();
+    });
+  });
+
+  test.describe('Accessibility — new registration and error UI', () => {
+    test('A11Y-026: Author search inputs have accessible names', async ({ page }) => {
+      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+      await page.goto('/research/create');
+      await page.waitForURL(/\/research\/\d+\/details/);
+      await fillWizardStep1(page, uniqueTitle('A11Y Author Search'));
+      await page.getByRole('button', { name: 'Continue to authors' }).click();
+
+      const clear = page.getByRole('button', { name: 'Clear', exact: true });
+      if (await clear.isVisible().catch(() => false)) {
+        await clear.click();
+      }
+      await expect(page.locator('#primary-author-search')).toHaveAttribute('aria-label', /primary author/i);
+      await page.getByRole('button', { name: 'This is me' }).click();
+      await expect(page.locator('#coauthor-search')).toHaveAttribute('aria-label', /co-author/i);
+    });
+
+    test('A11Y-027: 403, 404, and 419 pages have one level-one heading', async ({ page }) => {
+      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+      await page.goto('/dean/dashboard');
+      await expect(page.getByRole('heading', { level: 1, name: 'Access Denied' })).toBeVisible();
+      await expect(page.locator('h1')).toHaveCount(1);
+
+      await page.goto(`/not-found-${Date.now()}`);
+      await expect(page.getByRole('heading', { level: 1, name: 'Page Not Found' })).toBeVisible();
+      await expect(page.locator('h1')).toHaveCount(1);
+
+      const response = await page.request.post('/logout', { failOnStatusCode: false });
+      expect(response.status()).toBe(419);
+      await page.setContent(await response.text());
+      await expect(page.getByRole('heading', { level: 1, name: 'Session Expired' })).toBeVisible();
+      await expect(page.locator('h1')).toHaveCount(1);
     });
   });
 

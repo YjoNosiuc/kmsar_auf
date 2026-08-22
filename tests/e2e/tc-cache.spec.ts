@@ -3,7 +3,12 @@ import * as path from 'path';
 import { login, logout, credentials } from './helpers/auth';
 import { resetDatabaseAndAuth, runArtisan } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
-import { createAndSubmitResearch, endorseResearch } from './helpers/research';
+import {
+  createAndSubmitResearch,
+  endorseResearch,
+  selectCurrentUserAsPrimary,
+  submitResearchFromDocuments,
+} from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
 const USER_VALID = path.join(FIXTURES, 'user_import_valid.xlsx');
@@ -43,10 +48,7 @@ async function submitAsFaculty(
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
     page.getByRole('button', { name: 'Continue to authors' }).click(),
   ]);
-  const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
-  if (await primaryCheckbox.count()) {
-    await primaryCheckbox.check();
-  }
+  await selectCurrentUserAsPrimary(page);
   await Promise.all([
     page.waitForURL(/\/documents/, { timeout: 90_000 }),
     page.getByRole('button', { name: 'Continue to documents' }).click(),
@@ -58,9 +60,7 @@ async function submitAsFaculty(
   const researchId = match?.[1];
   expect(researchId).toBeTruthy();
 
-  await page.goto(`/research/${researchId}`);
-  await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-  await page.waitForURL(/\/research\/\d+$/);
+  await submitResearchFromDocuments(page, researchId!);
 
   return researchId!;
 }
@@ -160,7 +160,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
     await page.goto('/dean/dashboard');
     const beforeTotal = await getStatCardValue(page, /Total Research/i);
-    const beforeScopus = await getStatCardValue(page, /Scopus Indexed/i);
+    const beforeScopus = await getStatCardValue(page, /Scopus\/WoS Indexed/i);
 
     await uploadImport(page, '/admin/import/users', USER_VALID);
     await uploadImport(page, '/admin/import/research', RESEARCH_VALID);
@@ -168,7 +168,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
     await page.goto('/dean/dashboard');
     const afterTotal = await getStatCardValue(page, /Total Research/i);
-    const afterScopus = await getStatCardValue(page, /Scopus Indexed/i);
+    const afterScopus = await getStatCardValue(page, /Scopus\/WoS Indexed/i);
 
     expect(afterTotal).toBe(beforeTotal + 1);
     expect(afterScopus).toBe(beforeScopus + 1);
@@ -193,7 +193,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     await expect(page.getByText(TITLE_IMPORT_CBA, { exact: false })).toBeVisible({ timeout: 15_000 });
   });
 
-  test('CACHE-006: Dean academic year filter updates immediately after faculty submits', async ({
+  test('CACHE-006: Dean dashboard updates immediately after faculty submits', async ({
     page,
   }) => {
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);

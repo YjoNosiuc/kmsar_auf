@@ -45,9 +45,43 @@ function createViewerRoleUser(stamp: number): string {
   return email;
 }
 
+async function registerAndReadRole(page: Page, userType: string): Promise<string> {
+  const id = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+  const email = `ra.${userType}.${id}@auf.edu.ph`;
+  await page.goto('/register');
+  await page.fill('#first_name', 'ROLE');
+  await page.fill('#last_name', userType);
+  await page.fill('#employee_number', `RA-${id}`.slice(0, 20));
+  await page.locator('#college_id').selectOption({ index: 1 });
+  await page.locator('#user_type').selectOption(userType);
+  await page.fill('#email', email);
+  await page.fill('#password', 'password123');
+  await page.fill('#password_confirmation', 'password123');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(/\/research|\/403|Access Denied/);
+  return (
+    runTinker(
+      `echo \\App\\Models\\User::where('email','${email}')->firstOrFail()->getRoleNames()->first();`,
+    )
+      .trim()
+      .split(/\r?\n/)
+      .pop()
+      ?.trim() ?? ''
+  );
+}
+
 test.describe('Role Access — UAT Test Suite', () => {
   test.describe('Faculty access control', () => {
     test.use({ storageState: authStatePath('faculty') });
+
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/research');
+      if (page.url().includes('/login')) {
+        await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password, {
+          forceFormLogin: true,
+        });
+      }
+    });
 
     test('RA-001: Faculty cannot access /dean/dashboard → 403', async ({ page }) => {
       await expectForbidden(page, '/dean/dashboard');
@@ -169,7 +203,7 @@ test.describe('Role Access — UAT Test Suite', () => {
 
     test('RA-026: Admin CAN access /admin/colleges → 200', async ({ page }) => {
       await expectOk(page, '/admin/colleges');
-      await expect(page.getByRole('heading', { name: 'Colleges & programs' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Colleges/Offices & programs' })).toBeVisible();
     });
 
     test('RA-027: Admin CAN access /audit-logs → 200', async ({ page }) => {
@@ -178,7 +212,7 @@ test.describe('Role Access — UAT Test Suite', () => {
     });
   });
 
-  test.describe('Co-author access (M-02 fixes)', () => {
+  test.describe('Linked author and viewer access', () => {
     test('RA-028: Co-author can VIEW research they are tagged on → no 403', async ({ page }) => {
       const researchId = seedCoAuthorResearch('dean_review');
       await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
@@ -187,10 +221,10 @@ test.describe('Role Access — UAT Test Suite', () => {
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     });
 
-    test('RA-029: Co-author can EDIT research they are tagged on → edit form loads', async ({ page }) => {
+    test('RA-029: Linked faculty co-author can EDIT research they are tagged on → wizard loads', async ({ page }) => {
       const researchId = seedCoAuthorResearch('draft');
       await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
-      const response = await page.goto(`/research/${researchId}/edit`);
+      const response = await page.goto(`/research/${researchId}/details`);
       expect(response?.status()).toBe(200);
       await expect(page.locator('textarea[name="title"], #field_title').first()).toBeVisible();
     });
@@ -227,6 +261,59 @@ test.describe('Role Access — UAT Test Suite', () => {
       await expectForbidden(page, '/dean/dashboard');
       await expectForbidden(page, '/ovpri/dashboard');
       await expectForbidden(page, '/admin/dashboard');
+    });
+
+    test('RA-033c: Registrar, Unit Head, and co_author are not assignable in admin role options', async ({
+      page,
+    }) => {
+      await login(page, credentials.admin.email, credentials.admin.password);
+      await page.goto('/admin/users');
+      await page.getByRole('button', { name: 'Add user' }).click();
+      const role = page.locator('#add-role');
+      await expect(role.locator('option[value="college_dean"]')).toHaveText('Dean/Head');
+      await expect(role.locator('option[value="viewer"]')).toHaveCount(1);
+      await expect(role.locator('option').filter({ hasText: /^Registrar$/ })).toHaveCount(0);
+      await expect(role.locator('option').filter({ hasText: /Unit Head/ })).toHaveCount(0);
+      await expect(role.locator('option[value="co_author"]')).toHaveCount(0);
+      await expect(role.locator('option[value="registrar"]')).toHaveCount(0);
+      await expect(role.locator('option[value="unit_head"]')).toHaveCount(0);
+    });
+  });
+
+  test.describe('Registration user_type role mapping', () => {
+    test.use({ storageState: emptyStorage });
+
+    test('RA-039: Registering as Faculty assigns faculty role', async ({ page }) => {
+      expect(await registerAndReadRole(page, 'faculty')).toBe('faculty');
+    });
+
+    test('RA-040: Registering as Staff assigns faculty role', async ({ page }) => {
+      expect(await registerAndReadRole(page, 'staff')).toBe('faculty');
+    });
+
+    test('RA-041: Registering as Student assigns viewer role', async ({ page }) => {
+      expect(await registerAndReadRole(page, 'student')).toBe('viewer');
+    });
+
+    test('RA-042: Registering as External Affiliate assigns viewer role', async ({ page }) => {
+      expect(await registerAndReadRole(page, 'external_affiliate')).toBe('viewer');
+    });
+
+    test('RA-033b: Viewer can view own research but cannot edit or submit it', async ({ page }) => {
+      const stamp = Date.now();
+      const email = createViewerRoleUser(stamp);
+      const output = runTinker(
+        `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'VIEW-${stamp}','title'=>'VIEWER OWN ${stamp}','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'proposal','approval_stage'=>'draft','revision_count'=>0,'sdg_tags'=>[4]]); echo $r->id;`,
+      );
+      const researchId = parseInt(output.match(/\d+/)?.[0] ?? '0', 10);
+
+      await login(page, email, 'password');
+      const response = await page.goto(`/research/${researchId}`);
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('link', { name: 'Edit Details' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Submit for Dean Review' })).toHaveCount(0);
+      const createResponse = await page.goto('/research/create');
+      expect(createResponse?.status()).toBe(403);
     });
   });
 

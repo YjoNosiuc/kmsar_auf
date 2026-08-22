@@ -109,13 +109,49 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.locator('.kmsar-alert--danger')).toHaveCount(0);
   });
 
+  test('TC-004b: Dashboard has Date From and Date To filters', async ({ page }) => {
+    await ovpriLogin(page);
+    await page.goto('/ovpri/dashboard');
+
+    await expect(page.locator('input[name="date_from"]')).toBeVisible();
+    await expect(page.locator('input[name="date_to"]')).toBeVisible();
+    await expect(page.getByLabel(/Date From/i)).toBeVisible();
+    await expect(page.getByLabel(/Date To/i)).toBeVisible();
+  });
+
+  test('TC-004c: Dashboard shows Faculty/Staff Engaged and three-year submission trend', async ({
+    page,
+  }) => {
+    await ovpriLogin(page);
+    await page.goto('/ovpri/dashboard');
+
+    await expect(page.locator('[data-stat-card="engaged"]')).toContainText('Faculty/Staff Engaged');
+    await expect(page.locator('#engagedByCollegeChart')).toBeVisible();
+    await expect(page.locator('#submissionTrendChart')).toBeVisible();
+  });
+
   test('TC-005: Dashboard includes research from ALL colleges', async ({ page }) => {
     await ovpriLogin(page);
     await page.goto('/ovpri/dashboard');
 
     await expect(page.locator('#kmsarOvpriByCollege')).toBeVisible();
-    await expect(page.getByText(/Research by college/i)).toBeVisible();
-    await expect(page.locator('.kmsar-chart-legend, .kmsar-legend-item').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Research by College/Office' })).toBeVisible();
+    await expect(page.locator('#collegeBreakdownTable')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: '%' }).first()).toBeVisible();
+  });
+
+  test('TC-005b: College search shows Program/Dept breakdown', async ({ page }) => {
+    runTinker(
+      `$program = \\App\\Models\\Program::where('code','BSIT')->firstOrFail(); \\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->update(['program_id' => $program->id]);`,
+    );
+    await ovpriLogin(page);
+    await page.goto('/ovpri/dashboard');
+    await page.locator('input[name="college"]').fill('CCS');
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
+
+    await expect(page).toHaveURL(/college=CCS/);
+    await expect(page.getByRole('heading', { name: /Program\/Dept Breakdown.*CCS/i })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Program/Dept' })).toBeVisible();
   });
 
   test('TC-006: OVPRI Queue shows only endorsed research sorted by newest first, with college filter', async ({
@@ -127,6 +163,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'Final Approval' })).toBeVisible();
     await expect(page.locator('#panel-pending').getByText(/Sorted by submission date — newest first/i)).toBeVisible();
     await expect(page.locator('#college_id')).toBeVisible();
+    await expect(page.locator('#college_id option').first()).toHaveText('All Colleges/Offices');
 
     await Promise.all([
       page.waitForURL(/college_id=\d+/),

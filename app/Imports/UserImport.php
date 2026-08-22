@@ -18,11 +18,11 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
         'ovpri_admin',
         'cdaic_admin',
         'college_dean',
-        'unit_head',
         'faculty',
-        'registrar',
         'viewer',
     ];
+
+    private const VALID_USER_TYPES = ['faculty', 'staff', 'student', 'external_affiliate'];
 
     public int $imported = 0;
 
@@ -47,6 +47,7 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
             $employeeNumber = strtoupper(trim((string) ($data['employee_number'] ?? '')));
             $collegeCode = strtoupper(trim((string) ($data['college_code'] ?? '')));
             $officeRaw = trim((string) ($data['office'] ?? ''));
+            $userType = strtolower(trim((string) ($data['user_type'] ?? '')));
             $roleRaw = strtolower(trim((string) ($data['role'] ?? '')));
             $passwordRaw = trim((string) ($data['password'] ?? ''));
 
@@ -94,11 +95,18 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
                 }
             }
 
-            $role = in_array($roleRaw, self::VALID_ROLES, true) ? $roleRaw : 'faculty';
+            $userType = in_array($userType, self::VALID_USER_TYPES, true) ? $userType : 'faculty';
+            $role = match ($userType) {
+                'faculty', 'staff' => 'faculty',
+                'student', 'external_affiliate' => 'viewer',
+            };
+            if (($data['user_type'] ?? '') === '' && in_array($roleRaw, self::VALID_ROLES, true)) {
+                $role = $roleRaw;
+            }
             $office = $officeRaw !== '' ? $officeRaw : null;
             $password = $passwordRaw !== '' ? $passwordRaw : 'password';
 
-            DB::transaction(function () use ($name, $email, $employeeNumber, $college, $programId, $office, $password, $role) {
+            DB::transaction(function () use ($name, $email, $employeeNumber, $college, $programId, $office, $password, $role, $userType) {
                 $user = User::query()->create([
                     'name' => strtoupper($name),
                     'email' => $email,
@@ -106,6 +114,7 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
                     'college_id' => $college->id,
                     'program_id' => $programId,
                     'office' => $office,
+                    'user_type' => $userType,
                     'password' => bcrypt($password),
                     'is_active' => true,
                 ]);

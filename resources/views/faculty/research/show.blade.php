@@ -464,7 +464,7 @@
                         <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 0;flex-shrink:0;">
                             <div style="display:flex;align-items:center;gap:10px;">
                                 <div style="width:36px;height:36px;background:#EFF6FF;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                    <svg style="width:18px;height:18px;color:#1E3A8A;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg style="width:18px;height:18px;color:#1E3A8A;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                                     </svg>
                                 </div>
@@ -478,7 +478,7 @@
                                 style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#94A3B8;border-radius:8px;cursor:pointer;transition:background 0.15s;"
                                 onmouseover="this.style.background='#F1F5F9';this.style.color='#0F172A'"
                                 onmouseout="this.style.background='transparent';this.style.color='#94A3B8'">
-                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                             </button>
                         </div>
 
@@ -490,7 +490,7 @@
 
                             {{-- Info banner --}}
                             <div style="display:flex;gap:10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:12px 14px;">
-                                <svg style="width:16px;height:16px;color:#1E3A8A;flex-shrink:0;margin-top:1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg style="width:16px;height:16px;color:#1E3A8A;flex-shrink:0;margin-top:1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                                 <p style="font-size:12px;color:#1E40AF;margin:0;line-height:1.5;">{{ __('Updating the progress status will notify your Dean and OVPRI. The record will be re-submitted for endorsement.') }}</p>
@@ -519,7 +519,7 @@
                                         <option value="patent_granted" @selected($research->status === 'patent_granted')>{{ __('Patent Granted') }}</option>
                                     </select>
                                     <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:#94A3B8;">
-                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                                     </span>
                                 </div>
                             </div>
@@ -605,7 +605,7 @@
                                         <div style="border:1px solid #E2E8F0;border-radius:10px;padding:16px;background:#F8FAFC;">
                                             <div style="position:relative;">
                                                 <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#94A3B8;">
-                                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/>
                                                     </svg>
                                                 </span>
@@ -639,7 +639,7 @@
                             <button type="submit"
                                 style="padding:9px 22px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px;transition:background 0.15s;"
                                 onmouseover="this.style.background='#1e40af'" onmouseout="this.style.background='#1E3A8A'">
-                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                                 {{ __('Submit Progress Update') }}
                             </button>
                         </div>
@@ -664,7 +664,7 @@
                     <span id="kmsar-preview-modal-filename" style="font-size:13px;font-weight:600;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 48px);"></span>
                     <button type="button" onclick="kmsarClosePreviewModal()"
                         style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;color:#64748B;border-radius:6px;cursor:pointer;flex-shrink:0;">
-                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                 </div>
                 <div style="flex:1;overflow:auto;padding:16px;background:#F8FAFC;min-height:0;">

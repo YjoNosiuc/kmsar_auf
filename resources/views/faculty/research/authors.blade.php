@@ -85,13 +85,14 @@
                     <input
                         id="primary-author-search"
                         type="search"
-                        class="kmsar-input w-full"
+                        class="kmsar-input w-full author-search-input"
                         x-model="primarySearch"
                         @input.debounce.300ms="searchPrimary()"
                         @focus="if (primarySearch.trim()) primaryOpen = true"
                         @keydown.escape="closePrimary()"
                         placeholder="{{ __('Search by name, email, or employee number') }}"
                         autocomplete="off"
+                        aria-label="{{ __('Search primary author') }}"
                     >
 
                     {{-- Primary author search results dropdown --}}
@@ -101,7 +102,7 @@
                         </div>
 
                         <template x-for="user in primaryResults" :key="user.id">
-                            <button type="button" class="author-result" @click="selectPrimary(user)">
+                            <button type="button" class="author-result author-result-item" @click="selectPrimary(user)">
                                 <span class="author-result__name" x-text="user.name"></span>
                                 <span class="author-result__meta" x-text="resultMeta(user)"></span>
                                 <span class="author-result__email" x-text="user.email"></span>
@@ -151,7 +152,7 @@
                 <input
                     id="coauthor-search"
                     type="search"
-                    class="kmsar-input w-full"
+                    class="kmsar-input w-full author-search-input"
                     x-model="coAuthorSearch"
                     @input.debounce.300ms="searchCoAuthors()"
                     @focus="if (primaryAuthor && coAuthorSearch.trim()) coAuthorOpen = true"
@@ -159,6 +160,7 @@
                     :disabled="!primaryAuthor"
                     placeholder="{{ __('Search by name, email, or employee number') }}"
                     autocomplete="off"
+                    aria-label="{{ __('Search co-author') }}"
                 >
 
                 <p x-show="!primaryAuthor" class="kmsar-form-hint">
@@ -172,7 +174,7 @@
                     </div>
 
                     <template x-for="user in coAuthorResults" :key="user.id">
-                        <button type="button" class="author-result" @click="addCoAuthor(user)">
+                        <button type="button" class="author-result author-result-item" @click="addCoAuthor(user)">
                             <span class="author-result__name" x-text="user.name"></span>
                             <span class="author-result__meta" x-text="resultMeta(user)"></span>
                             <span class="author-result__email" x-text="user.email"></span>

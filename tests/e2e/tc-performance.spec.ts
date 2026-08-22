@@ -6,6 +6,8 @@ import {
   endorseResearch,
   approveResearch,
   setupEndorsedResearch,
+  selectCurrentUserAsPrimary,
+  submitResearchFromDocuments,
 } from './helpers/research';
 
 const USER_IMPORT = path.resolve('tests/e2e/fixtures/user_import_valid.xlsx');
@@ -66,6 +68,23 @@ test.describe('Performance — UAT', () => {
       expect(ms, `admin dashboard loaded in ${ms}ms`).toBeLessThan(4000);
     });
 
+    test('PERF-005b: Admin dashboard with SDG chart loads within 4 seconds', async ({ page }) => {
+      test.slow();
+      await login(page, credentials.admin.email, credentials.admin.password);
+      const ms = await measureGoto(page, '/admin/dashboard');
+      await expect(page.locator('#adminSdgChart')).toBeVisible();
+      expect(ms, `admin dashboard with SDG chart loaded in ${ms}ms`).toBeLessThan(4000);
+    });
+
+    test('PERF-004b: OVPRI dashboard with new charts loads within 5 seconds', async ({ page }) => {
+      test.slow();
+      await login(page, credentials.ovpri.email, credentials.ovpri.password);
+      const ms = await measureGoto(page, '/ovpri/dashboard');
+      await expect(page.locator('#submissionTrendChart')).toBeVisible();
+      await expect(page.locator('#engagedByCollegeChart')).toBeVisible();
+      expect(ms, `OVPRI dashboard with new charts loaded in ${ms}ms`).toBeLessThan(5000);
+    });
+
     test('PERF-006: All Research page (OVPRI) loads within 4 seconds', async ({ page }) => {
       test.slow();
       await login(page, credentials.ovpri.email, credentials.ovpri.password);
@@ -106,10 +125,7 @@ test.describe('Performance — UAT', () => {
       await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
       await page.getByRole('button', { name: 'Continue to authors' }).click();
       await page.waitForURL(/\/authors/, { timeout: 90_000 });
-      const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
-      if (await primaryCheckbox.count()) {
-        await primaryCheckbox.check();
-      }
+      await selectCurrentUserAsPrimary(page);
       await page.getByRole('button', { name: 'Continue to documents' }).click();
       await page.waitForURL(/\/documents/, { timeout: 90_000 });
       await page.locator('#kmsar-document-file-input').setInputFiles('tests/e2e/fixtures/sample.pdf');
@@ -120,11 +136,9 @@ test.describe('Performance — UAT', () => {
 
       const researchId = page.url().match(/\/research\/(\d+)\//)?.[1];
       expect(researchId).toBeTruthy();
-      await page.goto(`/research/${researchId}`);
 
       const ms = await measureAction(async () => {
-        await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-        await page.waitForURL(/\/research\/\d+$/, { timeout: 30_000 });
+        await submitResearchFromDocuments(page, researchId!);
       });
       expect(ms, `submission took ${ms}ms`).toBeLessThan(5000);
     });

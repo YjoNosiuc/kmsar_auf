@@ -2,9 +2,9 @@ import { test, expect, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { login, logout, credentials } from './helpers/auth';
+import { login, logout, credentials, stopKeepAlive } from './helpers/auth';
 import { runTinker } from './helpers/db';
-import { createAndSubmitResearch } from './helpers/research';
+import { createAndSubmitResearch, selectCurrentUserAsPrimary } from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
 const SAMPLE_PDF = path.join(FIXTURES, 'sample.pdf');
@@ -48,10 +48,7 @@ async function startWizardAtDocuments(page: Page, title: string): Promise<string
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
     page.getByRole('button', { name: 'Continue to authors' }).click(),
   ]);
-  const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
-  if (await primaryCheckbox.count()) {
-    await primaryCheckbox.check();
-  }
+  await selectCurrentUserAsPrimary(page);
   await Promise.all([
     page.waitForURL(/\/documents/, { timeout: 90_000 }),
     page.getByRole('button', { name: 'Continue to documents' }).click(),
@@ -383,6 +380,19 @@ test.describe('Security & sad-path — UAT', () => {
 
   // -------------------------------------------------------------------------
   test.describe('Access control — direct URL manipulation', () => {
+    test('SEC-015b: Wizard step URLs cannot bypass server-side guards', async ({ page }) => {
+      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+      await page.goto('/research/create');
+      await page.waitForURL(/\/research\/\d+\/details/);
+      const researchId = page.url().match(/\/research\/(\d+)\//)?.[1];
+
+      await page.goto(`/research/${researchId}/authors`);
+      await expect(page).toHaveURL(new RegExp(`/research/${researchId}/details`));
+
+      await page.goto(`/research/${researchId}/documents`);
+      await expect(page).toHaveURL(new RegExp(`/research/${researchId}/details`));
+    });
+
     test('SEC-016: Faculty directly accessing /approval/1 → 403 or redirect', async ({ page }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       const response = await page.goto('/approval/1');
@@ -515,6 +525,17 @@ test.describe('Security & sad-path — UAT', () => {
 
   // -------------------------------------------------------------------------
   test.describe('Session security', () => {
+    test('SEC-027b: Idle timeout modal appears after one minute', async ({ page }) => {
+      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+      stopKeepAlive(page);
+      await page.clock.install();
+      await page.goto('/research');
+      await page.clock.fastForward(60_000);
+
+      await expect(page.locator('#kmsar-idle-modal')).toHaveClass(/is-open/);
+      await expect(page.getByRole('heading', { name: 'Are you still there?' })).toBeVisible();
+    });
+
     test('SEC-028: After logout, direct URL access redirects to login (not cached page)', async ({
       page,
     }) => {
@@ -554,6 +575,26 @@ test.describe('Security & sad-path — UAT', () => {
     });
   });
 
+  test('SEC-035: Friendly error pages use KMSAR branding', async ({ page }) => {
+    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+    await page.goto('/dean/dashboard');
+    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
+    await expect(page.locator('.top-brand')).toHaveText('KMSAR');
+
+    await page.goto(`/not-found-${Date.now()}`);
+    await expect(page.getByRole('heading', { name: 'Page Not Found' })).toBeVisible();
+
+    for (const [code, heading] of [
+      [419, 'Session Expired'],
+      [500, 'Something Went Wrong'],
+      [503, 'System Unavailable'],
+    ] as const) {
+      const source = fs.readFileSync(path.join(process.cwd(), `resources/views/errors/${code}.blade.php`), 'utf8');
+      expect(source).toContain(`<h1>${heading}</h1>`);
+      expect(source).toContain('KMSAR');
+    }
+  });
+
   // -------------------------------------------------------------------------
   test.describe('Input sanitization', () => {
     test('SEC-031: Search field with SQL-like input (SELECT * FROM) → no error, treated as plain text search', async ({
@@ -591,7 +632,7 @@ test.describe('Security & sad-path — UAT', () => {
       expect(bodyHtml).toMatch(/&lt;script&gt;|SEC032/);
     });
 
-    test('SEC-033: Co-author email field with invalid format → validation error', async ({
+    test('SEC-033: Co-author search with an invalid email returns no users', async ({
       page,
     }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
@@ -601,29 +642,12 @@ test.describe('Security & sad-path — UAT', () => {
       await page.getByRole('button', { name: 'Continue to authors' }).click();
       await expect(page).toHaveURL(/\/authors/, { timeout: 30_000 });
 
-      await page.getByRole('button', { name: /Add co-author/i }).click();
-      const row = page.locator('.authors-coauthor-card').last();
-      await row.locator('input[name*="[first_name]"]:not([disabled])').fill('BAD');
-      await row.locator('input[name*="[last_name]"]:not([disabled])').fill('EMAIL');
-      const emailInput = row.locator('input[type="email"]:not([disabled])').first();
-      await emailInput.fill('not-an-email');
-
-      // Prefer HTML5 type=email failure; also exercise server validation if novalidate is set
-      const clientInvalid = await emailInput.evaluate((el: HTMLInputElement) => !el.checkValidity());
-      if (clientInvalid) {
-        const message = await emailInput.evaluate((el: HTMLInputElement) => el.validationMessage);
-        expect(message.length).toBeGreaterThan(0);
-        return;
-      }
-
-      await page.locator('form').first().evaluate((form: HTMLFormElement) => {
-        form.setAttribute('novalidate', 'novalidate');
-      });
-      await page.getByRole('button', { name: 'Continue to documents' }).click();
-      await expect(page.locator('.kmsar-form-error, .kmsar-alert--danger').first()).toBeVisible({
-        timeout: 15_000,
-      });
-      await expect(page.getByText(/email|valid|format/i).first()).toBeVisible();
+      await selectCurrentUserAsPrimary(page);
+      await page.locator('#coauthor-search').fill('not-an-email');
+      await expect(
+        page.locator('#coauthor-search').locator('..').getByText(/No users found matching/i),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('.author-result')).toHaveCount(0);
     });
 
     test('SEC-034: SDG picker with value outside 1-17 range → validation error or ignored', async ({

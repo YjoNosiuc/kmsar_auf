@@ -1,8 +1,10 @@
 import { test, expect, Page, Browser } from '@playwright/test';
 import * as path from 'path';
+import * as XLSX from 'xlsx';
 import { login, logout, credentials } from './helpers/auth';
 import { resetDatabaseAndAuth, runArtisan, runTinker } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
+import { selectCurrentUserAsPrimary, submitResearchFromDocuments } from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
 const USER_VALID = path.join(FIXTURES, 'user_import_valid.xlsx');
@@ -15,6 +17,7 @@ const RESEARCH_WITH_COAUTHORS = path.join(FIXTURES, 'research_import_with_coauth
 const RESEARCH_INVALID_COAUTHOR = path.join(FIXTURES, 'research_import_invalid_coauthor.xlsx');
 const RESEARCH_WITH_DOCUMENTS = path.join(FIXTURES, 'research_import_with_documents.xlsx');
 const USER_INVALID_PROGRAM = path.join(FIXTURES, 'user_import_invalid_program.xlsx');
+const USER_TYPES = path.join(FIXTURES, 'user_import_user_types.xlsx');
 const NON_XLSX = path.join(FIXTURES, 'sample.txt');
 
 const TITLE_1 = 'TEST RESEARCH MACHINE LEARNING FOR CROP DISEASE DETECTION';
@@ -104,6 +107,20 @@ function userProgramCode(email: string): string {
   );
   const match = out.trim().match(/(BSIT|BSA|NULL|NONE|[A-Z0-9_-]+)\s*$/);
   return match ? match[1] : 'UNKNOWN';
+}
+
+function userRole(email: string): string {
+  return runTinker(
+    `echo \\App\\Models\\User::where('email','${email}')->firstOrFail()->getRoleNames()->first();`,
+  ).trim().split(/\r?\n/).pop()?.trim() ?? '';
+}
+
+function firstSheetHeaders(filePath: string): string[] {
+  const xlsx = (XLSX as typeof XLSX & { default?: typeof XLSX }).default ?? XLSX;
+  const workbook = xlsx.readFile(filePath);
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json<(string | number)[]>(sheet, { header: 1 });
+  return (rows[0] ?? []).map(String);
 }
 
 function countDocumentsForTitle(title: string): number {
@@ -219,6 +236,26 @@ test.describe('Import Data — UAT Test Suite', () => {
       expect(countUsersByEmail(importedFaculty.one.email)).toBe(1);
       expect(countUsersByEmail(importedFaculty.two.email)).toBe(1);
       expect(countUsersByEmail(importedFaculty.three.email)).toBe(1);
+    });
+
+    test('IMPORT-005b: Import fixtures expose current user and research columns', async () => {
+      const userHeaders = firstSheetHeaders(USER_VALID);
+      expect(userHeaders).toHaveLength(9);
+      expect(userHeaders).toContain('program_code');
+      expect(userHeaders).toContain('user_type');
+
+      const researchHeaders = firstSheetHeaders(RESEARCH_VALID);
+      expect(researchHeaders).toHaveLength(19);
+    });
+
+    test('IMPORT-005c: Imported student gets viewer role and faculty gets faculty role', async ({
+      page,
+    }) => {
+      await page.goto('/admin/import/users');
+      await uploadImport(page, USER_TYPES);
+      await expect(page.locator('.kmsar-alert--success')).toContainText(/2 users? imported successfully/i);
+      expect(userRole('teststudent@auf.edu.ph')).toBe('viewer');
+      expect(userRole('testtypedfaculty@auf.edu.ph')).toBe('faculty');
     });
 
     test('IMPORT-006: Verify imported users exist in database (admin users list)', async ({ page }) => {
@@ -384,6 +421,7 @@ test.describe('Import Data — UAT Test Suite', () => {
       await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
       await page.getByRole('button', { name: 'Continue to authors' }).click();
       await page.waitForURL(/\/authors/);
+      await selectCurrentUserAsPrimary(page);
       await page.getByRole('button', { name: 'Continue to documents' }).click();
       await page.waitForURL(/\/documents/);
       await page.locator('#kmsar-document-file-input').setInputFiles(path.join(FIXTURES, 'sample.pdf'));
@@ -392,9 +430,7 @@ test.describe('Import Data — UAT Test Suite', () => {
       const match = page.url().match(/\/research\/(\d+)\//);
       const researchId = match?.[1];
       expect(researchId).toBeTruthy();
-      await page.goto(`/research/${researchId}`);
-      await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-      await page.waitForURL(/\/research\/\d+$/);
+      await submitResearchFromDocuments(page, researchId!);
 
       await page.goto('/research');
       await expect(page.getByText(title, { exact: false })).toBeVisible();
@@ -450,7 +486,7 @@ test.describe('Import Data — UAT Test Suite', () => {
       await login(page, importedFaculty.two.email, importedFaculty.two.password);
       await openResearchByTitle(page, TITLE_TWO_CO);
       await expect(
-        page.locator('.kmsar-page-header-actions').getByRole('link', { name: 'Edit', exact: true }),
+        page.locator('.kmsar-page-header-actions').getByRole('link', { name: 'Edit Details', exact: true }),
       ).toBeVisible();
     });
 
@@ -462,7 +498,7 @@ test.describe('Import Data — UAT Test Suite', () => {
       await openResearchByTitle(page, TITLE_ONE_CO);
       await expect(page.getByText('Co-author', { exact: true }).first()).toBeVisible();
       await expect(
-        page.locator('.kmsar-page-header-actions').getByRole('link', { name: 'Edit', exact: true }),
+        page.locator('.kmsar-page-header-actions').getByRole('link', { name: 'Edit Details', exact: true }),
       ).toHaveCount(0);
     });
 

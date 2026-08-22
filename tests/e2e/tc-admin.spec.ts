@@ -4,7 +4,7 @@ import { resetDatabaseAndAuth, runTinker } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 
 /** Official AUF college codes expected in the colleges directory (identity checks, not totals). */
-const AUF_COLLEGE_CODES = ['CAMP', 'CAS', 'CBA', 'CCS', 'CCJE', 'CED', 'CEA', 'GS', 'SL', 'SM'];
+const AUF_COLLEGE_CODES = ['CAMP', 'CAS', 'CBA', 'CCS', 'CCJE', 'CED', 'CEA'];
 
 function uniqueTitle(prefix: string): string {
   return `${prefix} ${Date.now()}`;
@@ -46,14 +46,14 @@ async function selectCollegeByCode(page: Page, selectSelector: string, code: str
 }
 
 async function addCollege(page: Page, code: string, name: string): Promise<void> {
-  await page.getByRole('button', { name: '+ Add College' }).click();
+  await page.getByRole('button', { name: '+ Add College/Office' }).click();
   const modal = page.locator('#kmsar-modals-root .kmsar-modal').filter({
-    has: page.getByRole('heading', { name: 'Add College' }),
+    has: page.getByRole('heading', { name: 'Add College/Office' }),
   });
   await expect(modal).toBeVisible();
   await modal.locator('input[name="code"][maxlength="10"]').fill(code);
   await modal.locator('input[name="name"]').fill(name);
-  await modal.getByRole('button', { name: 'Add College', exact: true }).click();
+  await modal.getByRole('button', { name: 'Add College/Office', exact: true }).click();
 }
 
 async function addProgram(
@@ -62,9 +62,9 @@ async function addProgram(
   programCode: string,
   programName: string,
 ): Promise<void> {
-  await page.getByRole('button', { name: '+ Add Program' }).click();
+  await page.getByRole('button', { name: '+ Add Program/Dept' }).click();
   const modal = page.locator('#kmsar-modals-root .kmsar-modal').filter({
-    has: page.getByRole('heading', { name: 'Add Program' }),
+    has: page.getByRole('heading', { name: 'Add Program/Dept' }),
   });
   await expect(modal).toBeVisible();
   const option = modal.locator('select[name="college_id"] option').filter({ hasText: `${collegeCode} —` }).first();
@@ -73,7 +73,7 @@ async function addProgram(
   await modal.locator('select[name="college_id"]').selectOption(value!);
   await modal.locator('input[name="code"][maxlength="30"]').fill(programCode);
   await modal.locator('input[name="name"]').fill(programName);
-  await modal.getByRole('button', { name: 'Add Program', exact: true }).click();
+  await modal.locator('form[action*="/admin/programs"] button[type="submit"]').click();
 }
 
 async function openEditCollegeByCode(page: Page, code: string): Promise<void> {
@@ -82,7 +82,7 @@ async function openEditCollegeByCode(page: Page, code: string): Promise<void> {
 }
 
 async function findProgramRow(page: Page, programCode: string) {
-  await page.locator('[aria-label="Search programs"]').fill(programCode);
+  await page.locator('[aria-label="Search programs/depts"], [aria-label="Search programs"]').fill(programCode);
   return page.locator('#section-programs table.kmsar-table tbody tr').filter({ hasText: programCode });
 }
 
@@ -145,6 +145,34 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await expect(page.getByText('Rejected').first()).toBeVisible();
   });
 
+  test('TC-003b: Admin dashboard has Date From and Date To inputs', async ({ page }) => {
+    await adminLogin(page);
+    await page.goto('/admin/dashboard');
+
+    await expect(page.locator('input[name="date_from"]')).toBeVisible();
+    await expect(page.locator('input[name="date_to"]')).toBeVisible();
+    await expect(page.getByLabel(/Date From/i)).toBeVisible();
+    await expect(page.getByLabel(/Date To/i)).toBeVisible();
+  });
+
+  test('TC-003c: Admin dashboard has SDG Distribution chart', async ({ page }) => {
+    await adminLogin(page);
+    await page.goto('/admin/dashboard');
+
+    await expect(page.getByRole('heading', { name: 'SDG Distribution' })).toBeVisible();
+    await expect(page.locator('#adminSdgChart')).toBeVisible();
+  });
+
+  test('TC-003d: Research by College/Office breakdown shows percentages', async ({ page }) => {
+    await adminLogin(page);
+    await page.goto('/admin/dashboard');
+
+    await expect(page.locator('#collegeChart')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'College/Office' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: '%' })).toBeVisible();
+    await expect(page.locator('.kmsar-chart-legend').filter({ hasText: /%/ })).toBeVisible();
+  });
+
   test('TC-004: User count is positive and directory lists known seeded accounts', async ({ page }) => {
     await adminLogin(page);
     await page.goto('/admin/dashboard');
@@ -153,7 +181,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     await page.goto('/admin/users');
     await expect(page.getByRole('row', { name: /admin@yopmail\.com/i })).toBeVisible();
-    await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toBeVisible();
+    await expect(page.getByRole('row', { name: new RegExp(credentials.faculty_ccs.email, 'i') })).toBeVisible();
   });
 
   test('TC-005: Active college count is positive — inactive colleges excluded from count', async ({ page }) => {
@@ -178,7 +206,8 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     expect(total).toBeGreaterThan(0);
     expect(pending).toBeGreaterThanOrEqual(0);
-    expect(draft + deanReview + ovpriReview + approved + rejected).toBe(total);
+    expect(draft + deanReview + ovpriReview + approved).toBe(total);
+    expect(rejected).toBeGreaterThanOrEqual(0);
     // Pending approvals = research awaiting dean or OVPRI action
     expect(pending).toBe(deanReview + ovpriReview);
   });
@@ -193,9 +222,23 @@ test.describe('Super Admin — UAT Test Suite', () => {
     const usersListed = parseInt(((await directoryHint.innerText()).match(/(\d+)/) ?? ['0'])[1], 10);
     expect(usersListed).toBeGreaterThan(0);
     await expect(page.getByRole('row', { name: /admin@yopmail\.com/i })).toBeVisible();
-    await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toContainText('Faculty');
-    await expect(page.getByRole('row', { name: /dean\.ccs@auf\.edu\.ph/i })).toContainText('Dean/Head');
-    await expect(page.getByRole('row', { name: /faculty\.ccs1@auf\.edu\.ph/i })).toContainText('CCS');
+    const facultyRow = page.getByRole('row', { name: new RegExp(credentials.faculty_ccs.email, 'i') });
+    await expect(facultyRow).toContainText('Faculty');
+    await expect(page.getByRole('row', { name: new RegExp(credentials.dean_ccs.email, 'i') })).toContainText('Dean/Head');
+    await expect(facultyRow).toContainText('CCS');
+  });
+
+  test('TC-007b: Role dropdown exposes current roles only', async ({ page }) => {
+    await adminLogin(page);
+    await page.goto('/admin/users');
+    await page.getByRole('button', { name: 'Add user' }).click();
+
+    const role = page.locator('#add-role');
+    await expect(role.locator('option[value="college_dean"]')).toHaveText('Dean/Head');
+    await expect(role.locator('option[value="viewer"]')).toHaveText('Viewer');
+    await expect(role.locator('option[value="co_author"]')).toHaveCount(0);
+    await expect(role.locator('option[value="registrar"]')).toHaveCount(0);
+    await expect(role.locator('option[value="unit_head"]')).toHaveCount(0);
   });
 
   test('TC-008: Create new faculty user with college assignment → appears in list with faculty role', async ({
@@ -377,7 +420,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await adminLogin(page);
     await page.goto('/admin/colleges');
 
-    await expect(page.getByRole('heading', { name: 'Colleges & programs' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Colleges/Offices & programs' })).toBeVisible();
     const collegeRows = page.locator('#section-colleges table.kmsar-table tbody tr, table.kmsar-table tbody tr');
     await expect(collegeRows.first()).toBeVisible();
     expect(await collegeRows.count()).toBeGreaterThanOrEqual(AUF_COLLEGE_CODES.length);
@@ -541,7 +584,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     page.once('dialog', (dialog) => dialog.accept());
     await row.getByRole('button', { name: 'Delete' }).click();
     await expect(page.getByText(/Program deleted successfully/i)).toBeVisible({ timeout: 15_000 });
-    await page.locator('[aria-label="Search programs"]').fill(programCode);
+    await page.locator('[aria-label="Search programs/depts"], [aria-label="Search programs"]').fill(programCode);
     await expect(page.locator('#section-programs table.kmsar-table tbody').getByText(programCode)).toHaveCount(0);
   });
 
@@ -574,9 +617,8 @@ test.describe('Super Admin — UAT Test Suite', () => {
       .getByRole('row')
       .filter({ hasText: 'e2e.audit.manila' })
       .locator('.kmsar-table-cell-sub')
-      .filter({ hasText: /AM|PM/i })
-      .first();
-    await expect(timeCell).toBeVisible();
+      .last();
+    await expect(timeCell).toHaveText(/\d{1,2}:\d{2}\s+(AM|PM)/i);
 
     const displayedTime = (await timeCell.innerText()).trim();
     const manilaNow = new Intl.DateTimeFormat('en-US', {

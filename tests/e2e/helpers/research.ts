@@ -4,6 +4,30 @@ import { runTinker } from './db';
 
 const WIZARD_TIMEOUT = 90_000;
 
+/** Select the authenticated KMSAR user as the primary author. */
+export async function selectCurrentUserAsPrimary(page: Page): Promise<void> {
+  const primaryId = page.locator('input[name="primary_author_user_id"]');
+  if (await primaryId.inputValue().catch(() => '')) {
+    return;
+  }
+
+  await page.getByRole('button', { name: 'This is me', exact: true }).click();
+  await expect(primaryId).not.toHaveValue('');
+}
+
+/** Submit a draft from the Documents wizard, where the submit action now lives. */
+export async function submitResearchFromDocuments(page: Page, researchId: string): Promise<void> {
+  if (!new RegExp(`/research/${researchId}/documents`).test(page.url())) {
+    await page.goto(`/research/${researchId}/documents`);
+  }
+
+  const submit = page.getByRole('button', { name: 'Submit for Dean Review', exact: true });
+  await expect(submit).toBeVisible({ timeout: WIZARD_TIMEOUT });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await page.waitForURL(new RegExp(`/research/${researchId}$`), { timeout: WIZARD_TIMEOUT });
+}
+
 /**
  * Create a research via the faculty wizard and submit for dean review.
  * Returns the research id.
@@ -26,18 +50,7 @@ export async function createAndSubmitResearch(page: Page, title: string): Promis
     page.getByRole('button', { name: 'Continue to authors' }).click(),
   ]);
 
-  // Ensure "I am the primary author" is checked (default path — no Employee/Student form)
-  const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
-  if (await primaryCheckbox.count()) {
-    await primaryCheckbox.check();
-  }
-
-  // Employee tab exists as "Employee" (renamed from "Employee / Researcher") — only needed if unchecked
-  const employeeTab = page.getByRole('tab', { name: /^Employee$/i });
-  if (await employeeTab.isVisible().catch(() => false)) {
-    // Primary author form is open; keep checkbox path instead
-    await primaryCheckbox.check();
-  }
+  await selectCurrentUserAsPrimary(page);
 
   await Promise.all([
     page.waitForURL(/\/documents/, { timeout: WIZARD_TIMEOUT }),
@@ -54,9 +67,7 @@ export async function createAndSubmitResearch(page: Page, title: string): Promis
   const researchId = match?.[1];
 
   if (researchId) {
-    await page.goto(`/research/${researchId}`);
-    await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-    await page.waitForURL(/\/research\/\d+$/, { timeout: WIZARD_TIMEOUT });
+    await submitResearchFromDocuments(page, researchId);
   }
 
   return researchId;

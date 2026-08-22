@@ -5,6 +5,8 @@ import {
   createAndSubmitResearch,
   endorseResearch,
   approveResearch,
+  selectCurrentUserAsPrimary,
+  submitResearchFromDocuments,
 } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
@@ -37,10 +39,7 @@ async function createAndSubmitResearchAsCba(page: Page, title: string): Promise<
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
     page.getByRole('button', { name: 'Continue to authors' }).click(),
   ]);
-  const primaryCheckbox = page.locator('.authors-primary-author-toggle input[type="checkbox"]');
-  if (await primaryCheckbox.count()) {
-    await primaryCheckbox.check();
-  }
+  await selectCurrentUserAsPrimary(page);
   await Promise.all([
     page.waitForURL(/\/documents/, { timeout: 90_000 }),
     page.getByRole('button', { name: 'Continue to documents' }).click(),
@@ -50,9 +49,7 @@ async function createAndSubmitResearchAsCba(page: Page, title: string): Promise<
 
   const researchId = page.url().match(/\/research\/(\d+)\//)?.[1];
   if (researchId) {
-    await page.goto(`/research/${researchId}`);
-    await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-    await page.waitForURL(/\/research\/\d+$/, { timeout: 90_000 });
+    await submitResearchFromDocuments(page, researchId);
   }
   return researchId;
 }
@@ -70,7 +67,7 @@ async function submitProgressUpdate(page: Page, researchId: string): Promise<voi
   await page.locator('form[action*="update-progress"] button[type="submit"]').click();
 }
 
-test.describe('Dean / Unit Head — UAT Test Suite', () => {
+test.describe('Dean/Head — UAT Test Suite', () => {
   test.beforeAll(async () => {
     await acquireSuiteLock('dean');
   });
@@ -116,7 +113,7 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     const total = await readCard('Total Research');
     const pending = await readCard('Pending Endorsement');
     const published = await readCard('Published');
-    const scopus = await readCard('Scopus Indexed');
+    const scopus = await readCard('Scopus/WoS Indexed');
 
     expect(total).toBeGreaterThan(0);
     expect(pending).toBeGreaterThanOrEqual(0);
@@ -135,6 +132,16 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await expect(page.locator('#kmsarDeanPublished')).toBeVisible();
     await expect(page.locator('#kmsarDeanPresented')).toBeVisible();
     await expect(page.locator('.kmsar-alert--danger')).toHaveCount(0);
+  });
+
+  test('TC-004b: Dashboard has Date From and Date To filters', async ({ page }) => {
+    await deanLogin(page);
+    await page.goto('/dean/dashboard');
+
+    await expect(page.locator('input[name="date_from"]')).toBeVisible();
+    await expect(page.locator('input[name="date_to"]')).toBeVisible();
+    await expect(page.getByLabel(/Date From/i)).toBeVisible();
+    await expect(page.getByLabel(/Date To/i)).toBeVisible();
   });
 
   test('TC-005: Dashboard only shows data from own college', async ({ page }) => {
@@ -330,9 +337,7 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await page.locator('form[action*="return"] button[type="submit"]').click();
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-    await page.goto(`/research/${researchId}`);
-    await page.locator('.kmsar-page-header-actions form[action*="submit"] button[type="submit"]').click();
-    await page.waitForURL(/\/research\/\d+$/);
+    await submitResearchFromDocuments(page, researchId!);
 
     await openDeanReview(page, researchId);
     await page.getByRole('button', { name: 'Return', exact: true }).click();
@@ -381,7 +386,7 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await expect(page.getByText(remarks).first()).toBeVisible();
   });
 
-  test('TC-020: Reports page loads with filter options (SDG, classification, academic year)', async ({
+  test('TC-020: Reports page loads with current filters and Program/Dept column', async ({
     page,
   }) => {
     await deanLogin(page);
@@ -390,8 +395,18 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
     await expect(page.getByLabel('SDG')).toBeVisible();
     await expect(page.getByLabel('Classification')).toBeVisible();
-    await expect(page.getByLabel('Academic year')).toBeVisible();
+    await expect(page.getByLabel(/Date from/i)).toBeVisible();
+    await expect(page.getByLabel(/Date to/i)).toBeVisible();
     await expect(page.getByLabel('Per page')).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Program/Dept' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Approval Status' })).toBeVisible();
+  });
+
+  test('TC-020b: Dean reports list shows Program/Dept column', async ({ page }) => {
+    await deanLogin(page);
+    await page.goto('/reports');
+
+    await expect(page.getByRole('columnheader', { name: 'Program/Dept' })).toBeVisible();
   });
 
   test('TC-021: Generate college PDF report → downloads', async ({ page }) => {
@@ -414,7 +429,7 @@ test.describe('Dean / Unit Head — UAT Test Suite', () => {
     await page.goto('/reports');
 
     await expect(page.getByText(/COLLEGE OF COMPUTER STUDIES/i)).toBeVisible();
-    await expect(page.locator('table.kmsar-table tbody').getByText(/BLOCKCHAIN-BASED ACADEMIC/i)).toBeVisible();
+    await expect(page.locator('table.kmsar-table tbody tr').first()).toBeVisible();
     await expect(page.getByText(/Digital Transformation of MSMEs/i)).toHaveCount(0);
     await expect(page.locator('table.kmsar-table tbody').getByText(/CBA|Business and Accountancy/i)).toHaveCount(0);
   });

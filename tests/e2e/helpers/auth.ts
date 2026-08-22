@@ -128,6 +128,19 @@ export async function logout(page: Page): Promise<void> {
   await page.waitForLoadState('domcontentloaded', { timeout: 30_000 });
 }
 
+const roleHomePath: Record<AuthRole, string> = {
+  faculty: '/research',
+  dean: '/dean/dashboard',
+  ovpri: '/ovpri/dashboard',
+  cdaic: '/ovpri/dashboard',
+  admin: '/admin/dashboard',
+};
+
+async function sessionIsValid(page: Page, homePath: string): Promise<boolean> {
+  await page.goto(homePath, { waitUntil: 'domcontentloaded' });
+  return !page.url().includes('/login');
+}
+
 /** Re-login each seeded role and overwrite tests/e2e/.auth/*.json (call after migrate:fresh). */
 export async function refreshAuthStates(baseURL = 'http://kmsar_auf.test'): Promise<void> {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
@@ -143,12 +156,32 @@ export async function refreshAuthStates(baseURL = 'http://kmsar_auf.test'): Prom
   const browser = await chromium.launch({ headless: true });
   try {
     for (const role of roles) {
-      const context = await browser.newContext({ baseURL });
-      const page = await context.newPage();
-      await login(page, role.email, role.password, { forceFormLogin: true });
-      await context.storageState({ path: authStatePath(role.name) });
-      stopKeepAlive(page);
-      await context.close();
+      const statePath = authStatePath(role.name);
+      const homePath = roleHomePath[role.name];
+      let saved = false;
+
+      for (let attempt = 1; attempt <= 2 && !saved; attempt++) {
+        const context = await browser.newContext({ baseURL });
+        const page = await context.newPage();
+        await login(page, role.email, role.password, { forceFormLogin: true });
+        if (!(await sessionIsValid(page, homePath))) {
+          stopKeepAlive(page);
+          await context.close();
+          continue;
+        }
+        await context.storageState({ path: statePath });
+        stopKeepAlive(page);
+        await context.close();
+
+        const verify = await browser.newContext({ baseURL, storageState: statePath });
+        const verifyPage = await verify.newPage();
+        saved = await sessionIsValid(verifyPage, homePath);
+        await verify.close();
+      }
+
+      if (!saved) {
+        throw new Error(`Failed to persist a valid ${role.name} auth state for ${role.email}`);
+      }
     }
   } finally {
     await browser.close();

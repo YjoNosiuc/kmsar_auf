@@ -15,6 +15,15 @@ function uniqueTitle(prefix: string): string {
   return `${prefix} ${Date.now()}`;
 }
 
+function queuedMailJobsContaining(className: string, email?: string): number {
+  const escapedClass = className.replace(/\\/g, '\\\\');
+  const emailClause = email ? `->where('payload','like','%${email}%')` : '';
+  const out = runTinker(
+    `echo \\Illuminate\\Support\\Facades\\DB::table('jobs')->where('payload','like','%${escapedClass}%')${emailClause}->count();`,
+  );
+  return parseInt(out.match(/(\d+)\s*$/)?.[1] ?? '0', 10);
+}
+
 async function openNotificationBell(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Notifications' }).click();
   await expect(page.locator('.kmsar-navbar-notif-panel')).toBeVisible({ timeout: 10_000 });
@@ -352,6 +361,33 @@ test.describe('Notifications — UAT', () => {
       await expect(page.getByText(/Bulk notification/i).first()).toBeVisible();
       const pager = page.locator('.pagination, nav[role="navigation"] a, .kmsar-pagination').first();
       await expect(pager).toBeVisible({ timeout: 10_000 });
+    });
+  });
+
+  test.describe('Email notification smoke tests', () => {
+    test('NOTIF-020: Research submission queues an email to faculty', async ({ page }) => {
+      const before = queuedMailJobsContaining('ResearchSubmittedFacultyMail', credentials.faculty_ccs.email);
+      await createAndSubmitResearch(page, uniqueTitle('NOTIF020 Faculty Mail'));
+      const after = queuedMailJobsContaining('ResearchSubmittedFacultyMail', credentials.faculty_ccs.email);
+      expect(after).toBeGreaterThan(before);
+    });
+
+    test('NOTIF-021: Research submission queues an email to the dean', async ({ page }) => {
+      const before = queuedMailJobsContaining('ResearchSubmittedDeanMail', credentials.dean_ccs.email);
+      await createAndSubmitResearch(page, uniqueTitle('NOTIF021 Dean Mail'));
+      const after = queuedMailJobsContaining('ResearchSubmittedDeanMail', credentials.dean_ccs.email);
+      expect(after).toBeGreaterThan(before);
+    });
+
+    test('NOTIF-022: Password-reset request creates OTP and dispatches email flow', async ({ page }) => {
+      await page.goto('/forgot-password');
+      await page.getByLabel('Email address').fill(credentials.faculty_ccs.email);
+      await page.getByRole('button', { name: 'Send verification code' }).click();
+      await expect(page).toHaveURL(/\/verify-otp\?email=/, { timeout: 30_000 });
+      const out = runTinker(
+        `echo \\App\\Models\\PasswordResetOtp::where('email','${credentials.faculty_ccs.email}')->where('expires_at','>',now())->count();`,
+      );
+      expect(parseInt(out.match(/(\d+)\s*$/)?.[1] ?? '0', 10)).toBe(1);
     });
   });
 });

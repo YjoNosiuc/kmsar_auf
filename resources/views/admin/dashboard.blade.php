@@ -144,15 +144,34 @@
                 <div style="position:relative; height:280px; width:100%;">
                     <canvas id="collegeChart" aria-label="{{ __('Research by college chart') }}"></canvas>
                 </div>
-                @if (! empty($researchByCollege))
+                @if (! empty($collegeBreakdown) && count($collegeBreakdown))
                     <div class="kmsar-chart-legend kmsar-chart-legend--horizontal">
-                        @foreach ($researchByCollege as $row)
+                        @foreach ($collegeBreakdown as $row)
                             <div class="kmsar-legend-item">
-                                <span class="kmsar-legend-dot" style="background:#1E3A8A;"></span>
-                                <span>{{ $row['label'] }}</span>
-                                <span class="kmsar-legend-value">{{ number_format($row['count']) }}</span>
+                                <span class="kmsar-legend-dot kmsar-legend-dot--navy"></span>
+                                <span>{{ $row['code'] }}: {{ number_format($row['count']) }} ({{ $row['percentage'] }}%)</span>
                             </div>
                         @endforeach
+                    </div>
+                    <div class="kmsar-table-wrap mt-4">
+                        <table class="kmsar-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('College/Office') }}</th>
+                                    <th>{{ __('Research') }}</th>
+                                    <th>{{ __('%') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($collegeBreakdown as $row)
+                                    <tr>
+                                        <td class="kmsar-table-cell-title">{{ $row['code'] }}</td>
+                                        <td>{{ number_format($row['count']) }}</td>
+                                        <td>{{ $row['percentage'] }}%</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 @endif
             </div>
@@ -179,6 +198,20 @@
                         @endforeach
                     </div>
                 @endif
+            </div>
+        </div>
+    </div>
+
+    <div class="kmsar-chart-card" style="margin-bottom:20px;">
+        <div class="kmsar-chart-header">
+            <div>
+                <h2 class="kmsar-chart-title">{{ __('SDG Distribution') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Research aligned to each Sustainable Development Goal (excluding drafts and rejected records)') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--sdg">
+                <canvas id="adminSdgChart" aria-label="{{ __('SDG Distribution') }}" height="300"></canvas>
             </div>
         </div>
     </div>
@@ -233,12 +266,19 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const researchByCollege = @json(collect($researchByCollege ?? []));
+    const collegeBreakdown = @json(collect($collegeBreakdown ?? []));
+    const researchByCollege = collegeBreakdown.length
+        ? collegeBreakdown.map(function (r) { return { label: r.code, count: r.count, percentage: r.percentage }; })
+        : @json(collect($researchByCollege ?? []));
     const researchByStage = @json($researchByStage ?? ['labels' => [], 'counts' => []]);
     const monthlySubmissions = @json($monthlySubmissions ?? ['labels' => [], 'counts' => []]);
     const researchByClassification = @json($researchByClassification ?? ['labels' => [], 'counts' => [], 'colors' => []]);
+    const sdgData = @json(array_values($sdgCounts ?? array_fill(1, 17, 0)));
+    const collegePercentages = researchByCollege.map(function (r) {
+        return r.percentage !== undefined ? r.percentage : 0;
+    });
 
-    const collegeLabels = researchByCollege.map(function (r) { return r.label; });
+    const collegeLabels = researchByCollege.map(function (r) { return r.label || r.code; });
     const collegeCounts = researchByCollege.map(function (r) { return r.count; });
 
     if (typeof Chart === 'undefined') {
@@ -286,6 +326,74 @@ document.addEventListener('DOMContentLoaded', function () {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: scaleCommon,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const pct = collegePercentages[context.dataIndex] ?? 0;
+                                return context.dataset.label + ': ' + context.parsed.y + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            },
+        });
+    }
+
+    const sdgLabels = [
+        'SDG 1: No Poverty', 'SDG 2: Zero Hunger', 'SDG 3: Good Health',
+        'SDG 4: Quality Education', 'SDG 5: Gender Equality', 'SDG 6: Clean Water',
+        'SDG 7: Clean Energy', 'SDG 8: Decent Work', 'SDG 9: Industry & Innovation',
+        'SDG 10: Reduced Inequalities', 'SDG 11: Sustainable Cities',
+        'SDG 12: Responsible Consumption', 'SDG 13: Climate Action',
+        'SDG 14: Life Below Water', 'SDG 15: Life on Land',
+        'SDG 16: Peace & Justice', 'SDG 17: Partnerships'
+    ];
+    const sdgCtx = document.getElementById('adminSdgChart');
+    if (sdgCtx) {
+        new Chart(sdgCtx, {
+            type: 'bar',
+            data: {
+                labels: sdgLabels,
+                datasets: [{
+                    label: 'Research Count',
+                    data: sdgData,
+                    backgroundColor: '#1E3A8A',
+                    hoverBackgroundColor: '#D4AF37',
+                    borderRadius: 4,
+                    borderSkipped: false,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                const total = sdgData.reduce(function (a, b) { return a + b; }, 0);
+                                const pct = total > 0 ? Math.round(context.parsed.x / total * 100) : 0;
+                                return context.parsed.x + ' research (' + pct + '%)';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 },
+                        grid: { color: '#E2E8F0' },
+                        border: { display: false },
+                    },
+                    y: {
+                        ticks: { autoSkip: false, font: { size: 10 } },
+                        grid: { display: false },
+                        border: { display: false },
+                    },
+                },
             },
         });
     }

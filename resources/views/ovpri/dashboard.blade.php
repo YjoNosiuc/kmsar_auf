@@ -64,17 +64,20 @@
                 <input
                     id="collegeSearch"
                     type="search"
+                    name="college"
                     class="kmsar-input"
                     style="width:100%;"
+                    value="{{ $collegeTerm ?? ($selectedCollege->code ?? '') }}"
                     placeholder="{{ __('Filter charts by college code or name…') }}"
                     autocomplete="off"
                 >
+                <p class="kmsar-chart-subtitle" style="margin-top:6px;">{{ __('Type a college code (for example CCS) and click Apply to open the program/dept breakdown.') }}</p>
             </div>
         </div>
     </form>
 
     {{-- Section 2 — Stat cards --}}
-    <div class="kmsar-stats-grid kmsar-animate-in mb-8" role="region" aria-label="{{ __('Dashboard statistics') }}">
+    <div class="kmsar-stats-grid kmsar-stats-grid--5 kmsar-animate-in mb-8" role="region" aria-label="{{ __('Dashboard statistics') }}">
         <div class="kmsar-stat-card kmsar-card--accent-primary">
             <div class="kmsar-stat-card-label">{{ __('Total research') }}</div>
             <div class="kmsar-stat-card-value">{{ number_format($totalResearch) }}</div>
@@ -91,6 +94,11 @@
             <div class="kmsar-stat-card-label">{{ __('Scopus/WoS Indexed') }}</div>
             <div class="kmsar-stat-card-value" style="color: var(--color-gold);">{{ number_format($scopusCount) }}</div>
         </div>
+        <div class="kmsar-stat-card" data-stat-card="engaged">
+            <div class="kmsar-stat-card-label">{{ __('Faculty/Staff Engaged') }}</div>
+            <div class="kmsar-stat-card-value">{{ number_format($engagedTotal ?? 0) }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Unique researchers in KMSAR') }}</div>
+        </div>
     </div>
 
     {{-- Section 3 — Research by college + SDG distribution --}}
@@ -106,6 +114,29 @@
                 <div style="position:relative;height:280px;width:100%;">
                     <canvas id="kmsarOvpriByCollege" aria-label="{{ __('Research by College/Office') }}"></canvas>
                 </div>
+                @php $collegeBreakdownRows = $collegeBreakdown ?? $researchByCollege; @endphp
+                @if (count($collegeBreakdownRows))
+                    <div class="kmsar-table-wrap mt-4" id="collegeBreakdownTable">
+                        <table class="kmsar-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('College/Office') }}</th>
+                                    <th>{{ __('Research') }}</th>
+                                    <th>{{ __('%') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($collegeBreakdownRows as $item)
+                                    <tr data-college-code="{{ $item['code'] ?? $item['label'] }}">
+                                        <td class="kmsar-table-cell-title">{{ $item['code'] ?? $item['label'] }}</td>
+                                        <td>{{ number_format($item['count']) }}</td>
+                                        <td>{{ $item['percentage'] ?? 0 }}%</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
             </div>
         </div>
         <div class="kmsar-chart-card">
@@ -119,6 +150,72 @@
                 <div style="position:relative;height:280px;width:100%;">
                     <canvas id="sdgChart" aria-label="{{ __('SDG Distribution') }}"></canvas>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    @if (! empty($selectedCollege))
+        <div class="kmsar-chart-card" style="margin-bottom:16px;">
+            <div class="kmsar-chart-header">
+                <div>
+                    <h2 class="kmsar-chart-title">{{ __('Program/Dept Breakdown') }} — {{ $selectedCollege->code }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ $selectedCollege->name }}</p>
+                </div>
+            </div>
+            <div class="kmsar-chart-body">
+                @if (count($programBreakdown) > 0)
+                    <div class="kmsar-table-wrap">
+                        <table class="kmsar-table">
+                            <thead>
+                                <tr>
+                                    <th>{{ __('Program/Dept') }}</th>
+                                    <th>{{ __('Research Count') }}</th>
+                                    <th>{{ __('%') }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @php $totalProg = collect($programBreakdown)->sum('count'); @endphp
+                                @foreach ($programBreakdown as $prog)
+                                    <tr>
+                                        <td class="kmsar-table-cell-title">{{ $prog['code'] }}</td>
+                                        <td>{{ number_format($prog['count']) }}</td>
+                                        <td>{{ $totalProg > 0 ? round($prog['count'] / $totalProg * 100, 1) : 0 }}%</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <p class="kmsar-body">{{ __('No program or department counts are available for this college yet. Counts use the primary author’s program assignment.') }}</p>
+                @endif
+            </div>
+        </div>
+    @endif
+
+    <div class="kmsar-chart-card" style="margin-bottom:16px;">
+        <div class="kmsar-chart-header">
+            <div>
+                <h2 class="kmsar-chart-title">{{ __('Submission trend — last 3 years') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Monthly research registrations excluding drafts') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--tall">
+                <canvas id="submissionTrendChart" aria-label="{{ __('Submission trend last 3 years') }}"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="kmsar-chart-card" style="margin-bottom:16px;">
+        <div class="kmsar-chart-header">
+            <div>
+                <h2 class="kmsar-chart-title">{{ __('Faculty/Staff Engaged by College/Office') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Unique faculty and staff listed as authors') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div style="position:relative;height:280px;width:100%;">
+                <canvas id="engagedByCollegeChart" aria-label="{{ __('Faculty/Staff Engaged by College/Office') }}"></canvas>
             </div>
         </div>
     </div>
@@ -227,6 +324,8 @@
             const workflowCounts = @json($workflowStatus->pluck('count'));
             const monthlyLabels = @json($monthlyTrend->pluck('label'));
             const monthlyCounts = @json($monthlyTrend->pluck('count'));
+            const submissionTrend = @json($submissionTrend ?? []);
+            const engagedByCollege = @json(($engagedByCollege ?? collect())->values());
 
             const primary = '#1E3A8A';
             const gold = '#D4AF37';
@@ -279,6 +378,13 @@
                     presentedChart.data.datasets[0].data = presentedData;
                     presentedChart.update();
                 }
+
+                const visibleCodes = labels.map((code) => String(code).toLowerCase());
+                document.querySelectorAll('#collegeBreakdownTable tbody tr[data-college-code]').forEach(function (tr) {
+                    const code = (tr.getAttribute('data-college-code') || '').toLowerCase();
+                    const show = !term || !String(term).trim() || visibleCodes.indexOf(code) !== -1;
+                    tr.hidden = !show;
+                });
             }
 
             const barOptionsShort = {
@@ -314,6 +420,17 @@
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        const data = context.dataset.data || [];
+                                        const total = data.reduce(function (a, b) { return a + b; }, 0);
+                                        const val = context.parsed.y;
+                                        const pct = total > 0 ? (val / total * 100).toFixed(1) : '0.0';
+                                        return context.dataset.label + ': ' + val + ' (' + pct + '%)';
+                                    }
+                                }
+                            }
                         },
                         scales: {
                             x: { stacked: false, ticks: { maxRotation: 45, minRotation: 0 } },
@@ -486,6 +603,61 @@
                         },
                     },
                 });
+            }
+
+            const submissionTrendEl = document.getElementById('submissionTrendChart');
+            if (submissionTrendEl && submissionTrend.length) {
+                new Chart(submissionTrendEl, {
+                    type: 'line',
+                    data: {
+                        labels: submissionTrend.map(function (row) { return row.label; }),
+                        datasets: [{
+                            label: 'Research Submitted',
+                            data: submissionTrend.map(function (row) { return row.count; }),
+                            borderColor: '#1E3A8A',
+                            backgroundColor: 'rgba(30,58,138,0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointBackgroundColor: '#D4AF37',
+                            pointRadius: 4,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { stepSize: 1 } },
+                        },
+                    },
+                });
+            }
+
+            const engagedEl = document.getElementById('engagedByCollegeChart');
+            if (engagedEl) {
+                new Chart(engagedEl, {
+                    type: 'bar',
+                    data: {
+                        labels: engagedByCollege.map(function (row) { return row.code; }),
+                        datasets: [{
+                            label: 'Faculty/Staff Engaged',
+                            data: engagedByCollege.map(function (row) { return row.count; }),
+                            backgroundColor: '#D4AF37',
+                            borderColor: '#D4AF37',
+                            borderRadius: 4,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+                    },
+                });
+            }
+
+            if (collegeSearchEl && collegeSearchEl.value) {
+                applyCollegeFilter(collegeSearchEl.value);
             }
         });
     </script>

@@ -2120,6 +2120,28 @@ input[name="title"] {
 
 .kmsar-stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .kmsar-stats-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.kmsar-stats-grid--5 { grid-template-columns: repeat(5, 1fr); }
+
+@media (max-width: 1280px) {
+  .kmsar-stats-grid--5 { grid-template-columns: repeat(3, 1fr); }
+}
+
+.kmsar-stat-card-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+}
+
+.kmsar-legend-dot--navy { background: var(--color-primary); }
+.kmsar-legend-dot--gold { background: var(--color-gold); }
+
+.kmsar-chart-canvas-wrap--tall {
+  height: 360px;
+}
+
+.kmsar-chart-canvas-wrap--sdg {
+  height: 420px;
+}
 
 .kmsar-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
 .kmsar-three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--space-4); }

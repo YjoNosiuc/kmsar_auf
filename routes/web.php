@@ -229,6 +229,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'pendingApprovals' => 0,
                     'submissionsThisYear' => 0,
                     'researchByCollege' => [],
+                    'collegeBreakdown' => [],
+                    'sdgCounts' => array_fill(1, 17, 0),
                     'researchByStatus' => $researchByStatus,
                     'researchByStage' => [
                         'labels' => ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'],
@@ -270,6 +272,32 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     )->count(),
                 ])
                 ->values();
+
+            $collegeChartTotal = (int) $researchByCollege->sum('count');
+            $collegeBreakdown = $researchByCollege->map(fn (array $row) => [
+                'code' => $row['label'],
+                'count' => (int) $row['count'],
+                'percentage' => $collegeChartTotal > 0
+                    ? round($row['count'] / $collegeChartTotal * 100, 1)
+                    : 0.0,
+            ])->values();
+
+            $sdgCounts = array_fill(1, 17, 0);
+            $sdgTags = $applyDates(
+                Research::query()->whereNotIn('approval_stage', ['draft', 'rejected'])
+            )
+                ->whereNotNull('sdg_tags')
+                ->pluck('sdg_tags');
+
+            foreach ($sdgTags as $tags) {
+                $arr = is_array($tags) ? $tags : (json_decode((string) $tags, true) ?? []);
+                foreach ($arr as $sdg) {
+                    $num = (int) $sdg;
+                    if (isset($sdgCounts[$num])) {
+                        $sdgCounts[$num]++;
+                    }
+                }
+            }
 
             $statusKeys = ['draft', 'dean_review', 'ovpri_review', 'approved', 'rejected'];
             $statusLabels = ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'];
@@ -373,6 +401,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'pendingApprovals' => $pendingApprovals,
                 'submissionsThisYear' => $submissionsThisYear,
                 'researchByCollege' => $researchByCollege,
+                'collegeBreakdown' => $collegeBreakdown,
+                'sdgCounts' => $sdgCounts,
                 'researchByStatus' => $researchByStatus,
                 'researchByStage' => $researchByStage,
                 'researchByClassification' => $researchByClassification,

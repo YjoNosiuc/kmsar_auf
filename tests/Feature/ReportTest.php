@@ -53,7 +53,7 @@ function reportSeedCollegeResearchBundle(int $count = 5): array
         $researches->push(Research::factory()->approved()->create([
             'mother_college_id' => $college->id,
             'primary_author_id' => $faculty->id,
-            'status' => 'ongoing',
+            'status' => 'completed_unpublished',
             'research_classification' => 'internally_funded',
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],

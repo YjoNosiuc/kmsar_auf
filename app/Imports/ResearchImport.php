@@ -262,13 +262,16 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             // Clear OVPRI / admin caches (current and previous hour to avoid boundary staleness)
             foreach ([now(), now()->subHour()] as $moment) {
                 $hourKey = $moment->format('Y-m-d-H');
+                Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
                 Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
                 Cache::forget('ovpri_stats_all_'.$hourKey);
                 for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
                     Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
                 }
             }
+            Cache::forget('admin_monthly_stats_v2_all_all_'.now()->format('Y-m'));
             Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
+            Cache::forget('sdg_counts_v2_all_all');
             Cache::forget('sdg_counts');
             Cache::forget('sdg_counts_all');
             for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
@@ -283,6 +286,7 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             foreach ($deanUsers as $deanId) {
                 foreach ([now(), now()->subDay()] as $day) {
                     $dayKey = $day->format('Y-m-d');
+                    Cache::forget('dean_stats_v2_'.$deanId.'_all_all_'.$dayKey);
                     Cache::forget('dean_stats_'.$deanId.'_all_all_'.$dayKey);
                     Cache::forget('dean_stats_'.$deanId.'_all_'.$dayKey);
                     for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {

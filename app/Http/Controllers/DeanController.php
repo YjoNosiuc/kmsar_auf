@@ -12,6 +12,17 @@ use Illuminate\View\View;
 
 class DeanController extends Controller
 {
+    private const COMPLETED_STATUSES = [
+        'completed_unpublished',
+        'presented_internal',
+        'presented_external',
+        'published_non_indexed',
+        'published_scopus',
+        'patent_granted',
+    ];
+
+    private const IN_PROGRESS_STATUSES = ['proposal', 'ongoing'];
+
     private const PUBLISHED_STATUSES = ['published_non_indexed', 'published_scopus'];
 
     private const PRESENTED_STATUSES = ['presented_internal', 'presented_external'];
@@ -36,12 +47,14 @@ class DeanController extends Controller
             ->limit(15)
             ->get();
 
-        $cacheKey = 'dean_stats_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m-d');
+        $cacheKey = 'dean_stats_v2_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m-d');
 
         $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $dateFrom, $dateTo, $scopeAllColleges) {
             $base = $this->collegeResearchQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
+            $completed = (clone $base)->whereIn('status', self::COMPLETED_STATUSES);
 
-            $totalResearch = (clone $base)->count();
+            $totalResearch = (clone $completed)->count();
+            $researchInProgress = (clone $base)->whereIn('status', self::IN_PROGRESS_STATUSES)->count();
 
             $pendingEndorsement = (clone $base)
                 ->where('approval_stage', 'dean_review')
@@ -65,7 +78,7 @@ class DeanController extends Controller
                 ? 'CAST(strftime(\'%Y\', start_date) AS INTEGER)'
                 : 'YEAR(start_date)';
 
-            $submissionsByYearCounts = (clone $base)
+            $submissionsByYearCounts = (clone $completed)
                 ->selectRaw("{$yearSelect}, COUNT(*) as total")
                 ->groupByRaw($yearGroup)
                 ->get()
@@ -112,6 +125,7 @@ class DeanController extends Controller
 
             return [
                 'totalResearch' => $totalResearch,
+                'researchInProgress' => $researchInProgress,
                 'pendingEndorsement' => $pendingEndorsement,
                 'publishedCount' => $publishedCount,
                 'scopusIndexedCount' => $scopusIndexedCount,
@@ -125,6 +139,7 @@ class DeanController extends Controller
         return view('dean.dashboard', [
             'college' => $college,
             'totalResearch' => $cached['totalResearch'],
+            'researchInProgress' => $cached['researchInProgress'],
             'pendingEndorsement' => $cached['pendingEndorsement'],
             'publishedCount' => $cached['publishedCount'],
             'scopusIndexedCount' => $cached['scopusIndexedCount'],
@@ -142,7 +157,7 @@ class DeanController extends Controller
     private function collegeResearchQuery(?College $college, ?string $dateFrom = null, ?string $dateTo = null, bool $allColleges = false): Builder
     {
         $q = Research::query()
-            ->whereNotIn('approval_stage', ['draft']);
+            ->whereNotIn('approval_stage', ['draft', 'rejected']);
 
         if ($allColleges) {
             // Super admin: university-wide, no college filter.
@@ -215,7 +230,7 @@ class DeanController extends Controller
         $facultyIds = $facultyUsers->pluck('id')->all();
 
         $researchQuery = Research::query()
-            ->whereNotIn('approval_stage', ['draft'])
+            ->whereNotIn('approval_stage', ['draft', 'rejected'])
             ->where('mother_college_id', $collegeId)
             ->where(function (Builder $b) use ($facultyIds) {
                 $b->whereIn('primary_author_id', $facultyIds)
@@ -238,7 +253,7 @@ class DeanController extends Controller
                 return $r->researchAuthors->pluck('user_id')->contains($user->id);
             });
 
-            $total = $relevant->count();
+            $total = $relevant->whereIn('status', self::COMPLETED_STATUSES)->count();
             $published = $relevant->whereIn('status', self::PUBLISHED_STATUSES)->count();
             $presented = $relevant->whereIn('status', self::PRESENTED_STATUSES)->count();
             $scopus = $relevant->where('is_scopus_indexed', true)->count();

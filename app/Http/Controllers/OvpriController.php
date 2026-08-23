@@ -19,6 +19,17 @@ class OvpriController extends Controller
 {
     use AuthorizesRequests;
 
+    private const COMPLETED_STATUSES = [
+        'completed_unpublished',
+        'presented_internal',
+        'presented_external',
+        'published_non_indexed',
+        'published_scopus',
+        'patent_granted',
+    ];
+
+    private const IN_PROGRESS_STATUSES = ['proposal', 'ongoing'];
+
     private const PUBLISHED_STATUSES = ['published_non_indexed', 'published_scopus'];
 
     private const PRESENTED_STATUSES = ['presented_internal', 'presented_external'];
@@ -40,7 +51,7 @@ class OvpriController extends Controller
         $cacheSuffix = ($dateFrom ?? 'all').'_'.($dateTo ?? 'all');
 
         $stats = Cache::remember(
-            'ovpri_dash_v2_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
+            'ovpri_dash_v3_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
             3600,
             fn () => $this->buildDashboardStats($dateFrom, $dateTo)
         );
@@ -55,13 +66,14 @@ class OvpriController extends Controller
         ];
 
         $sdgDistribution = Cache::remember(
-            'sdg_counts_'.$cacheSuffix,
+            'sdg_counts_v2_'.$cacheSuffix,
             3600,
             fn () => $this->buildSdgDistribution($dateFrom, $dateTo, $sdgNames)
         );
 
         return view('ovpri.dashboard', [
             'totalResearch' => $stats['totalResearch'],
+            'researchInProgress' => $stats['researchInProgress'],
             'pendingApprovals' => $stats['pendingApprovals'],
             'publishedCount' => $stats['publishedCount'],
             'scopusCount' => $stats['scopusCount'],
@@ -90,8 +102,10 @@ class OvpriController extends Controller
     private function buildDashboardStats(?string $dateFrom, ?string $dateTo): array
     {
         $base = $this->baseResearchQuery($dateFrom, $dateTo);
+        $completed = (clone $base)->whereIn('status', self::COMPLETED_STATUSES);
 
-        $totalResearch = (clone $base)->count();
+        $totalResearch = (clone $completed)->count();
+        $researchInProgress = (clone $base)->whereIn('status', self::IN_PROGRESS_STATUSES)->count();
 
         $pendingApprovals = (clone $base)
             ->where('approval_stage', 'ovpri_review')
@@ -108,7 +122,7 @@ class OvpriController extends Controller
             })
             ->count();
 
-        $researchCountsByCollege = (clone $base)
+        $researchCountsByCollege = (clone $completed)
             ->selectRaw('mother_college_id, count(*) as total')
             ->groupBy('mother_college_id')
             ->pluck('total', 'mother_college_id');
@@ -159,19 +173,27 @@ class OvpriController extends Controller
             'count' => (int) ($presentedCountsByCollege[$c->id] ?? 0),
         ]);
 
-        $classificationBreakdown = $this->buildClassificationBreakdown($base);
+        $classificationBreakdown = $this->buildClassificationBreakdown($completed);
+
+        $rejectedQuery = Research::query()->where('approval_stage', 'rejected');
+        if ($dateFrom) {
+            $rejectedQuery->whereDate('start_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $rejectedQuery->whereDate('start_date', '<=', $dateTo);
+        }
 
         $workflowStatus = collect([
             ['key' => 'ovpri_review', 'label' => __('OVPRI Review'), 'count' => (clone $base)->where('approval_stage', 'ovpri_review')->count()],
             ['key' => 'approved', 'label' => __('Approved'), 'count' => (clone $base)->where('approval_stage', 'approved')->count()],
-            ['key' => 'rejected', 'label' => __('Rejected'), 'count' => (clone $base)->where('approval_stage', 'rejected')->count()],
+            ['key' => 'rejected', 'label' => __('Rejected'), 'count' => $rejectedQuery->count()],
         ]);
 
         $trendYear = $dateFrom
             ? (int) date('Y', strtotime((string) $dateFrom))
             : (int) now()->year;
         $isSqlite = Research::query()->getConnection()->getDriverName() === 'sqlite';
-        $monthlyQuery = clone $base;
+        $monthlyQuery = clone $completed;
 
         if ($dateFrom || $dateTo) {
             $monthlyTotals = $isSqlite
@@ -213,6 +235,7 @@ class OvpriController extends Controller
 
         return [
             'totalResearch' => $totalResearch,
+            'researchInProgress' => $researchInProgress,
             'pendingApprovals' => $pendingApprovals,
             'publishedCount' => $publishedCount,
             'scopusCount' => $scopusCount,
@@ -276,6 +299,7 @@ class OvpriController extends Controller
                     ->when($dateFrom, fn ($q) => $q->whereDate('start_date', '>=', $dateFrom))
                     ->when($dateTo, fn ($q) => $q->whereDate('start_date', '<=', $dateTo))
                     ->whereNotIn('approval_stage', ['draft', 'rejected'])
+                    ->whereIn('status', self::COMPLETED_STATUSES)
                     ->count();
 
                 return [
@@ -300,7 +324,8 @@ class OvpriController extends Controller
         $isSqlite = Research::query()->getConnection()->getDriverName() === 'sqlite';
 
         $query = Research::query()
-            ->whereNotIn('approval_stage', ['draft'])
+            ->whereNotIn('approval_stage', ['draft', 'rejected'])
+            ->whereIn('status', self::COMPLETED_STATUSES)
             ->whereYear('created_at', '>=', $startYear)
             ->whereYear('created_at', '<=', $endYear);
 
@@ -404,7 +429,7 @@ class OvpriController extends Controller
     private function baseResearchQuery(?string $dateFrom, ?string $dateTo): Builder
     {
         $query = Research::query()
-            ->whereNotIn('approval_stage', ['draft', 'dean_review']);
+            ->whereNotIn('approval_stage', ['draft', 'dean_review', 'rejected']);
 
         if ($dateFrom) {
             $query->whereDate('start_date', '>=', $dateFrom);
@@ -423,7 +448,9 @@ class OvpriController extends Controller
      */
     private function buildSdgDistribution(?string $dateFrom, ?string $dateTo, array $sdgNames): \Illuminate\Support\Collection
     {
-        $query = $this->baseResearchQuery($dateFrom, $dateTo)->whereNotNull('sdg_tags');
+        $query = $this->baseResearchQuery($dateFrom, $dateTo)
+            ->whereIn('status', self::COMPLETED_STATUSES)
+            ->whereNotNull('sdg_tags');
         $allSdgTags = $query->pluck('sdg_tags');
         $sdgCounts = array_fill(1, 17, 0);
 

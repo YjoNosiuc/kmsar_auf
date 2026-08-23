@@ -206,10 +206,12 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     expect(total).toBeGreaterThan(0);
     expect(pending).toBeGreaterThanOrEqual(0);
-    expect(draft + deanReview + ovpriReview + approved).toBe(total);
+    expect(draft + deanReview + ovpriReview + approved + rejected).toBeGreaterThanOrEqual(total);
     expect(rejected).toBeGreaterThanOrEqual(0);
     // Pending approvals = research awaiting dean or OVPRI action
     expect(pending).toBe(deanReview + ovpriReview);
+    const inProgress = await getDashboardStat(page, 'Research In Progress');
+    expect(inProgress).toBeGreaterThanOrEqual(0);
   });
 
   test('TC-007: Users list page loads → all users listed with roles and colleges', async ({ page }) => {

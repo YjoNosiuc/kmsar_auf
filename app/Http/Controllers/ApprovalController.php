@@ -486,12 +486,16 @@ class ApprovalController extends Controller
     {
         foreach ([now(), now()->subHour()] as $moment) {
             $hourKey = $moment->format('Y-m-d-H');
+            Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
             Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
             Cache::forget('ovpri_stats_all_all_'.$hourKey);
             Cache::forget('ovpri_stats_all_'.$hourKey);
         }
-        Cache::forget('admin_monthly_stats_all_all_'.now()->format('Y-m'));
-        Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
+        $monthKey = now()->format('Y-m');
+        Cache::forget('admin_monthly_stats_v2_all_all_'.$monthKey);
+        Cache::forget('admin_monthly_stats_all_all_'.$monthKey);
+        Cache::forget('admin_monthly_stats_'.$monthKey);
+        Cache::forget('sdg_counts_v2_all_all');
         Cache::forget('sdg_counts');
         Cache::forget('sdg_counts_all');
         Cache::forget('sdg_counts_all_all');
@@ -499,6 +503,7 @@ class ApprovalController extends Controller
         foreach ($this->deanUserIdsForCollege((int) $research->mother_college_id) as $id) {
             foreach ([now(), now()->subDay()] as $day) {
                 $dayKey = $day->format('Y-m-d');
+                Cache::forget('dean_stats_v2_'.$id.'_all_all_'.$dayKey);
                 Cache::forget('dean_stats_'.$id.'_all_all_'.$dayKey);
                 Cache::forget('dean_stats_'.$id.'_all_'.$dayKey);
             }

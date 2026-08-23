@@ -97,7 +97,12 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
       10,
     );
     expect(pending).toBeGreaterThanOrEqual(0);
-    expect(total).toBeGreaterThanOrEqual(pending);
+    const inProgressCard = page.locator('.kmsar-stat-card').filter({ hasText: 'Research In Progress' });
+    const inProgress = parseInt(
+      (await inProgressCard.locator('.kmsar-stat-card-value').innerText()).replace(/,/g, ''),
+      10,
+    );
+    expect(inProgress).toBeGreaterThanOrEqual(0);
   });
 
   test('TC-004: SDG distribution chart loads without errors', async ({ page }) => {

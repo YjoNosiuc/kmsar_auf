@@ -236,6 +236,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'totalUsers' => $totalUsers,
                     'totalColleges' => $totalColleges,
                     'totalResearch' => 0,
+                    'researchInProgress' => 0,
                     'pendingApprovals' => 0,
                     'submissionsThisYear' => 0,
                     'researchByCollege' => [],
@@ -253,10 +254,17 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 ]);
             }
 
-            // Match reports default scope: Eloquent (excludes soft-deletes) and exclude rejected.
-            $activeResearch = fn () => $applyDates(Research::query()->where('approval_stage', '!=', 'rejected'));
+            $completedStatuses = config('kmsar.completed_statuses');
+            $inProgressStatuses = config('kmsar.in_progress_statuses');
 
-            $totalResearch = (int) $activeResearch()->count();
+            // Dashboard totals exclude drafts and rejected; Total Research is completed statuses only.
+            $activeResearch = fn () => $applyDates(
+                Research::query()->whereNotIn('approval_stage', ['draft', 'rejected'])
+            );
+            $completedResearch = fn () => $activeResearch()->whereIn('status', $completedStatuses);
+
+            $totalResearch = (int) $completedResearch()->count();
+            $researchInProgress = (int) $activeResearch()->whereIn('status', $inProgressStatuses)->count();
 
             $researchByStatus = [
                 'draft' => (int) $applyDates(Research::query()->where('approval_stage', 'draft'))->count(),
@@ -278,7 +286,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'count' => (int) $applyDates(
                         Research::query()
                             ->where('mother_college_id', $college->id)
-                            ->where('approval_stage', '!=', 'rejected')
+                            ->whereNotIn('approval_stage', ['draft', 'rejected'])
+                            ->whereIn('status', $completedStatuses)
                     )->count(),
                 ])
                 ->values();
@@ -294,7 +303,9 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
 
             $sdgCounts = array_fill(1, 17, 0);
             $sdgTags = $applyDates(
-                Research::query()->whereNotIn('approval_stage', ['draft', 'rejected'])
+                Research::query()
+                    ->whereNotIn('approval_stage', ['draft', 'rejected'])
+                    ->whereIn('status', $completedStatuses)
             )
                 ->whereNotNull('sdg_tags')
                 ->pluck('sdg_tags');
@@ -340,7 +351,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'other' => 'Other',
             ];
 
-            $rawClass = $activeResearch()
+            $rawClass = $completedResearch()
                 ->select('research_classification', DB::raw('count(*) as total'))
                 ->groupBy('research_classification')
                 ->pluck('total', 'research_classification');
@@ -364,16 +375,20 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'colors' => array_map(fn (string $k) => $classificationColorsMap[$k], $classificationKeys),
             ];
 
-            $submissionsThisYear = (int) $applyDates($activeResearch())
+            $submissionsThisYear = (int) $applyDates($completedResearch())
                 ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', now()->year))
                 ->count();
 
             $monthlySubmissions = Cache::remember(
-                'admin_monthly_stats_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m'),
+                'admin_monthly_stats_v2_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m'),
                 3600,
-                function () use ($applyDates, $dateFrom, $dateTo) {
+                function () use ($applyDates, $dateFrom, $dateTo, $completedStatuses) {
                     $isSqlite = DB::connection()->getDriverName() === 'sqlite';
-                    $base = $applyDates(Research::query()->where('approval_stage', '!=', 'rejected'));
+                    $base = $applyDates(
+                        Research::query()
+                            ->whereNotIn('approval_stage', ['draft', 'rejected'])
+                            ->whereIn('status', $completedStatuses)
+                    );
                     $dateColumn = ($dateFrom || $dateTo) ? 'start_date' : 'created_at';
                     $byMonth = $isSqlite
                         ? (clone $base)
@@ -408,6 +423,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'totalUsers' => $totalUsers,
                 'totalColleges' => $totalColleges,
                 'totalResearch' => $totalResearch,
+                'researchInProgress' => $researchInProgress,
                 'pendingApprovals' => $pendingApprovals,
                 'submissionsThisYear' => $submissionsThisYear,
                 'researchByCollege' => $researchByCollege,

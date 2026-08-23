@@ -2118,9 +2118,11 @@ button.kmsar-nav-item {
 .kmsar-stats-grid--3 { grid-template-columns: repeat(3, 1fr); }
 .kmsar-stats-grid--2 { grid-template-columns: repeat(2, 1fr); }
 .kmsar-stats-grid--5 { grid-template-columns: repeat(5, 1fr); }
+.kmsar-stats-grid--6 { grid-template-columns: repeat(6, 1fr); }
 
 @media (max-width: 1280px) {
   .kmsar-stats-grid--5 { grid-template-columns: repeat(3, 1fr); }
+  .kmsar-stats-grid--6 { grid-template-columns: repeat(3, 1fr); }
 }
 
 .kmsar-stat-card-sub {

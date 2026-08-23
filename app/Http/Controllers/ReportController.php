@@ -423,10 +423,18 @@ class ReportController extends Controller
 
         if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
+        } else {
+            $query->whereIn('status', config('kmsar.completed_statuses'));
         }
 
         if (! empty($filters['approval_stage'])) {
             $query->where('approval_stage', $filters['approval_stage']);
+        } else {
+            $excludedStages = ['draft'];
+            if (($filters['include_rejected'] ?? '0') !== '1') {
+                $excludedStages[] = 'rejected';
+            }
+            $query->whereNotIn('approval_stage', $excludedStages);
         }
 
         if (! empty($filters['sdg'])) {
@@ -435,10 +443,6 @@ class ReportController extends Controller
 
         if (! empty($filters['funding_agency'])) {
             $query->where('funding_agency', 'like', '%'.$filters['funding_agency'].'%');
-        }
-
-        if (($filters['include_rejected'] ?? '0') !== '1') {
-            $query->where('approval_stage', '!=', 'rejected');
         }
 
         return $query;

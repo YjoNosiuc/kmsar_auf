@@ -119,9 +119,10 @@ test.describe('Dean/Head — UAT Test Suite', () => {
     expect(pending).toBeGreaterThanOrEqual(0);
     expect(published).toBeGreaterThanOrEqual(0);
     expect(scopus).toBeGreaterThanOrEqual(0);
-    expect(total).toBeGreaterThanOrEqual(pending);
     expect(total).toBeGreaterThanOrEqual(published);
     expect(published).toBeGreaterThanOrEqual(scopus);
+    const inProgress = await readCard('Research In Progress');
+    expect(inProgress).toBeGreaterThanOrEqual(0);
   });
 
   test('TC-004: Chart data loads correctly without errors', async ({ page }) => {

@@ -77,10 +77,15 @@
     </form>
 
     {{-- Section 2 — Stat cards --}}
-    <div class="kmsar-stats-grid kmsar-stats-grid--5 kmsar-animate-in mb-8" role="region" aria-label="{{ __('Dashboard statistics') }}">
+    <div class="kmsar-stats-grid kmsar-stats-grid--6 kmsar-animate-in mb-8" role="region" aria-label="{{ __('Dashboard statistics') }}">
         <div class="kmsar-stat-card kmsar-card--accent-primary">
             <div class="kmsar-stat-card-label">{{ __('Total research') }}</div>
             <div class="kmsar-stat-card-value">{{ number_format($totalResearch) }}</div>
+        </div>
+        <div class="kmsar-stat-card" data-stat-card="in-progress">
+            <div class="kmsar-stat-card-label">{{ __('Research In Progress') }}</div>
+            <div class="kmsar-stat-card-value">{{ number_format($researchInProgress ?? 0) }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Proposal and ongoing') }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-pending">
             <div class="kmsar-stat-card-label">{{ __('Pending OVPRI approval') }}</div>

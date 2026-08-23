@@ -64,13 +64,6 @@ class Research extends Model implements AuditableContract
         ];
     }
 
-    protected function title(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upper($value),
-        );
-    }
-
     protected function fundingAgency(): Attribute
     {
         return Attribute::make(

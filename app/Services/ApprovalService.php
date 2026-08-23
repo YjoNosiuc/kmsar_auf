@@ -113,7 +113,7 @@ class ApprovalService
             return Research::query()->create([
                 'reference_number' => $referenceNumber,
                 'registration_type' => $registrationType,
-                'title' => __('Untitled research'),
+                'title' => '',
                 'primary_author_id' => $user->id,
                 'mother_college_id' => $collegeId,
                 'research_classification' => 'other',

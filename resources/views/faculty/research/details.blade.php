@@ -114,7 +114,7 @@
                             rows="4"
                             required
                             @class(['kmsar-textarea', 'kmsar-input--error' => $errors->has('title')])
-                        >{{ old('title', $research->title) }}</textarea>
+                        >{{ in_array(mb_strtolower(trim((string) old('title', $research->title))), ['untitled research'], true) ? '' : old('title', $research->title) }}</textarea>
                         @if ($errors->has('title'))
                             <p class="kmsar-form-error" id="field_title-error" role="alert">{{ $errors->first('title') }}</p>
                         @endif

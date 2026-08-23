@@ -18,7 +18,7 @@ test.describe('Faculty research registration', () => {
     await registerResearchThroughWizard(page, title);
 
     await page.goto(`${BASE_URL}/research`);
-    await expect(page.getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.getByText(title)).toBeVisible();
   });
 
   test('M-03: registering duplicate title shows warning', async ({ page }) => {
@@ -91,7 +91,7 @@ test.describe('Faculty research registration', () => {
 
     await login(page, CREDENTIALS.facultyCoAuthor.email);
     await page.goto(`${BASE_URL}/research`);
-    await expect(page.getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.getByText(title)).toBeVisible();
     await expect(page.getByText('Co-author', { exact: true }).first()).toBeVisible();
   });
 });

@@ -87,13 +87,6 @@ class User extends Authenticatable
         );
     }
 
-    protected function name(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upper($value),
-        );
-    }
-
     protected function employeeNumber(): Attribute
     {
         return Attribute::make(

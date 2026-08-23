@@ -1058,13 +1058,6 @@ button.kmsar-nav-item {
   background: var(--color-surface);
 }
 
-/* Title fields only — display uppercase while typing.
-   Other inputs show what the user types; backend may still store uppercase. */
-textarea[name="title"],
-input[name="title"] {
-  text-transform: uppercase;
-}
-
 .kmsar-input,
 .kmsar-select,
 .kmsar-textarea {

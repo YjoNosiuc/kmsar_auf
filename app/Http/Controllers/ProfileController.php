@@ -37,14 +37,11 @@ class ProfileController extends Controller
         $validated = $validator->validated();
 
         $user->update([
-            'first_name' => strtoupper($validated['first_name']),
-            'last_name' => strtoupper($validated['last_name']),
-            'middle_name' => $validated['middle_name']
-                ? strtoupper($validated['middle_name'])
-                : null,
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'middle_name' => $validated['middle_name'] ?: null,
             'suffix' => $validated['suffix'] ?? null,
-            'name' => strtoupper($validated['first_name'])
-                .' '.strtoupper($validated['last_name']),
+            'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'email' => strtolower($validated['email']),
         ]);
 

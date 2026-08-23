@@ -136,13 +136,13 @@
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
-                    <h2 class="kmsar-chart-title">{{ __('Research by college') }}</h2>
-                    <p class="kmsar-chart-subtitle">{{ __('Count of registered research per mother college') }}</p>
+                    <h2 class="kmsar-chart-title">{{ __('Research by College/Office') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Count of registered research per College/Office') }}</p>
                 </div>
             </div>
             <div class="kmsar-chart-body" style="padding:20px;">
                 <div style="position:relative; height:280px; width:100%;">
-                    <canvas id="collegeChart" aria-label="{{ __('Research by college chart') }}"></canvas>
+                    <canvas id="collegeChart" aria-label="{{ __('Research by College/Office chart') }}"></canvas>
                 </div>
                 @if (! empty($collegeBreakdown) && count($collegeBreakdown))
                     <div class="kmsar-chart-legend kmsar-chart-legend--horizontal">

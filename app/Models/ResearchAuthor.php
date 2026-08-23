@@ -46,41 +46,6 @@ class ResearchAuthor extends Model
         ];
     }
 
-    protected function name(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upper($value),
-        );
-    }
-
-    protected function firstName(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upperNullable($value),
-        );
-    }
-
-    protected function lastName(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upperNullable($value),
-        );
-    }
-
-    protected function middleName(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upperNullable($value),
-        );
-    }
-
-    protected function suffix(): Attribute
-    {
-        return Attribute::make(
-            set: fn (?string $value) => TextNormalizer::upperNullable($value),
-        );
-    }
-
     protected function employeeNumber(): Attribute
     {
         return Attribute::make(
@@ -139,9 +104,7 @@ class ResearchAuthor extends Model
         $normalizedEmployeeNumber = $user->employee_number
             ? TextNormalizer::upperNullable($user->employee_number)
             : null;
-        $normalizedName = trim((string) $user->name) !== ''
-            ? TextNormalizer::upper($user->name)
-            : null;
+        $normalizedName = trim((string) $user->name);
 
         return $query
             ->where('is_primary', false)
@@ -156,8 +119,8 @@ class ResearchAuthor extends Model
                     $authorQ->orWhere('employee_number', $normalizedEmployeeNumber);
                 }
 
-                if ($normalizedName !== null) {
-                    $authorQ->orWhere('name', $normalizedName);
+                if ($normalizedName !== '') {
+                    $authorQ->orWhereRaw('LOWER(name) = ?', [strtolower($normalizedName)]);
                 }
             });
     }

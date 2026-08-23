@@ -273,9 +273,9 @@ test.describe('Super Admin — UAT Test Suite', () => {
     expect(usersAfter).toBe(usersBefore + 1);
   });
 
-  test('TC-009: New user name is stored in UPPERCASE', async ({ page }) => {
+  test('TC-009: New user name is stored as typed', async ({ page }) => {
     const stamp = Date.now();
-    const email = `e2e.uppercase.${stamp}@auf.edu.ph`;
+    const email = `e2e.as-typed.${stamp}@auf.edu.ph`;
 
     await adminLogin(page);
     await page.goto('/admin/users');
@@ -291,7 +291,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.getByRole('button', { name: 'Create user' }).click();
 
     await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('LOWERCASE MIXEDCASE');
+    await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('lowercase mixedcase');
   });
 
   test('TC-010: Edit existing user → change their college → changes reflected in list', async ({ page }) => {

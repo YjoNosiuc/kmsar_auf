@@ -391,7 +391,6 @@
                                 name="first_name"
                                 class="kmsar-input @error('first_name') kmsar-input--error @enderror"
                                 value="{{ old('first_name') }}"
-                                style="text-transform: uppercase"
                                 required
                             >
                             @error('first_name')
@@ -409,7 +408,6 @@
                                 name="last_name"
                                 class="kmsar-input @error('last_name') kmsar-input--error @enderror"
                                 value="{{ old('last_name') }}"
-                                style="text-transform: uppercase"
                                 required
                             >
                             @error('last_name')
@@ -424,7 +422,6 @@
                                 name="middle_name"
                                 class="kmsar-input @error('middle_name') kmsar-input--error @enderror"
                                 value="{{ old('middle_name') }}"
-                                style="text-transform: uppercase"
                             >
                             @error('middle_name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
@@ -600,7 +597,6 @@
                                 name="first_name"
                                 class="kmsar-input @error('first_name') kmsar-input--error @enderror"
                                 x-model="editUser.first_name"
-                                style="text-transform: uppercase"
                                 required
                             >
                             @error('first_name')
@@ -618,7 +614,6 @@
                                 name="last_name"
                                 class="kmsar-input @error('last_name') kmsar-input--error @enderror"
                                 x-model="editUser.last_name"
-                                style="text-transform: uppercase"
                                 required
                             >
                             @error('last_name')
@@ -633,7 +628,6 @@
                                 name="middle_name"
                                 class="kmsar-input @error('middle_name') kmsar-input--error @enderror"
                                 x-model="editUser.middle_name"
-                                style="text-transform: uppercase"
                             >
                             @error('middle_name')
                                 <p class="kmsar-form-error">{{ $message }}</p>

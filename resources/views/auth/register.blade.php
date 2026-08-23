@@ -144,7 +144,6 @@
                             name="first_name"
                             value="{{ old('first_name') }}"
                             class="kmsar-input"
-                            style="text-transform:uppercase"
                             required
                             autofocus
                             autocomplete="given-name"
@@ -158,7 +157,6 @@
                             name="last_name"
                             value="{{ old('last_name') }}"
                             class="kmsar-input"
-                            style="text-transform:uppercase"
                             required
                             autocomplete="family-name"
                         >
@@ -171,7 +169,6 @@
                             name="middle_name"
                             value="{{ old('middle_name') }}"
                             class="kmsar-input"
-                            style="text-transform:uppercase"
                             autocomplete="additional-name"
                         >
                     </div>

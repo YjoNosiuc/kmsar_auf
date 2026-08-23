@@ -77,7 +77,7 @@ describe('Wizard: Draft Creation', function () {
 
         $this->assertDatabaseHas('research', [
             'id'    => $research->id,
-            'title' => 'EFFECTS OF AI IN PHILIPPINE EDUCATION', // uppercase mutator
+            'title' => 'Effects of AI in Philippine Education',
         ]);
     });
 

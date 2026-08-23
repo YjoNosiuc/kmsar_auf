@@ -82,13 +82,11 @@ class UserController extends Controller
 
         $user = User::create([
             'employee_number' => $validated['employee_number'],
-            'first_name' => strtoupper($validated['first_name']),
-            'last_name' => strtoupper($validated['last_name']),
-            'middle_name' => $validated['middle_name']
-                ? strtoupper($validated['middle_name'])
-                : null,
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'middle_name' => $validated['middle_name'] ?: null,
             'suffix' => filled($validated['suffix'] ?? '') ? trim((string) $validated['suffix']) : null,
-            'name' => strtoupper($validated['first_name']).' '.strtoupper($validated['last_name']),
+            'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'email' => $validated['email'],
             'password' => $validated['password'],
             'college_id' => $validated['college_id'] ?? null,
@@ -146,13 +144,11 @@ class UserController extends Controller
 
         $user->fill([
             'employee_number' => $validated['employee_number'],
-            'first_name' => strtoupper($validated['first_name']),
-            'last_name' => strtoupper($validated['last_name']),
-            'middle_name' => $validated['middle_name']
-                ? strtoupper($validated['middle_name'])
-                : null,
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'middle_name' => $validated['middle_name'] ?: null,
             'suffix' => filled($validated['suffix'] ?? '') ? trim((string) $validated['suffix']) : null,
-            'name' => strtoupper($validated['first_name']).' '.strtoupper($validated['last_name']),
+            'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'email' => $validated['email'],
             'college_id' => $validated['college_id'] ?? null,
             'program_id' => $validated['program_id'] ?? null,

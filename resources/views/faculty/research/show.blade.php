@@ -56,8 +56,7 @@
                 <h1 style="font-size: var(--text-xl);
                            font-weight: 700;
                            color: var(--color-text-primary);
-                           margin-bottom: 0.375rem;
-                           text-transform: uppercase;">
+                           margin-bottom: 0.375rem;">
                     {{ $research->title }}
                 </h1>
 
@@ -73,8 +72,7 @@
                     </span>
                     @if($research->primaryAuthor)
                         <span>·</span>
-                        <span style="font-weight: 500;
-                                     text-transform: uppercase;">
+                        <span style="font-weight: 500;">
                             @if($research->primaryAuthor->first_name)
                                 {{ $research->primaryAuthor->first_name }}
                                 {{ $research->primaryAuthor->last_name }}

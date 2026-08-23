@@ -194,7 +194,7 @@ describe('Admin user management', function () {
             ->assertForbidden();
     });
 
-    it('created user is stored with uppercase name fields', function () {
+    it('created user is stored with name fields as typed', function () {
         $admin = adminMakeSuperAdmin();
 
         $employeeNumber = fake()->unique()->bothify('??####');
@@ -218,11 +218,11 @@ describe('Admin user management', function () {
 
         $created = User::query()->where('email', $email)->firstOrFail();
 
-        expect($created->first_name)->toBe('LOWERCASE')
-            ->and($created->last_name)->toBe('NAMES')
-            ->and($created->middle_name)->toBe('MIDDLE')
-            ->and($created->name)->toContain('LOWERCASE')
-            ->and($created->name)->toContain('NAMES');
+        expect($created->first_name)->toBe('lowercase')
+            ->and($created->last_name)->toBe('names')
+            ->and($created->middle_name)->toBe('middle')
+            ->and($created->name)->toContain('lowercase')
+            ->and($created->name)->toContain('names');
     });
 });
 

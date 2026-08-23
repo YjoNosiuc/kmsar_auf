@@ -75,7 +75,7 @@ test.describe('College dean approval workflow', () => {
 
     await login(page, CREDENTIALS.ovpri.email);
     await page.goto(`${BASE_URL}/ovpri/queue`);
-    await expect(page.getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.getByText(title)).toBeVisible();
   });
 
   test('return research — faculty gets notification', async ({ page }) => {
@@ -152,9 +152,9 @@ test.describe('College dean approval workflow', () => {
     await login(page, CREDENTIALS.dean.email);
     await page.goto(`${BASE_URL}/approval/queue`);
     await page.getByRole('tab', { name: /Pending Endorsement/i }).click();
-    await expect(page.getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.getByText(title)).toBeVisible();
 
     await page.getByRole('tab', { name: /Returned \/ Rejected/i }).click();
-    await expect(page.getByText(title.toUpperCase())).not.toBeVisible();
+    await expect(page.getByText(title)).not.toBeVisible();
   });
 });

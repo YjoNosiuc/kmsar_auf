@@ -431,7 +431,7 @@
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="edit-college-name">{{ __('College/Office name') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <input id="edit-college-name" type="text" name="name" class="kmsar-input @error('name') kmsar-input--error @enderror" required maxlength="150" autocomplete="organization" x-model="editCollege.name" style="text-transform: uppercase">
+                            <input id="edit-college-name" type="text" name="name" class="kmsar-input @error('name') kmsar-input--error @enderror" required maxlength="150" autocomplete="organization" x-model="editCollege.name">
                             @error('name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -513,7 +513,7 @@
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="edit-program-name">{{ __('Program/Dept') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <input id="edit-program-name" type="text" name="name" class="kmsar-input @error('name') kmsar-input--error @enderror" required maxlength="200" autocomplete="off" x-model="editProgram.name" style="text-transform: uppercase">
+                            <input id="edit-program-name" type="text" name="name" class="kmsar-input @error('name') kmsar-input--error @enderror" required maxlength="200" autocomplete="off" x-model="editProgram.name">
                             @error('name')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror

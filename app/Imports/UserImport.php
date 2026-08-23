@@ -108,7 +108,7 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
 
             DB::transaction(function () use ($name, $email, $employeeNumber, $college, $programId, $office, $password, $role, $userType) {
                 $user = User::query()->create([
-                    'name' => strtoupper($name),
+                    'name' => $name,
                     'email' => $email,
                     'employee_number' => $employeeNumber !== '' ? $employeeNumber : null,
                     'college_id' => $college->id,

@@ -116,14 +116,14 @@ test.describe('Faculty — UAT Test Suite', () => {
     await expect(page.locator('#profile_email')).toHaveValue(credentials.faculty_ccs.email);
   });
 
-  test('TC-007: update name is stored in UPPERCASE', async ({ page }) => {
+  test('TC-007: update name is stored as typed', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto('/profile');
-    const newFirst = `E2E${Date.now()}`.slice(0, 12);
+    const newFirst = `E2e${Date.now()}`.slice(0, 12);
     await page.fill('#profile_first_name', newFirst);
     await page.click('button:has-text("Save changes")');
     await expect(page.getByText('Profile updated successfully')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('#profile_first_name')).toHaveValue(newFirst.toUpperCase());
+    await expect(page.locator('#profile_first_name')).toHaveValue(newFirst);
   });
 
   test('TC-008: change password — old password no longer works', async ({ page }) => {
@@ -514,7 +514,7 @@ test.describe('Faculty — UAT Test Suite', () => {
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await openFacultyResearchList(page, title);
-    const card = facultyResearchCard(page, title.toUpperCase());
+    const card = facultyResearchCard(page, title);
     await expect(card).toBeVisible({ timeout: 15_000 });
     await expect(card.getByText(/Returned by OVPRI/i)).toBeVisible();
     await expect(card.getByText(/^Rejected$/i)).toHaveCount(0);

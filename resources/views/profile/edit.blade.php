@@ -55,7 +55,6 @@
                            id="profile_first_name"
                            class="kmsar-input {{ $errors->profile->has('first_name') ? 'kmsar-input--error' : '' }}"
                            value="{{ old('first_name', $user->first_name) }}"
-                           style="text-transform: uppercase;"
                            required>
                     @error('first_name', 'profile')
                         <p class="kmsar-form-error">{{ $message }}</p>
@@ -72,7 +71,6 @@
                            id="profile_last_name"
                            class="kmsar-input {{ $errors->profile->has('last_name') ? 'kmsar-input--error' : '' }}"
                            value="{{ old('last_name', $user->last_name) }}"
-                           style="text-transform: uppercase;"
                            required>
                     @error('last_name', 'profile')
                         <p class="kmsar-form-error">{{ $message }}</p>
@@ -87,8 +85,7 @@
                            name="middle_name"
                            id="profile_middle_name"
                            class="kmsar-input {{ $errors->profile->has('middle_name') ? 'kmsar-input--error' : '' }}"
-                           value="{{ old('middle_name', $user->middle_name) }}"
-                           style="text-transform: uppercase;">
+                           value="{{ old('middle_name', $user->middle_name) }}">
                     @error('middle_name', 'profile')
                         <p class="kmsar-form-error">{{ $message }}</p>
                     @enderror

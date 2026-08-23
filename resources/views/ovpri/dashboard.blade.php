@@ -289,20 +289,6 @@
         </div>
     </div>
 
-    {{-- Section 5 — Monthly submission trend (full width) --}}
-    <div class="kmsar-chart-card">
-        <div class="kmsar-chart-header">
-            <div>
-                <h2 class="kmsar-chart-title">{{ __('Submission trend') }}</h2>
-                <p class="kmsar-chart-subtitle">{{ __('New research registrations by month (last 12 months)') }}</p>
-            </div>
-        </div>
-        <div class="kmsar-chart-body">
-            <div style="position:relative;height:280px;width:100%;">
-                <canvas id="kmsarOvpriMonthlyTrend" aria-label="{{ __('Monthly submission trend') }}"></canvas>
-            </div>
-        </div>
-    </div>
 @endsection
 
 @push('scripts')
@@ -322,8 +308,6 @@
             const sdgNums = @json($sdgDistribution->pluck('sdg')->values());
             const workflowLabels = @json($workflowStatus->pluck('label'));
             const workflowCounts = @json($workflowStatus->pluck('count'));
-            const monthlyLabels = @json($monthlyTrend->pluck('label'));
-            const monthlyCounts = @json($monthlyTrend->pluck('count'));
             const submissionTrend = @json($submissionTrend ?? []);
             const engagedByCollege = @json(($engagedByCollege ?? collect())->values());
 
@@ -568,38 +552,6 @@
                         cutout: '65%',
                         plugins: {
                             legend: { display: false },
-                        },
-                    },
-                });
-            }
-
-            const monthlyEl = document.getElementById('kmsarOvpriMonthlyTrend');
-            if (monthlyEl) {
-                new Chart(monthlyEl, {
-                    type: 'line',
-                    data: {
-                        labels: monthlyLabels,
-                        datasets: [{
-                            label: @json(__('Submissions')),
-                            data: monthlyCounts,
-                            borderColor: primary,
-                            backgroundColor: 'rgba(30, 58, 138, 0.08)',
-                            fill: true,
-                            tension: 0.25,
-                            borderWidth: 2,
-                            pointBackgroundColor: primary,
-                        }],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { display: true, position: 'bottom' },
-                        },
-                        scales: {
-                            y: { beginAtZero: true, ticks: { precision: 0 } },
-                            x: {},
                         },
                     },
                 });

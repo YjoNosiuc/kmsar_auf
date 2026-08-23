@@ -215,7 +215,7 @@ test.describe('Dean/Head — UAT Test Suite', () => {
 
     await deanLogin(page);
     await page.goto('/approval/queue');
-    await expect(page.getByText(cbaTitle.toUpperCase())).toHaveCount(0);
+    await expect(page.getByText(cbaTitle)).toHaveCount(0);
     await expect(page.getByText('AUF-2024-CBA-0002')).toHaveCount(0);
   });
 
@@ -236,7 +236,7 @@ test.describe('Dean/Head — UAT Test Suite', () => {
 
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/queue');
-    await expect(page.getByText(endorsedTitle.toUpperCase())).toBeVisible();
+    await expect(page.getByText(endorsedTitle)).toBeVisible();
   });
 
   test('TC-012: Faculty receives ResearchEndorsed notification after endorsement', async ({
@@ -260,7 +260,7 @@ test.describe('Dean/Head — UAT Test Suite', () => {
 
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/queue');
-    await expect(page.getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.getByText(title)).toBeVisible();
   });
 
   test('TC-014: Endorsing with short remarks (< 10 characters) succeeds — remarks are optional', async ({

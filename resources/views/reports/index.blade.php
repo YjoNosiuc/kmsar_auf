@@ -184,7 +184,7 @@
     <div class="kmsar-reports-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
         @if ($reportScope === 'ovpri')
             <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px;border-top:3px solid #1E3A8A;">
-                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-bottom:4px;">{{ __('Total Records') }}</div>
+                <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin-bottom:4px;">{{ __('Total Research') }}</div>
                 <div style="font-size:28px;font-weight:700;color:#1E3A8A;">{{ number_format($stats['matching']) }}</div>
             </div>
             <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px;border-top:3px solid #D4AF37;">

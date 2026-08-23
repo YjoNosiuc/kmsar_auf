@@ -53,7 +53,7 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                 return;
             }
 
-            $title = strtoupper($titleRaw);
+            $title = $titleRaw;
 
             if (Research::query()->whereRaw('LOWER(title) = ?', [strtolower($title)])->exists()) {
                 $this->skip($rowNumber, $title, 'Title already exists');

@@ -232,14 +232,14 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     ).toBeVisible({ timeout: 15_000 });
 
     await page.goto('/ovpri/queue');
-    await expect(page.locator('#panel-pending').getByText(title.toUpperCase())).toHaveCount(0);
+    await expect(page.locator('#panel-pending').getByText(title)).toHaveCount(0);
     await switchQueueTab(page, 'approved');
-    await expect(page.locator('#panel-approved').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-approved').getByText(title)).toBeVisible();
 
     await cdaicLogin(page);
     await page.goto('/ovpri/queue?tab=approved');
     await switchQueueTab(page, 'approved');
-    await expect(page.locator('#panel-approved').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-approved').getByText(title)).toBeVisible();
   });
 
   test('TC-011: Primary author receives ResearchApproved notification (H-04)', async ({
@@ -278,24 +278,24 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     // Faculty list shows "Returned by OVPRI" badge
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await openFacultyResearchList(page, title);
-    const facultyCard = facultyResearchCard(page, title.toUpperCase());
+    const facultyCard = facultyResearchCard(page, title);
     await expect(facultyCard).toBeVisible({ timeout: 15_000 });
     await expect(facultyCard.getByText(/Returned by OVPRI/i)).toBeVisible();
 
     // Dean: NOT in Pending, IS in Returned
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
     await page.goto('/approval/queue');
-    await expect(page.locator('#panel-pending').getByText(title.toUpperCase())).toHaveCount(0);
+    await expect(page.locator('#panel-pending').getByText(title)).toHaveCount(0);
     await page.locator('#tab-returned').click();
     await expect(page.locator('#panel-returned')).toHaveClass(/active/);
-    await expect(page.locator('#panel-returned').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-returned').getByText(title)).toBeVisible();
     await expect(page.locator('#panel-returned').getByText(/Returned by OVPRI/i).first()).toBeVisible();
 
     // CDAIC can still open the returned record (institutional reviewer)
     await cdaicLogin(page);
     await page.goto('/ovpri/queue?tab=returned');
     await switchQueueTab(page, 'returned');
-    await expect(page.locator('#panel-returned').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-returned').getByText(title)).toBeVisible();
     await expect(page.locator('#panel-returned').getByText(/Returned to Faculty/i).first()).toBeVisible();
   });
 
@@ -364,7 +364,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await cdaicLogin(page);
     await page.goto('/ovpri/queue?tab=returned');
     await switchQueueTab(page, 'returned');
-    await expect(page.locator('#panel-returned').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-returned').getByText(title)).toBeVisible();
   });
 
   test('TC-017: Dean receives ResearchRejectedDean on OVPRI rejection', async ({ page }) => {
@@ -517,7 +517,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await cdaicLogin(page);
     await page.goto('/ovpri/queue?tab=approved');
     await switchQueueTab(page, 'approved');
-    await expect(page.locator('#panel-approved').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-approved').getByText(title)).toBeVisible();
   });
 
   test('CDAIC-002: CDAIC can return research without 403', async ({ page }) => {
@@ -549,7 +549,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await cdaicLogin(page);
     await page.goto('/ovpri/queue?tab=returned');
     await switchQueueTab(page, 'returned');
-    await expect(page.locator('#panel-returned').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-returned').getByText(title)).toBeVisible();
   });
 
   test('CDAIC-004: OVPRI sees CDAIC\'s approved records in Approved tab', async ({ page }) => {
@@ -560,7 +560,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await ovpriLogin(page);
     await page.goto('/ovpri/queue?tab=approved');
     await switchQueueTab(page, 'approved');
-    await expect(page.locator('#panel-approved').getByText(title.toUpperCase())).toBeVisible();
+    await expect(page.locator('#panel-approved').getByText(title)).toBeVisible();
   });
 
   test('CDAIC-005: OVPRI sees CDAIC\'s returned records in Returned tab', async ({ page }) => {

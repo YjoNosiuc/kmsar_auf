@@ -79,12 +79,6 @@
             'returned_to_faculty' => __('Returned by OVPRI'),
         ];
 
-        $filterItems = $research->map(static fn ($item) => [
-            'id' => $item->id,
-            'title' => (string) $item->title,
-            'approval_stage' => (string) $item->approval_stage,
-            'status' => (string) $item->status,
-        ])->values()->all();
     @endphp
 
     <div
@@ -92,17 +86,16 @@
             search: '',
             stage: '',
             status: '',
-            items: {{ \Illuminate\Support\Js::from($filterItems) }},
-            matches(title, approvalStage, progressStatus) {
-                const q = (this.search || '').trim().toLowerCase();
-                const titleOk = !q || (title || '').toLowerCase().includes(q);
-                const stageOk = !this.stage || approvalStage === this.stage;
-                const statusOk = !this.status || progressStatus === this.status;
-                return titleOk && stageOk && statusOk;
-            },
-            get visibleCount() {
-                return this.items.filter((item) => this.matches(item.title, item.approval_stage, item.status)).length;
-            },
+            items: @js($filterItems ?? []),
+            get filtered() {
+                return this.items.filter((item) => {
+                    const matchSearch = !this.search ||
+                        (item.title || '').toLowerCase().includes(this.search.toLowerCase());
+                    const matchStage = !this.stage || item.stage === this.stage;
+                    const matchStatus = !this.status || item.status === this.status;
+                    return matchSearch && matchStage && matchStatus;
+                });
+            }
         }"
     >
         @if ($research->isNotEmpty())
@@ -152,7 +145,8 @@
             @endphp
             <div
                 class="kmsar-research-card"
-                x-show='matches(@js($item->title), @js($item->approval_stage), @js($item->status))'
+                x-show="filtered.some(f => f.id === {{ $item->id }})"
+                x-cloak
                 style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-left:4px solid {{ $leftBorder }};"
             >
                 <div style="flex:1;min-width:0;">
@@ -206,11 +200,11 @@
 
         @if ($research->isNotEmpty())
             <div
-                x-show="visibleCount === 0"
+                x-show="filtered.length === 0"
                 x-cloak
                 style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:24px;text-align:center;color:#64748B;font-size:13px;"
             >
-                {{ __('No research matches your search or filters.') }}
+                {{ __('No results found') }}
             </div>
         @endif
     </div>

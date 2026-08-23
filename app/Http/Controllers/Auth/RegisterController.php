@@ -29,6 +29,10 @@ class RegisterController extends Controller
             'suffix' => ['nullable', 'string', 'max:20'],
             'employee_number' => ['required', 'string', 'max:50', 'unique:users,employee_number'],
             'college_id' => ['required', 'exists:colleges,id'],
+            'program_id' => [
+                'nullable',
+                'exists:programs,id',
+            ],
             'user_type' => ['required', 'in:faculty,staff,student,external_affiliate'],
             'email' => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
@@ -42,6 +46,7 @@ class RegisterController extends Controller
             'name' => trim($validated['first_name'].' '.$validated['last_name']),
             'employee_number' => strtoupper($validated['employee_number']),
             'college_id' => $validated['college_id'],
+            'program_id' => $validated['program_id'] ?? null,
             'user_type' => $validated['user_type'],
             'email' => strtolower($validated['email']),
             'password' => $validated['password'],

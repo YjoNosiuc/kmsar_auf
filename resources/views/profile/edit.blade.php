@@ -155,6 +155,16 @@
             </div>
 
             <div class="kmsar-form-group">
+                <label class="kmsar-form-label">Program/Dept</label>
+                <div class="kmsar-input" style="background:#F8FAFC; color:#64748B;">
+                    {{ $user->program
+                        ? $user->program->code.' — '.$user->program->name
+                        : 'Not assigned' }}
+                </div>
+                <p class="kmsar-form-hint">Contact admin to update your Program/Dept.</p>
+            </div>
+
+            <div class="kmsar-form-group">
                 <label class="kmsar-form-label">Role</label>
                 <input type="text"
                        class="kmsar-input"

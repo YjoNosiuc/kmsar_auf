@@ -36,6 +36,7 @@
                 'suffix' => old('suffix', ''),
                 'email' => old('email', ''),
                 'college_id' => old('college_id') !== null && old('college_id') !== '' ? (string) old('college_id') : '',
+                'program_id' => old('program_id') !== null && old('program_id') !== '' ? (string) old('program_id') : '',
                 'office' => old('office', ''),
                 'role' => old('role', ''),
                 'is_active' => filter_var(old('is_active', '1'), FILTER_VALIDATE_BOOLEAN),
@@ -52,6 +53,7 @@
             'employee_number' => $user->employee_number,
             'role' => $primaryRole?->name ?? '',
             'college_id' => $user->college_id,
+            'program_id' => $user->program_id,
             'office' => $user->office,
             'user_type' => $user->user_type,
             'is_active' => (bool) $user->is_active,
@@ -479,10 +481,16 @@
                     <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="add-college_id">{{ __('College/Office') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
-                            <select id="add-college_id" name="college_id" class="kmsar-select">
-                                <option value="">{{ __('— Select college/office —') }}</option>
+                            <select
+                                id="add-college_id"
+                                name="college_id"
+                                class="kmsar-select"
+                                x-model="addCollegeId"
+                                x-on:change="addProgramId = ''; loadPrograms($event.target.value, 'add')"
+                            >
+                                <option value="">{{ __('— Select College/Office —') }}</option>
                                 @foreach ($colleges as $college)
-                                    <option value="{{ $college->id }}" @selected((string) old('college_id') === (string) $college->id)>{{ $college->code }} — {{ $college->name }}</option>
+                                    <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
                                 @endforeach
                             </select>
                             @error('college_id')
@@ -490,6 +498,28 @@
                             @enderror
                         </div>
 
+                        <div class="kmsar-form-group">
+                            <label class="kmsar-form-label" for="add-program_id">{{ __('Program/Dept') }}</label>
+                            <input type="hidden" x-bind:name="addPrograms.length === 0 ? 'program_id' : null" x-bind:value="addProgramId">
+                            <select
+                                id="add-program_id"
+                                name="program_id"
+                                class="kmsar-select @error('program_id') kmsar-input--error @enderror"
+                                x-model="addProgramId"
+                                x-bind:disabled="addPrograms.length === 0"
+                            >
+                                <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
+                                <template x-for="program in addPrograms" :key="program.id">
+                                    <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
+                                </template>
+                            </select>
+                            @error('program_id')
+                                <p class="kmsar-form-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="add-role">{{ __('Role') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
                             <select id="add-role" name="role" class="kmsar-select @error('role') kmsar-input--error @enderror" required>
@@ -502,23 +532,23 @@
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
-                    </div>
 
-                    <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="add-office">{{ __('Program/Dept') }}</label>
-                        <input
-                            id="add-office"
-                            type="text"
-                            name="office"
-                            class="kmsar-input @error('office') kmsar-input--error @enderror"
-                            value="{{ old('office') }}"
-                            maxlength="100"
-                            placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
-                        >
-                        <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
-                        @error('office')
-                            <p class="kmsar-form-error">{{ $message }}</p>
-                        @enderror
+                        <div class="kmsar-form-group">
+                            <label class="kmsar-form-label" for="add-office">{{ __('Office') }}</label>
+                            <input
+                                id="add-office"
+                                type="text"
+                                name="office"
+                                class="kmsar-input @error('office') kmsar-input--error @enderror"
+                                value="{{ old('office') }}"
+                                maxlength="100"
+                                placeholder="{{ __('e.g. OVPRI, CDAIC, IS, CCFP') }}"
+                            >
+                            <p class="kmsar-form-hint">{{ __('For non-college units: IS, CCFP, OVPRI, CDAIC, CARI, CARE, OVPAA, UL') }}</p>
+                            @error('office')
+                                <p class="kmsar-form-error">{{ $message }}</p>
+                            @enderror
+                        </div>
                     </div>
 
                     <div class="kmsar-form-group">
@@ -685,8 +715,14 @@
                     <div class="kmsar-form-row-3">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="edit-college_id">{{ __('College/Office') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
-                            <select id="edit-college_id" name="college_id" class="kmsar-select" x-model="editUser.college_id">
-                                <option value="">{{ __('— Select college/office —') }}</option>
+                            <select
+                                id="edit-college_id"
+                                name="college_id"
+                                class="kmsar-select"
+                                x-model="editUser.college_id"
+                                x-on:change="editUser.program_id = ''; loadPrograms($event.target.value, 'edit')"
+                            >
+                                <option value="">{{ __('— Select College/Office —') }}</option>
                                 @foreach ($colleges as $college)
                                     <option value="{{ $college->id }}">{{ $college->code }} — {{ $college->name }}</option>
                                 @endforeach
@@ -697,7 +733,27 @@
                         </div>
 
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-office">{{ __('Program/Dept') }}</label>
+                            <label class="kmsar-form-label" for="edit-program_id">{{ __('Program/Dept') }}</label>
+                            <input type="hidden" x-bind:name="editPrograms.length === 0 ? 'program_id' : null" x-bind:value="editUser.program_id">
+                            <select
+                                id="edit-program_id"
+                                name="program_id"
+                                class="kmsar-select @error('program_id') kmsar-input--error @enderror"
+                                x-model="editUser.program_id"
+                                x-bind:disabled="editPrograms.length === 0"
+                            >
+                                <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
+                                <template x-for="program in editPrograms" :key="program.id">
+                                    <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
+                                </template>
+                            </select>
+                            @error('program_id')
+                                <p class="kmsar-form-error">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        <div class="kmsar-form-group">
+                            <label class="kmsar-form-label" for="edit-office">{{ __('Office') }}</label>
                             <input
                                 id="edit-office"
                                 type="text"
@@ -762,7 +818,41 @@ document.addEventListener('alpine:init', () => {
         showEdit: @json($errors->any() && old('_form') === 'edit'),
         editUser: @json($editUserInitial ?: new \stdClass()),
         adminUsersBase: @json(rtrim(url('/admin/users'), '/')),
+        programsUrl: @json(route('api.programs')),
+        addCollegeId: @json($errors->any() && old('_form', 'add') === 'add' && old('college_id') ? (string) old('college_id') : ''),
+        addProgramId: @json($errors->any() && old('_form', 'add') === 'add' && old('program_id') ? (string) old('program_id') : ''),
+        addPrograms: [],
+        editPrograms: [],
         users: @json($usersForAlpine),
+        init() {
+            if (this.addCollegeId) {
+                this.loadPrograms(this.addCollegeId, 'add');
+            }
+            if (this.editUser && this.editUser.college_id) {
+                this.loadPrograms(this.editUser.college_id, 'edit');
+            }
+        },
+        loadPrograms(collegeId, dest = 'add') {
+            const listKey = dest === 'edit' ? 'editPrograms' : 'addPrograms';
+            this[listKey] = [];
+            if (!collegeId) {
+                return Promise.resolve();
+            }
+            return fetch(`${this.programsUrl}?college_id=${encodeURIComponent(collegeId)}`, {
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                credentials: 'same-origin',
+            })
+                .then((r) => r.json())
+                .then((data) => {
+                    this[listKey] = Array.isArray(data) ? data : [];
+                })
+                .catch(() => {
+                    this[listKey] = [];
+                });
+        },
         search: '',
         filterRole: '',
         filterCollege: '',
@@ -825,11 +915,13 @@ document.addEventListener('alpine:init', () => {
                         suffix: data.suffix ?? '',
                         email: data.email ?? '',
                         college_id: data.college_id != null ? String(data.college_id) : '',
+                        program_id: data.program_id != null ? String(data.program_id) : '',
                         office: data.office ?? '',
                         role: data.role ?? '',
                         is_active: !!data.is_active,
                     };
                     this.showEdit = true;
+                    this.loadPrograms(this.editUser.college_id, 'edit');
                 })
                 .catch(() => {});
         },

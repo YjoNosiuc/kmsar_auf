@@ -10,7 +10,7 @@ class ProfileController extends Controller
 {
     public function edit()
     {
-        $user = auth()->user();
+        $user = auth()->user()->loadMissing(['college', 'program', 'roles']);
         $colleges = \App\Models\College::orderBy('name')->get();
 
         return view('profile.edit', compact('user', 'colleges'));

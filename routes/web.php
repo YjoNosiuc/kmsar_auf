@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\ImportController;
 use App\Http\Controllers\Admin\ProgramController;
 use App\Http\Controllers\Admin\UserController;
 use App\Models\College;
+use App\Models\Program;
 use App\Models\Research;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
@@ -67,6 +68,15 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
+
+Route::get('/api/programs', function (Request $request) {
+    $programs = Program::query()
+        ->where('college_id', $request->integer('college_id'))
+        ->orderBy('code')
+        ->get(['id', 'code', 'name']);
+
+    return response()->json($programs);
+})->name('api.programs');
 
 Route::middleware(['auth', 'nocache'])->group(function () {
     Route::get('/api/users/search', [UserSearchController::class, 'search'])

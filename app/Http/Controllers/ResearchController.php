@@ -43,8 +43,16 @@ class ResearchController extends Controller
 
         $research = $this->approvalService->paginateResearchForUser($request->user());
 
+        $filterItems = $research->map(fn ($r) => [
+            'id' => $r->id,
+            'title' => $r->title,
+            'stage' => $r->approval_stage,
+            'status' => $r->status,
+        ])->values();
+
         return view('faculty.research.index', [
             'research' => $research,
+            'filterItems' => $filterItems,
         ]);
     }
 

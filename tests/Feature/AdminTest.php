@@ -224,6 +224,32 @@ describe('Admin user management', function () {
             ->and($created->name)->toContain('lowercase')
             ->and($created->name)->toContain('names');
     });
+
+    it('programs api returns programs for the selected college', function () {
+        $college = College::factory()->create();
+        $otherCollege = College::factory()->create();
+
+        $program = Program::query()->create([
+            'college_id' => $college->id,
+            'code' => 'BSIT',
+            'name' => 'BS Information Technology',
+            'is_active' => true,
+        ]);
+        Program::query()->create([
+            'college_id' => $otherCollege->id,
+            'code' => 'BSA',
+            'name' => 'BS Accountancy',
+            'is_active' => true,
+        ]);
+
+        $this->getJson(route('api.programs', ['college_id' => $college->id]))
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonFragment([
+                'id' => $program->id,
+                'code' => 'BSIT',
+            ]);
+    });
 });
 
 // ─────────────────────────────────────────────

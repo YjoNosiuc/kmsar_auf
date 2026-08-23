@@ -132,7 +132,30 @@
                 </x-alert>
             @endif
 
-            <form method="POST" action="{{ route('register.store') }}">
+            <form
+                method="POST"
+                action="{{ route('register.store') }}"
+                x-data="{
+                    selectedCollegeId: @js(old('college_id') ? (string) old('college_id') : ''),
+                    selectedProgramId: @js(old('program_id') ? (string) old('program_id') : ''),
+                    programs: [],
+                    programsUrl: @js(route('api.programs')),
+                    init() {
+                        if (this.selectedCollegeId) {
+                            this.loadPrograms(this.selectedCollegeId);
+                        }
+                    },
+                    loadPrograms(collegeId) {
+                        this.programs = [];
+                        if (!collegeId) return;
+                        fetch(`${this.programsUrl}?college_id=${encodeURIComponent(collegeId)}`, {
+                            headers: { Accept: 'application/json' },
+                        })
+                            .then((r) => r.json())
+                            .then((data) => { this.programs = Array.isArray(data) ? data : []; });
+                    }
+                }"
+            >
                 @csrf
 
                 <div class="kmsar-form-row-3">
@@ -205,14 +228,38 @@
                 </div>
 
                 <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="college_id">College / Unit <span class="kmsar-form-required">*</span></label>
-                    <select id="college_id" name="college_id" class="kmsar-select" required>
-                        <option value="" disabled {{ old('college_id') ? '' : 'selected' }}>— Select college —</option>
+                    <label class="kmsar-form-label" for="college_id">College/Office <span class="kmsar-form-required">*</span></label>
+                    <select
+                        id="college_id"
+                        name="college_id"
+                        class="kmsar-select"
+                        required
+                        x-model="selectedCollegeId"
+                        x-on:change="selectedProgramId = ''; loadPrograms($event.target.value)"
+                    >
+                        <option value="">{{ __('— Select College/Office —') }}</option>
                         @foreach ($colleges as $college)
-                            <option value="{{ $college->id }}" @selected(old('college_id') == $college->id)>
+                            <option value="{{ $college->id }}">
                                 {{ $college->code }} — {{ $college->name }}
                             </option>
                         @endforeach
+                    </select>
+                </div>
+
+                <div class="kmsar-form-group">
+                    <label class="kmsar-form-label" for="program_id">Program/Dept</label>
+                    <input type="hidden" x-bind:name="programs.length === 0 ? 'program_id' : null" x-bind:value="selectedProgramId">
+                    <select
+                        id="program_id"
+                        name="program_id"
+                        class="kmsar-select"
+                        x-model="selectedProgramId"
+                        x-bind:disabled="programs.length === 0"
+                    >
+                        <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
+                        <template x-for="program in programs" :key="program.id">
+                            <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
+                        </template>
                     </select>
                 </div>
 

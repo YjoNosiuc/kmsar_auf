@@ -42,7 +42,7 @@ class UserController extends Controller
     public function index(): View
     {
         $users = User::query()
-            ->with(['roles', 'college'])
+            ->with(['roles', 'college', 'program'])
             ->orderBy('name')
             ->get();
 
@@ -119,6 +119,7 @@ class UserController extends Controller
             'suffix' => $user->suffix,
             'email' => $user->email,
             'college_id' => $user->college_id,
+            'program_id' => $user->program_id,
             'office' => $user->office,
             'role' => $user->getRoleNames()->first(),
             'is_active' => $user->is_active,

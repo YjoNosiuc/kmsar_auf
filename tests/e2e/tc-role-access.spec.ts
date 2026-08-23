@@ -51,14 +51,18 @@ async function registerAndReadRole(page: Page, userType: string): Promise<string
   await page.goto('/register');
   await page.fill('#first_name', 'ROLE');
   await page.fill('#last_name', userType);
-  await page.fill('#employee_number', `RA-${id}`.slice(0, 20));
-  await page.locator('#college_id').selectOption({ index: 1 });
   await page.locator('#user_type').selectOption(userType);
+  if (userType !== 'external_affiliate') {
+    await page.fill('#employee_number', `RA-${id}`.slice(0, 20));
+  } else {
+    await page.fill('#institution', 'De La Salle University');
+  }
+  await page.locator('#college_id').selectOption({ index: 1 });
   await page.fill('#email', email);
   await page.fill('#password', 'password123');
   await page.fill('#password_confirmation', 'password123');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/research|\/403|Access Denied/);
+  await expect(page).toHaveURL(/\/login/);
   return (
     runTinker(
       `echo \\App\\Models\\User::where('email','${email}')->firstOrFail()->getRoleNames()->first();`,
@@ -283,12 +287,12 @@ test.describe('Role Access — UAT Test Suite', () => {
   test.describe('Registration user_type role mapping', () => {
     test.use({ storageState: emptyStorage });
 
-    test('RA-039: Registering as Faculty assigns faculty role', async ({ page }) => {
-      expect(await registerAndReadRole(page, 'faculty')).toBe('faculty');
+    test('RA-039: Registering as Faculty assigns viewer role until approved', async ({ page }) => {
+      expect(await registerAndReadRole(page, 'faculty')).toBe('viewer');
     });
 
-    test('RA-040: Registering as Staff assigns faculty role', async ({ page }) => {
-      expect(await registerAndReadRole(page, 'staff')).toBe('faculty');
+    test('RA-040: Registering as Staff assigns viewer role until approved', async ({ page }) => {
+      expect(await registerAndReadRole(page, 'staff')).toBe('viewer');
     });
 
     test('RA-041: Registering as Student assigns viewer role', async ({ page }) => {

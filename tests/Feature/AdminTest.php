@@ -99,7 +99,9 @@ describe('Admin user management', function () {
 
         $created = User::query()->where('email', $email)->first();
         expect($created)->not->toBeNull()
-            ->and($created->hasRole('faculty'))->toBeTrue();
+            ->and($created->hasRole('faculty'))->toBeTrue()
+            ->and($created->is_pending)->toBeFalse()
+            ->and($created->is_active)->toBeTrue();
     });
 
     it('super_admin can edit an existing user', function () {

@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { login, logout, credentials } from './helpers/auth';
+import { login, credentials } from './helpers/auth';
 import { runTinker } from './helpers/db';
 import { selectCurrentUserAsPrimary } from './helpers/research';
 
@@ -15,15 +15,26 @@ async function registerAs(page: Page, userType: string): Promise<string> {
   await page.goto('/register');
   await page.fill('#first_name', 'E2E');
   await page.fill('#last_name', userType);
-  await page.fill('#employee_number', `E2E-${id}`.slice(0, 20));
-  await page.locator('#college_id').selectOption({ index: 1 });
   await page.locator('#user_type').selectOption(userType);
+  if (userType !== 'external_affiliate') {
+    await page.fill('#employee_number', `E2E-${id}`.slice(0, 20));
+  } else {
+    await page.fill('#institution', 'De La Salle University');
+  }
+  await page.locator('#college_id').selectOption({ index: 1 });
   await page.fill('#email', email);
   await page.fill('#password', 'password123');
   await page.fill('#password_confirmation', 'password123');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/research/);
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByText(/submitted for approval/i)).toBeVisible();
   return email;
+}
+
+function activateRegisteredUser(email: string): void {
+  runTinker(
+    `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $u->forceFill(['is_active'=>true,'is_pending'=>false])->save();`,
+  );
 }
 
 function roleFor(email: string): string {
@@ -75,21 +86,26 @@ test.describe('Registration and author wizard — UAT', () => {
     }
   });
 
-  for (const [id, userType, expectedRole] of [
-    ['REG-002', 'faculty', 'faculty'],
-    ['REG-003', 'staff', 'faculty'],
-    ['REG-004', 'student', 'viewer'],
-    ['REG-005', 'external_affiliate', 'viewer'],
+  for (const [id, userType] of [
+    ['REG-002', 'faculty'],
+    ['REG-003', 'staff'],
+    ['REG-004', 'student'],
+    ['REG-005', 'external_affiliate'],
   ] as const) {
-    test(`${id}: Registering as ${userType} assigns ${expectedRole} role`, async ({ page }) => {
+    test(`${id}: Registering as ${userType} stays pending with viewer role`, async ({ page }) => {
       const email = await registerAs(page, userType);
-      expect(roleFor(email)).toBe(expectedRole);
-      await logout(page);
+      expect(roleFor(email)).toBe('viewer');
+      const pending = runTinker(
+        `echo \\App\\Models\\User::where('email','${email}')->firstOrFail()->is_pending ? '1' : '0';`,
+      ).trim().split(/\r?\n/).pop()?.trim();
+      expect(pending).toBe('1');
     });
   }
 
   test('REG-006: Viewer role user cannot register new research', async ({ page }) => {
     const email = await registerAs(page, 'student');
+    activateRegisteredUser(email);
+    await login(page, email, 'password123', { forceFormLogin: true });
     const response = await page.goto('/research/create');
     expect(response?.status()).toBe(403);
     expect(roleFor(email)).toBe('viewer');
@@ -97,10 +113,12 @@ test.describe('Registration and author wizard — UAT', () => {
 
   test('REG-007: Viewer can view research they are linked to as co-author', async ({ page }) => {
     const email = await registerAs(page, 'external_affiliate');
+    activateRegisteredUser(email);
     const output = runTinker(
       `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $p=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-VIEW-${stamp()}','title'=>'REG VIEWER COAUTHOR','primary_author_id'=>$p->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'proposal','approval_stage'=>'dean_review','revision_count'=>0,'sdg_tags'=>[4]]); \\App\\Models\\ResearchAuthor::create(['research_id'=>$r->id,'user_id'=>$u->id,'name'=>$u->name,'email'=>$u->email,'is_primary'=>false,'can_edit'=>false]); echo $r->id;`,
     );
     const researchId = output.match(/\d+/)?.[0];
+    await login(page, email, 'password123', { forceFormLogin: true });
     const response = await page.goto(`/research/${researchId}`);
     expect(response?.status()).toBe(200);
   });

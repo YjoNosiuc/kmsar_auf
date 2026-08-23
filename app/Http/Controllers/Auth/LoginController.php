@@ -48,6 +48,14 @@ class LoginController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
+        if ($user->is_pending) {
+            Auth::logout();
+
+            throw ValidationException::withMessages([
+                'login' => [__('Your account is pending approval by the administrator. Please wait for confirmation.')],
+            ]);
+        }
+
         if (! $user->is_active) {
             Auth::logout();
 

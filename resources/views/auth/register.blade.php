@@ -94,6 +94,7 @@
         color: var(--color-text-secondary, #475569);
         margin-bottom: 1.5rem;
     }
+    [x-cloak] { display: none !important; }
     .kmsar-login-ldap {
         margin-top: 1.5rem;
         padding-top: 1.25rem;
@@ -138,8 +139,20 @@
                 x-data="{
                     selectedCollegeId: @js(old('college_id') ? (string) old('college_id') : ''),
                     selectedProgramId: @js(old('program_id') ? (string) old('program_id') : ''),
+                    userType: @js(old('user_type', '')),
                     programs: [],
                     programsUrl: @js(route('api.programs')),
+                    get idLabel() {
+                        if (this.userType === 'student') return 'Student Number';
+                        if (this.userType === 'external_affiliate') return 'ID Number (optional)';
+                        return 'Employee Number';
+                    },
+                    get showInstitution() {
+                        return this.userType === 'external_affiliate';
+                    },
+                    get idRequired() {
+                        return this.userType === 'faculty' || this.userType === 'staff' || this.userType === 'student';
+                    },
                     init() {
                         if (this.selectedCollegeId) {
                             this.loadPrograms(this.selectedCollegeId);
@@ -212,19 +225,57 @@
                         >
                     </div>
                     <div class="kmsar-form-group">
-                        <label class="kmsar-form-label" for="employee_number">Employee Number <span class="kmsar-form-required">*</span></label>
-                        <input
-                            id="employee_number"
-                            type="text"
-                            name="employee_number"
-                            value="{{ old('employee_number') }}"
-                            class="kmsar-input"
-                            style="text-transform:uppercase"
-                            placeholder="e.g. AUF-2024-0001"
-                            required
-                            autocomplete="off"
-                        >
+                        <label class="kmsar-form-label" for="user_type">
+                            User Type <span class="kmsar-form-required">*</span>
+                        </label>
+                        <select id="user_type" name="user_type" class="kmsar-select" required x-model="userType">
+                            <option value="">— Select user type —</option>
+                            <option value="faculty">Faculty</option>
+                            <option value="staff">Staff</option>
+                            <option value="student">Student</option>
+                            <option value="external_affiliate">External Affiliate</option>
+                        </select>
+                        @error('user_type')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
                     </div>
+                </div>
+
+                <div class="kmsar-form-group" x-show="userType !== 'external_affiliate'" x-cloak>
+                    <label class="kmsar-form-label" for="employee_number">
+                        <span x-text="idLabel"></span>
+                        <span class="kmsar-form-required" x-show="idRequired">*</span>
+                    </label>
+                    <input
+                        id="employee_number"
+                        type="text"
+                        name="employee_number"
+                        value="{{ old('employee_number') }}"
+                        class="kmsar-input"
+                        style="text-transform:uppercase"
+                        placeholder="Enter your number"
+                        x-bind:required="idRequired"
+                        autocomplete="off"
+                    >
+                    @error('employee_number')
+                        <p class="kmsar-form-error">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="kmsar-form-group" x-show="showInstitution" x-cloak>
+                    <label class="kmsar-form-label" for="institution">Institution</label>
+                    <input
+                        id="institution"
+                        type="text"
+                        name="institution"
+                        value="{{ old('institution') }}"
+                        class="kmsar-input"
+                        placeholder="e.g. De La Salle University"
+                        autocomplete="organization"
+                    >
+                    @error('institution')
+                        <p class="kmsar-form-error">{{ $message }}</p>
+                    @enderror
                 </div>
 
                 <div class="kmsar-form-group">
@@ -261,22 +312,6 @@
                             <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
                         </template>
                     </select>
-                </div>
-
-                <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="user_type">
-                        User Type <span class="kmsar-form-required">*</span>
-                    </label>
-                    <select id="user_type" name="user_type" class="kmsar-select" required>
-                        <option value="">— Select user type —</option>
-                        <option value="faculty" @selected(old('user_type') === 'faculty')>Faculty</option>
-                        <option value="staff" @selected(old('user_type') === 'staff')>Staff</option>
-                        <option value="student" @selected(old('user_type') === 'student')>Student</option>
-                        <option value="external_affiliate" @selected(old('user_type') === 'external_affiliate')>External Affiliate</option>
-                    </select>
-                    @error('user_type')
-                        <p class="kmsar-form-error">{{ $message }}</p>
-                    @enderror
                 </div>
 
                 <div class="kmsar-form-group">

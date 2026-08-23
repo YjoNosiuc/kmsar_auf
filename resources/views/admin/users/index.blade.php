@@ -38,6 +38,8 @@
                 'college_id' => old('college_id') !== null && old('college_id') !== '' ? (string) old('college_id') : '',
                 'program_id' => old('program_id') !== null && old('program_id') !== '' ? (string) old('program_id') : '',
                 'office' => old('office', ''),
+                'user_type' => old('user_type', ''),
+                'institution' => old('institution', ''),
                 'role' => old('role', ''),
                 'is_active' => filter_var(old('is_active', '1'), FILTER_VALIDATE_BOOLEAN),
             ]
@@ -170,7 +172,7 @@
 @section('content')
 <div
     x-data="userManager"
-    x-on:keydown.escape.window="showAdd = false; showEdit = false"
+    x-on:keydown.escape.window="showAdd = false; showEdit = false; showApprove = false"
 >
     <div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:20px 28px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
         <div>
@@ -205,6 +207,69 @@
     @if (session('success'))
         <div class="kmsar-alert kmsar-alert--success kmsar-animate-in mb-5" role="status">
             {{ session('success') }}
+        </div>
+    @endif
+
+    @if ($pendingUsers->count() > 0)
+        <div class="kmsar-card" id="pending-registrations" style="margin-bottom:16px; border-left:4px solid var(--color-warning, #D97706);">
+            <div class="kmsar-card-header">
+                <h3 class="kmsar-card-title">
+                    {{ __('Pending Registrations') }}
+                    <span class="kmsar-badge kmsar-badge--pending" style="margin-left:8px;">{{ $pendingUsers->count() }}</span>
+                </h3>
+            </div>
+            <div class="kmsar-card-body">
+                <div class="kmsar-table-wrap">
+                    <table class="kmsar-table">
+                        <thead>
+                            <tr>
+                                <th>{{ __('Name') }}</th>
+                                <th>{{ __('Email') }}</th>
+                                <th>{{ __('ID Number') }}</th>
+                                <th>{{ __('College/Office') }}</th>
+                                <th>{{ __('User Type') }}</th>
+                                <th>{{ __('Institution') }}</th>
+                                <th>{{ __('Registered') }}</th>
+                                <th>{{ __('Action') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($pendingUsers as $pendingUser)
+                                <tr>
+                                    <td>{{ $pendingUser->name }}</td>
+                                    <td>{{ $pendingUser->email }}</td>
+                                    <td>{{ $pendingUser->employee_number ?? '—' }}</td>
+                                    <td>{{ $pendingUser->college?->code ?? '—' }}</td>
+                                    <td>{{ $userTypeLabels[$pendingUser->user_type] ?? '—' }}</td>
+                                    <td>{{ $pendingUser->institution ?? '—' }}</td>
+                                    <td>{{ $pendingUser->created_at->diffForHumans() }}</td>
+                                    <td>
+                                        <button
+                                            type="button"
+                                            class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
+                                            x-on:click="openApprove({{ $pendingUser->id }}, {{ \Illuminate\Support\Js::from($pendingUser->name) }})"
+                                        >
+                                            {{ __('Approve') }}
+                                        </button>
+                                        <form
+                                            method="POST"
+                                            action="{{ route('admin.users.reject', $pendingUser) }}"
+                                            style="display:inline;"
+                                            onsubmit="return confirm('Reject this registration?')"
+                                        >
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="kmsar-btn kmsar-btn--danger-outline kmsar-btn--sm">
+                                                {{ __('Reject') }}
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     @endif
 
@@ -448,12 +513,54 @@
                             @enderror
                         </div>
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="add-employee_number">{{ __('Employee number') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <input id="add-employee_number" type="text" name="employee_number" class="kmsar-input @error('employee_number') kmsar-input--error @enderror" value="{{ old('employee_number') }}" required autocomplete="off" placeholder="{{ __('e.g. AUF-2024-0001') }}">
-                            @error('employee_number')
+                            <label class="kmsar-form-label" for="add-user_type">{{ __('User Type') }}</label>
+                            <select id="add-user_type" name="user_type" class="kmsar-select @error('user_type') kmsar-input--error @enderror" x-model="addUserType">
+                                <option value="">{{ __('— Select user type —') }}</option>
+                                <option value="faculty">{{ __('Faculty') }}</option>
+                                <option value="staff">{{ __('Staff') }}</option>
+                                <option value="student">{{ __('Student') }}</option>
+                                <option value="external_affiliate">{{ __('External Affiliate') }}</option>
+                            </select>
+                            @error('user_type')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
+                    </div>
+
+                    <div class="kmsar-form-group" x-show="addUserType !== 'external_affiliate'">
+                        <label class="kmsar-form-label" for="add-employee_number">
+                            <span x-text="idFieldLabel(addUserType)"></span>
+                            <span class="kmsar-form-required" aria-hidden="true" x-show="idFieldRequired(addUserType)">*</span>
+                        </label>
+                        <input
+                            id="add-employee_number"
+                            type="text"
+                            name="employee_number"
+                            class="kmsar-input @error('employee_number') kmsar-input--error @enderror"
+                            value="{{ old('employee_number') }}"
+                            x-bind:required="idFieldRequired(addUserType)"
+                            autocomplete="off"
+                            placeholder="{{ __('e.g. AUF-2024-0001') }}"
+                        >
+                        @error('employee_number')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="kmsar-form-group" x-show="addUserType === 'external_affiliate'" x-cloak>
+                        <label class="kmsar-form-label" for="add-institution">{{ __('Institution') }}</label>
+                        <input
+                            id="add-institution"
+                            type="text"
+                            name="institution"
+                            class="kmsar-input @error('institution') kmsar-input--error @enderror"
+                            value="{{ old('institution') }}"
+                            placeholder="{{ __('e.g. De La Salle University') }}"
+                            autocomplete="organization"
+                        >
+                        @error('institution')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div class="kmsar-form-group">
@@ -682,12 +789,53 @@
                             @enderror
                         </div>
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-employee_number">{{ __('Employee number') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <input id="edit-employee_number" type="text" name="employee_number" class="kmsar-input @error('employee_number') kmsar-input--error @enderror" required autocomplete="off" x-model="editUser.employee_number">
-                            @error('employee_number')
+                            <label class="kmsar-form-label" for="edit-user_type">{{ __('User Type') }}</label>
+                            <select id="edit-user_type" name="user_type" class="kmsar-select @error('user_type') kmsar-input--error @enderror" x-model="editUser.user_type">
+                                <option value="">{{ __('— Select user type —') }}</option>
+                                <option value="faculty">{{ __('Faculty') }}</option>
+                                <option value="staff">{{ __('Staff') }}</option>
+                                <option value="student">{{ __('Student') }}</option>
+                                <option value="external_affiliate">{{ __('External Affiliate') }}</option>
+                            </select>
+                            @error('user_type')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
                         </div>
+                    </div>
+
+                    <div class="kmsar-form-group" x-show="editUser.user_type !== 'external_affiliate'">
+                        <label class="kmsar-form-label" for="edit-employee_number">
+                            <span x-text="idFieldLabel(editUser.user_type)"></span>
+                            <span class="kmsar-form-required" aria-hidden="true" x-show="idFieldRequired(editUser.user_type)">*</span>
+                        </label>
+                        <input
+                            id="edit-employee_number"
+                            type="text"
+                            name="employee_number"
+                            class="kmsar-input @error('employee_number') kmsar-input--error @enderror"
+                            x-bind:required="idFieldRequired(editUser.user_type)"
+                            autocomplete="off"
+                            x-model="editUser.employee_number"
+                        >
+                        @error('employee_number')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="kmsar-form-group" x-show="editUser.user_type === 'external_affiliate'" x-cloak>
+                        <label class="kmsar-form-label" for="edit-institution">{{ __('Institution') }}</label>
+                        <input
+                            id="edit-institution"
+                            type="text"
+                            name="institution"
+                            class="kmsar-input @error('institution') kmsar-input--error @enderror"
+                            placeholder="{{ __('e.g. De La Salle University') }}"
+                            autocomplete="organization"
+                            x-model="editUser.institution"
+                        >
+                        @error('institution')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <div class="kmsar-form-group">
@@ -807,6 +955,58 @@
             </div>
         </div>
     </div>
+
+    {{-- Approve pending registration --}}
+    <div
+        id="modal-approve-user"
+        x-show="showApprove"
+        x-cloak
+        class="kmsar-modal-overlay"
+        style="display: none;"
+        x-on:click.self="closeApprove()"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-approve-user-title"
+    >
+        <div class="kmsar-modal kmsar-modal--compact" style="max-width:440px;" x-on:click.stop>
+            <div class="kmsar-modal-header">
+                <h2 id="modal-approve-user-title" class="kmsar-modal-title">{{ __('Approve Registration') }}</h2>
+                <button type="button" class="kmsar-modal-close" aria-label="{{ __('Close') }}" x-on:click="closeApprove()">&times;</button>
+            </div>
+            <form
+                id="approve-form"
+                method="POST"
+                class="kmsar-modal-body"
+                x-bind:action="approveUserId ? `${adminUsersBase}/${approveUserId}/approve` : '#'"
+            >
+                @csrf
+                @method('PATCH')
+                <p class="kmsar-body" style="margin-top:0;">
+                    {{ __('Approving:') }}
+                    <strong id="approve-user-name" x-text="approveUserName"></strong>
+                </p>
+                <div class="kmsar-form-group">
+                    <label class="kmsar-form-label" for="approve-role">
+                        {{ __('Assign Role') }}
+                        <span class="kmsar-form-required">*</span>
+                    </label>
+                    <select id="approve-role" name="role" class="kmsar-select" required>
+                        <option value="">{{ __('— Select role —') }}</option>
+                        <option value="faculty">{{ __('Faculty') }}</option>
+                        <option value="viewer">{{ __('Viewer') }}</option>
+                        <option value="college_dean">{{ __('Dean/Head') }}</option>
+                        <option value="ovpri_admin">{{ __('OVPRI Admin') }}</option>
+                        <option value="cdaic_admin">{{ __('CDAIC Admin') }}</option>
+                        <option value="super_admin">{{ __('Super Admin') }}</option>
+                    </select>
+                </div>
+            </form>
+            <div class="kmsar-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
+                <button type="button" class="kmsar-btn kmsar-btn--outline kmsar-btn--md" x-on:click="closeApprove()">{{ __('Cancel') }}</button>
+                <button type="submit" class="kmsar-btn kmsar-btn--primary kmsar-btn--md" form="approve-form">{{ __('Approve & Activate') }}</button>
+            </div>
+        </div>
+    </div>
 </div>
 @endsection
 
@@ -816,11 +1016,15 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('userManager', () => ({
         showAdd: @json($errors->any() && old('_form', 'add') === 'add'),
         showEdit: @json($errors->any() && old('_form') === 'edit'),
+        showApprove: false,
+        approveUserId: null,
+        approveUserName: '',
         editUser: @json($editUserInitial ?: new \stdClass()),
         adminUsersBase: @json(rtrim(url('/admin/users'), '/')),
         programsUrl: @json(route('api.programs')),
         addCollegeId: @json($errors->any() && old('_form', 'add') === 'add' && old('college_id') ? (string) old('college_id') : ''),
         addProgramId: @json($errors->any() && old('_form', 'add') === 'add' && old('program_id') ? (string) old('program_id') : ''),
+        addUserType: @json($errors->any() && old('_form', 'add') === 'add' ? (string) old('user_type', '') : ''),
         addPrograms: [],
         editPrograms: [],
         users: @json($usersForAlpine),
@@ -831,6 +1035,24 @@ document.addEventListener('alpine:init', () => {
             if (this.editUser && this.editUser.college_id) {
                 this.loadPrograms(this.editUser.college_id, 'edit');
             }
+        },
+        idFieldLabel(type) {
+            if (type === 'student') return @json(__('Student Number'));
+            if (type === 'external_affiliate') return @json(__('ID Number (optional)'));
+            return @json(__('Employee Number'));
+        },
+        idFieldRequired(type) {
+            return type !== 'external_affiliate';
+        },
+        openApprove(userId, userName) {
+            this.approveUserId = userId;
+            this.approveUserName = userName;
+            this.showApprove = true;
+        },
+        closeApprove() {
+            this.showApprove = false;
+            this.approveUserId = null;
+            this.approveUserName = '';
         },
         loadPrograms(collegeId, dest = 'add') {
             const listKey = dest === 'edit' ? 'editPrograms' : 'addPrograms';
@@ -917,6 +1139,8 @@ document.addEventListener('alpine:init', () => {
                         college_id: data.college_id != null ? String(data.college_id) : '',
                         program_id: data.program_id != null ? String(data.program_id) : '',
                         office: data.office ?? '',
+                        user_type: data.user_type ?? '',
+                        institution: data.institution ?? '',
                         role: data.role ?? '',
                         is_active: !!data.is_active,
                     };

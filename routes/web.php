@@ -438,6 +438,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             ]);
         })->name('admin.dashboard');
 
+        Route::patch('users/{user}/approve', [UserController::class, 'approve'])->name('admin.users.approve');
+        Route::delete('users/{user}/reject', [UserController::class, 'reject'])->name('admin.users.reject');
         Route::resource('users', UserController::class)->names('admin.users');
         Route::post('colleges/{college}/toggle-active', [CollegeController::class, 'toggleActive'])->name('admin.colleges.toggle-active');
         Route::resource('colleges', CollegeController::class)->names('admin.colleges');

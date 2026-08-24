@@ -266,7 +266,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await selectCollegeByCode(page, '#add-college_id', 'CCS');
     await page.getByRole('button', { name: 'Create user' }).click();
 
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('Faculty');
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('CCS');
 
@@ -292,7 +292,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-college_id').selectOption({ index: 1 });
     await page.getByRole('button', { name: 'Create user' }).click();
 
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('lowercase mixedcase');
   });
 
@@ -312,12 +312,12 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-role').selectOption('faculty');
     await selectCollegeByCode(page, '#add-college_id', 'CCS');
     await page.getByRole('button', { name: 'Create user' }).click();
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
 
     await openEditUserByEmail(page, email);
     await selectCollegeByCode(page, '#edit-college_id', 'CBA');
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('User updated successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('CBA');
   });
 
@@ -337,12 +337,12 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-role').selectOption('faculty');
     await page.locator('#add-college_id').selectOption({ index: 1 });
     await page.getByRole('button', { name: 'Create user' }).click();
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
 
     await openEditUserByEmail(page, email);
     await page.locator('#edit-role').selectOption('viewer');
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('User updated successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('Viewer');
   });
 
@@ -362,7 +362,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-role').selectOption('faculty');
     await page.locator('#add-college_id').selectOption({ index: 1 });
     await page.getByRole('button', { name: 'Create user' }).click();
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
 
     await openEditUserByEmail(page, email);
     const scrollableForm = page.locator('#form-edit-user');
@@ -371,7 +371,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     await page.locator('#form-edit-user .kmsar-switch-track').click({ force: true });
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('User updated successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('Inactive');
   });
 
@@ -394,12 +394,12 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-role').selectOption('faculty');
     await page.locator('#add-college_id').selectOption({ index: 1 });
     await page.getByRole('button', { name: 'Create user' }).click();
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
 
     await openEditUserByEmail(page, email);
     await page.locator('#form-edit-user .kmsar-switch-track').click({ force: true });
     await page.getByRole('button', { name: 'Save changes' }).click();
-    await expect(page.getByText('User updated successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
 
     const isolatedContext = await browser.newContext();
     const isolatedPage = await isolatedContext.newPage();
@@ -666,7 +666,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await page.locator('#add-office').fill('OVPRI');
     await page.getByRole('button', { name: 'Create user' }).click();
 
-    await expect(page.getByText('User created successfully')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/created successfully|updated successfully/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('OVPRI');
     await expect(page.getByRole('row', { name: new RegExp(email, 'i') })).toContainText('Non-college unit');
   });

@@ -285,7 +285,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await openFacultyResearchList(page, title);
     const facultyCard = facultyResearchCard(page, title);
     await expect(facultyCard).toBeVisible({ timeout: 15_000 });
-    await expect(facultyCard.getByText(/Returned by OVPRI/i)).toBeVisible();
+    await expect(facultyCard.locator('.kmsar-badge').filter({ hasText: /Returned by OVPRI/i })).toBeVisible();
 
     // Dean: NOT in Pending, IS in Returned
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);

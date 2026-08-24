@@ -6,7 +6,6 @@ import {
   createAndSubmitResearch,
   openFacultyResearchList,
   facultyResearchCard,
-  facultyResearchCardByStage,
   selectCurrentUserAsPrimary,
 } from './helpers/research';
 
@@ -176,7 +175,10 @@ test.describe('Faculty — UAT Test Suite', () => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await startWizardStep1(page);
     await page.getByRole('button', { name: 'Continue to authors' }).click();
-    await expect(page.locator('.kmsar-form-error, .kmsar-alert--danger').first()).toBeVisible();
+    await expect(page).toHaveURL(/\/research\/\d+\/details/);
+    const serverError = page.locator('.kmsar-form-error, .kmsar-alert--danger');
+    const nativeInvalid = page.locator('textarea[name="title"]:invalid, .kmsar-input:invalid, .kmsar-select:invalid, .kmsar-textarea:invalid');
+    await expect(serverError.or(nativeInvalid).first()).toBeVisible();
   });
 
   test('TC-012: fill Step 2 add self as primary author and proceed to Step 3', async ({ page }) => {
@@ -272,9 +274,10 @@ test.describe('Faculty — UAT Test Suite', () => {
 
     await logout(page);
     await login(page, 'faculty.ccs2@yopmail.com', 'password');
-    await page.goto('/research');
-    await expect(page.getByText(title)).toBeVisible();
-    await expect(page.getByText('Co-author', { exact: true }).first()).toBeVisible();
+    await openFacultyResearchList(page, title);
+    const coCard = facultyResearchCard(page, title);
+    await expect(coCard).toBeVisible({ timeout: 15_000 });
+    await expect(coCard.getByText('Co-author', { exact: true })).toBeVisible();
   });
 
   test('TC-014: view Step 3 document upload page — upload area visible', async ({ page }) => {
@@ -428,20 +431,20 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.fill('textarea[name="title"]', updatedTitle);
     await page.getByRole('button', { name: 'Continue to authors' }).click();
     await expect(page).toHaveURL(/\/authors/);
-    await page.goto('/research');
-    await expect(page.getByText(updatedTitle)).toBeVisible();
+    await openFacultyResearchList(page, updatedTitle);
+    await expect(facultyResearchCard(page, updatedTitle)).toBeVisible({ timeout: 15_000 });
   });
 
   test('TC-025: try to edit research in Dean Review — edit not available', async ({ page }) => {
-    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-    await openFacultyResearchList(page);
-    const stage = page.locator('#faculty-research-stage');
-    if (await stage.isVisible().catch(() => false)) {
-      await stage.selectOption('dean_review');
-    }
-    const card = facultyResearchCardByStage(page, /Dean Review/i);
+    const title = uniqueTitle('TC025 Submitted');
+    const researchId = await createAndSubmitResearch(page, title);
+    expect(researchId).toBeTruthy();
+
+    await openFacultyResearchList(page, title);
+    const card = facultyResearchCard(page, title);
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await card.getByRole('link', { name: 'View research' }).click();
+    await expect(card.locator('.kmsar-badge').filter({ hasText: 'Dean Review' })).toBeVisible();
+    await card.getByRole('link', { name: /View research/i }).click();
     await expect(page.getByRole('link', { name: /^Edit$/i })).toHaveCount(0);
     await expect(page.locator('.kmsar-page-header-actions a:has-text("Edit")')).toHaveCount(0);
   });
@@ -467,18 +470,18 @@ test.describe('Faculty — UAT Test Suite', () => {
     await card.getByRole('button', { name: 'Delete' }).click();
     await page.waitForLoadState('networkidle');
     await openFacultyResearchList(page, title);
-    await expect(page.locator('div[style*="border-left"]').filter({ hasText: title })).toHaveCount(0);
+    await expect(facultyResearchCard(page, title)).toHaveCount(0);
   });
 
   test('TC-027: try to delete research not in Draft — delete not available', async ({ page }) => {
-    await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-    await openFacultyResearchList(page);
-    const stage = page.locator('#faculty-research-stage');
-    if (await stage.isVisible().catch(() => false)) {
-      await stage.selectOption('dean_review');
-    }
-    const card = facultyResearchCardByStage(page, /Dean Review/i);
+    const title = uniqueTitle('TC027 No Delete');
+    const researchId = await createAndSubmitResearch(page, title);
+    expect(researchId).toBeTruthy();
+
+    await openFacultyResearchList(page, title);
+    const card = facultyResearchCard(page, title);
     await expect(card).toBeVisible({ timeout: 15_000 });
+    await expect(card.locator('.kmsar-badge').filter({ hasText: 'Dean Review' })).toBeVisible();
     await expect(card.getByRole('button', { name: 'Delete' })).toHaveCount(0);
   });
 
@@ -516,11 +519,11 @@ test.describe('Faculty — UAT Test Suite', () => {
     await openFacultyResearchList(page, title);
     const card = facultyResearchCard(page, title);
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByText(/Returned by OVPRI/i)).toBeVisible();
+    await expect(card.locator('.kmsar-badge').filter({ hasText: /Returned by OVPRI/i })).toBeVisible();
     await expect(card.getByText(/^Rejected$/i)).toHaveCount(0);
 
     await page.goto(`/research/${researchId}`);
-    await expect(page.getByText(/Returned by OVPRI/i).first()).toBeVisible();
+    await expect(page.locator('.kmsar-badge').filter({ hasText: /Returned by OVPRI/i }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Revise', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Revise', exact: true }).click();
     await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });

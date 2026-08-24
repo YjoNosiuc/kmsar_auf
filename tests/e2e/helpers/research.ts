@@ -146,8 +146,13 @@ export async function openFacultyResearchList(page: Page, searchTitle?: string):
   const stage = page.locator('#faculty-research-stage');
   const status = page.locator('#faculty-research-status');
 
+  await page
+    .waitForFunction(() => document.querySelectorAll('.kmsar-research-card[x-cloak]').length === 0)
+    .catch(() => undefined);
+
   if (await search.isVisible().catch(() => false)) {
     await search.fill('');
+    await page.keyboard.press('Escape');
   }
   if (await stage.isVisible().catch(() => false)) {
     await stage.selectOption('');
@@ -155,20 +160,26 @@ export async function openFacultyResearchList(page: Page, searchTitle?: string):
   if (await status.isVisible().catch(() => false)) {
     await status.selectOption('');
   }
+  await page.waitForTimeout(500);
+
   if (searchTitle && (await search.isVisible().catch(() => false))) {
     await search.fill(searchTitle);
+    await page.waitForTimeout(500);
   }
 }
 
-/** Research card on My Research list (works with Alpine search/filter UI). */
+/** Visible research card on My Research (Alpine x-show hides non-matching cards). */
 export function facultyResearchCard(page: Page, title: string) {
-  // border-left style uniquely marks each submission card (avoid ancestor divs)
-  return page.locator('div[style*="border-left"]').filter({ hasText: title }).first();
+  return page.locator('.kmsar-research-card').filter({ hasText: title }).filter({ visible: true });
 }
 
-/** First card matching approval-stage badge text (e.g. Dean Review). */
+/** First visible card matching approval-stage badge text (e.g. Dean Review). */
 export function facultyResearchCardByStage(page: Page, stageLabel: RegExp) {
-  return page.locator('div[style*="border-left"]').filter({ hasText: stageLabel }).first();
+  return page
+    .locator('.kmsar-research-card')
+    .filter({ hasText: stageLabel })
+    .filter({ visible: true })
+    .first();
 }
 
 /** Current approval_stage from DB (used after OVPRI return → returned_to_faculty). */

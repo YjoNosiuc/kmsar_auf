@@ -4,7 +4,12 @@ import * as XLSX from 'xlsx';
 import { login, logout, credentials } from './helpers/auth';
 import { resetDatabaseAndAuth, runArtisan, runTinker } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
-import { selectCurrentUserAsPrimary, submitResearchFromDocuments } from './helpers/research';
+import {
+  selectCurrentUserAsPrimary,
+  submitResearchFromDocuments,
+  openFacultyResearchList,
+  facultyResearchCard,
+} from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
 const USER_VALID = path.join(FIXTURES, 'user_import_valid.xlsx');
@@ -462,20 +467,16 @@ test.describe('Import Data — UAT Test Suite', () => {
     }) => {
       await logout(page);
       await login(page, importedFaculty.two.email, importedFaculty.two.password);
-      await page.goto('/research');
-      const card = page
-        .getByText(TITLE_TWO_CO, { exact: true })
-        .locator('xpath=ancestor::div[contains(@style,"border-left")][1]');
-      await expect(card.getByText(TITLE_TWO_CO, { exact: true })).toBeVisible();
+      await openFacultyResearchList(page, TITLE_TWO_CO);
+      const card = facultyResearchCard(page, TITLE_TWO_CO);
+      await expect(card).toBeVisible({ timeout: 15_000 });
       await expect(card.getByText('Co-author', { exact: true })).toBeVisible();
 
       await logout(page);
       await login(page, importedFaculty.three.email, importedFaculty.three.password);
-      await page.goto('/research');
-      const card3 = page
-        .getByText(TITLE_TWO_CO, { exact: true })
-        .locator('xpath=ancestor::div[contains(@style,"border-left")][1]');
-      await expect(card3.getByText(TITLE_TWO_CO, { exact: true })).toBeVisible();
+      await openFacultyResearchList(page, TITLE_TWO_CO);
+      const card3 = facultyResearchCard(page, TITLE_TWO_CO);
+      await expect(card3).toBeVisible({ timeout: 15_000 });
       await expect(card3.getByText('Co-author', { exact: true })).toBeVisible();
     });
 
@@ -507,8 +508,8 @@ test.describe('Import Data — UAT Test Suite', () => {
     }) => {
       await logout(page);
       await login(page, importedFaculty.one.email, importedFaculty.one.password);
-      await page.goto('/research');
-      await expect(page.getByText(TITLE_TWO_CO, { exact: false })).toBeVisible();
+      await openFacultyResearchList(page, TITLE_TWO_CO);
+      await expect(facultyResearchCard(page, TITLE_TWO_CO)).toBeVisible({ timeout: 15_000 });
     });
 
     test('IMPORT-024: Invalid co-author email — research imported, co-author skipped', async ({

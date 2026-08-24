@@ -181,7 +181,9 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/dashboard');
     const afterTotal = await getStatCardValue(page, /Total research/i);
-    expect(afterTotal).toBe(ovpriTotalBeforeImport + 2);
+    // Import fixture: CCS published_scopus (completed) + CBA ongoing (in progress).
+    // Total Research counts completed statuses only.
+    expect(afterTotal).toBe(ovpriTotalBeforeImport + 1);
 
     await page.goto('/ovpri/research');
     const stage = page.locator('select[name="stage"]');

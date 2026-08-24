@@ -49,6 +49,8 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
                 __('Registration Type'),
                 __('Title of Research'),
                 __('Research Progress'),
+                __('Registered'),
+                __('OVPRI approved'),
             ];
         }
 
@@ -62,6 +64,8 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
             __('Registration Type'),
             __('Classification'),
             __('Research Progress'),
+            __('Registered'),
+            __('OVPRI approved'),
         ];
     }
 
@@ -86,6 +90,8 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
                 $this->service->registrationTypeLabel($r->registration_type),
                 $r->title,
                 $this->service->statusLabel($r->status),
+                $this->service->reportDate($r->created_at),
+                $this->service->reportDate($r->ovpriApprovedAt()),
             ];
         }
 
@@ -103,6 +109,8 @@ class ResearchReportExport implements FromCollection, WithHeadings, ShouldAutoSi
             $this->service->registrationTypeLabel($r->registration_type),
             $this->service->classificationLabel($r->research_classification),
             $this->service->statusLabel($r->status),
+            $this->service->reportDate($r->created_at),
+            $this->service->reportDate($r->ovpriApprovedAt()),
         ];
     }
 

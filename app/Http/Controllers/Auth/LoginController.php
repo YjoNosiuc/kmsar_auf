@@ -86,20 +86,67 @@ class LoginController extends Controller
 
     /**
      * First matching Spatie role wins (highest-privilege roles checked first).
+     *
+     * Do not blindly follow url.intended — a stale tab or expired session often
+     * stores a route the user cannot access, which looks like a random 403.
      */
     protected function redirectAfterLogin(User $user): RedirectResponse
     {
         /** @var User $authUser */
         $authUser = auth()->user() ?? $user;
+        $home = $this->homeUrl($authUser);
+        $intended = session()->pull('url.intended');
 
-        $url = match (true) {
-            $authUser->hasRole('super_admin') => route('admin.dashboard'),
-            $authUser->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => route('ovpri.dashboard'),
-            $authUser->hasAnyRole(['college_dean', 'unit_head']) => route('dean.dashboard'),
-            $authUser->hasAnyRole(['faculty', 'viewer']) => route('research.index'),
+        if (is_string($intended) && $intended !== '' && $this->intendedIsAllowed($authUser, $intended)) {
+            return redirect()->to($intended);
+        }
+
+        return redirect()->to($home);
+    }
+
+    protected function homeUrl(User $user): string
+    {
+        return match (true) {
+            $user->hasRole('super_admin') => route('admin.dashboard'),
+            $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => route('ovpri.dashboard'),
+            $user->hasAnyRole(['college_dean', 'unit_head']) => route('dean.dashboard'),
+            $user->hasAnyRole(['faculty', 'viewer']) => route('research.index'),
             default => '/',
         };
+    }
 
-        return redirect()->intended($url);
+    protected function intendedIsAllowed(User $user, string $url): bool
+    {
+        $parts = parse_url($url);
+        if ($parts === false) {
+            return false;
+        }
+
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+        $host = $parts['host'] ?? null;
+        if (is_string($host) && is_string($appHost) && strcasecmp($host, $appHost) !== 0) {
+            return false;
+        }
+
+        $path = '/'.ltrim((string) ($parts['path'] ?? '/'), '/');
+
+        if ($user->hasRole('super_admin')) {
+            return true;
+        }
+
+        $prefixes = match (true) {
+            $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']) => ['/ovpri', '/reports', '/profile', '/notifications'],
+            $user->hasAnyRole(['college_dean', 'unit_head']) => ['/dean', '/approval', '/reports', '/profile', '/notifications'],
+            $user->hasAnyRole(['faculty', 'viewer']) => ['/research', '/profile', '/notifications', '/documents'],
+            default => [],
+        };
+
+        foreach ($prefixes as $prefix) {
+            if ($path === $prefix || str_starts_with($path, $prefix.'/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

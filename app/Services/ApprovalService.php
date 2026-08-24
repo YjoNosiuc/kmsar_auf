@@ -32,7 +32,10 @@ class ApprovalService
             ->get();
     }
 
-    public function paginateResearchForUser(User $user, int $perPage = 15): LengthAwarePaginator
+    /**
+     * @param  array{search?: string|null, approval_stage?: string|null, status?: string|null}  $filters
+     */
+    public function paginateResearchForUser(User $user, int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
         $query = Research::query()
             ->with(['motherCollege', 'primaryAuthor'])
@@ -53,7 +56,26 @@ class ApprovalService
             $query->whereRaw('1 = 0');
         }
 
-        return $query->paginate($perPage);
+        $search = trim((string) ($filters['search'] ?? ''));
+        if ($search !== '') {
+            $like = '%'.addcslashes($search, '%_\\').'%';
+            $query->where(function ($q) use ($like) {
+                $q->where('title', 'like', $like)
+                    ->orWhere('reference_number', 'like', $like);
+            });
+        }
+
+        $stage = trim((string) ($filters['approval_stage'] ?? ''));
+        if ($stage !== '') {
+            $query->where('approval_stage', $stage);
+        }
+
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status !== '') {
+            $query->where('status', $status);
+        }
+
+        return $query->paginate($perPage)->withQueryString();
     }
 
     public function paginateAllResearch(

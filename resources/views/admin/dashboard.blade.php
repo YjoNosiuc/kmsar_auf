@@ -11,7 +11,7 @@
 @endsection
 
 @php
-    $stageColors = ['#94A3B8', '#D97706', '#2563EB', '#059669', '#DC2626'];
+    $stageColors = ['#D97706', '#2563EB', '#059669', '#DC2626'];
 @endphp
 
 @section('content')
@@ -115,7 +115,6 @@
 
     @php
         $statusBreakdown = [
-            'draft' => ['label' => __('Draft'), 'color' => '#94A3B8'],
             'dean_review' => ['label' => __('Dean review'), 'color' => '#D97706'],
             'ovpri_review' => ['label' => __('OVPRI review'), 'color' => '#2563EB'],
             'approved' => ['label' => __('Approved'), 'color' => '#059669'],
@@ -127,11 +126,11 @@
         <div class="kmsar-card-header">
             <div>
                 <h2 class="kmsar-card-title">{{ __('Research by approval stage') }}</h2>
-                <p class="kmsar-body mt-1" style="font-size:0.875rem;color:var(--color-text-secondary);">{{ __('Breakdown of all registered research by current approval stage') }}</p>
+                <p class="kmsar-body mt-1" style="font-size:0.875rem;color:var(--color-text-secondary);">{{ __('Submitted research only. Drafts stay with the faculty who created them.') }}</p>
             </div>
         </div>
         <div class="kmsar-card-body">
-            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;" role="region" aria-label="{{ __('Research approval stage breakdown') }}">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;" role="region" aria-label="{{ __('Research approval stage breakdown') }}">
                 @foreach ($statusBreakdown as $key => $meta)
                     <div class="kmsar-stat-card" style="padding:1rem 1.125rem;">
                         <div class="kmsar-stat-card-value" style="color:{{ $meta['color'] }};font-size:1.5rem;">{{ number_format($researchByStatus[$key] ?? 0) }}</div>
@@ -416,7 +415,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const stageColors = ['#94A3B8', '#D97706', '#2563EB', '#059669', '#DC2626'];
+    const stageColors = ['#D97706', '#2563EB', '#059669', '#DC2626'];
     const stageCtx = document.getElementById('stageChart');
     if (stageCtx && researchByStage.counts && researchByStage.counts.length) {
         new Chart(stageCtx, {

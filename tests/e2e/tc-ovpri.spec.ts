@@ -16,11 +16,11 @@ function uniqueTitle(prefix: string): string {
   return `${prefix} ${Date.now()}`;
 }
 
-/** Ensure at least one CBA research exists (suite no longer starts from a fresh seed). */
-function ensureCbaResearchVisible(): void {
+/** Ensure at least one CAMP research exists (suite no longer starts from a fresh seed). */
+function ensureCampResearchVisible(): void {
   const stamp = Date.now();
   runTinker(
-    `$author = \\App\\Models\\User::where('email','faculty.cba1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CBA')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CBA-${stamp}'], ['title' => 'E2E CBA Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
+    `$author = \\App\\Models\\User::where('email','faculty.camp1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CAMP')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CAMP-${stamp}'], ['title' => 'E2E CAMP Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
   );
 }
 
@@ -399,14 +399,14 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
   test('TC-019: All Research page shows all research across all colleges (H-05)', async ({
     page,
   }) => {
-    ensureCbaResearchVisible();
+    ensureCampResearchVisible();
     await ovpriLogin(page);
     await page.goto('/ovpri/research');
 
     await expect(page.getByRole('heading', { name: 'All research' })).toBeVisible();
     await expect(page.locator('table tbody tr').first()).toBeVisible();
     await expect(page.locator('table tbody').getByText('CCS').first()).toBeVisible();
-    await expect(page.locator('table tbody').getByText('CBA').first()).toBeVisible();
+    await expect(page.locator('table tbody').getByText('CAMP').first()).toBeVisible();
   });
 
   test('TC-020: Filter by college works on All Research page (H-05)', async ({ page }) => {
@@ -420,7 +420,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
       page.locator('select[name="college"]').selectOption(ccsValue!),
     ]);
     await expect(page.locator('table tbody').getByText('CCS').first()).toBeVisible();
-    await expect(page.locator('table tbody').getByText('CBA')).toHaveCount(0);
+    await expect(page.locator('table tbody').getByText('CAMP')).toHaveCount(0);
   });
 
   test('TC-021: Filter by approval stage works on All Research page (H-05)', async ({ page }) => {
@@ -488,7 +488,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await page.goto('/reports?per_page=10');
 
     await expect(page.getByText(/Showing .* of .* records/i)).toBeVisible();
-    await expect(page.locator('table.kmsar-table tbody').getByText(/BLOCKCHAIN|CCS|CBA|CEA/i).first()).toBeVisible();
+    await expect(page.locator('table.kmsar-table tbody').getByText(/BLOCKCHAIN|CCS|CAMP/i).first()).toBeVisible();
 
     await page.locator('select[name="sdg"]').selectOption('4');
     await page.getByRole('button', { name: 'Apply', exact: true }).click();

@@ -559,9 +559,13 @@
                             name="employee_number"
                             class="kmsar-input @error('employee_number') kmsar-input--error @enderror"
                             value="{{ old('employee_number') }}"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            maxlength="10"
                             x-bind:required="idFieldRequired(addUserType)"
                             autocomplete="off"
-                            placeholder="{{ __('e.g. AUF-2024-0001') }}"
+                            placeholder="{{ __('Up to 10 digits') }}"
+                            x-on:input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 10)"
                         >
                         @error('employee_number')
                             <p class="kmsar-form-error">{{ $message }}</p>
@@ -608,11 +612,15 @@
 
                     <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="add-college_id">{{ __('College/Office') }} <span class="kmsar-form-hint" style="font-weight:400;text-transform:none;">({{ __('optional') }})</span></label>
+                            <label class="kmsar-form-label" for="add-college_id">
+                                {{ __('College/Office') }}
+                                <span class="kmsar-form-required">*</span>
+                            </label>
                             <select
                                 id="add-college_id"
                                 name="college_id"
                                 class="kmsar-select"
+                                required
                                 x-model="addCollegeId"
                                 x-on:change="addProgramId = ''; loadPrograms($event.target.value, 'add')"
                             >
@@ -834,9 +842,13 @@
                             type="text"
                             name="employee_number"
                             class="kmsar-input @error('employee_number') kmsar-input--error @enderror"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            maxlength="10"
                             x-bind:required="idFieldRequired(editUser.user_type)"
                             autocomplete="off"
                             x-model="editUser.employee_number"
+                            x-on:input="editUser.employee_number = $event.target.value.replace(/[^0-9]/g, '').slice(0, 10)"
                         >
                         @error('employee_number')
                             <p class="kmsar-form-error">{{ $message }}</p>

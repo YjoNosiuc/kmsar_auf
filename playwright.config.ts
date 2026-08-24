@@ -36,7 +36,11 @@ export default defineConfig({
       // Truly shareable on one DB: no migrate:fresh; light / read-mostly.
       // Security, API, and A11Y mutate research concurrently and cause 500/flakes —
       // they run in sequential instead.
-      testMatch: ['**/tc-role-access.spec.ts', '**/tc-performance.spec.ts'],
+      testMatch: [
+        '**/tc-role-access.spec.ts',
+        '**/tc-uat-current-roles.spec.ts',
+        '**/tc-performance.spec.ts',
+      ],
       fullyParallel: false,
       workers: isCi ? 1 : 3,
     },

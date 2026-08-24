@@ -6,11 +6,18 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const facultyCamp = { email: 'faculty.camp1@yopmail.com', password: 'password' };
+const deanCamp = { email: 'dean.camp@yopmail.com', password: 'password' };
+
 export const credentials = {
   faculty_ccs: { email: 'faculty.ccs1@yopmail.com', password: 'password' },
-  faculty_cba: { email: 'faculty.cba1@yopmail.com', password: 'password' },
+  faculty_ccs2: { email: 'faculty.ccs2@yopmail.com', password: 'password' },
+  faculty_camp: facultyCamp,
+  faculty_camp2: { email: 'faculty.camp2@yopmail.com', password: 'password' },
+  faculty_cba: facultyCamp,
   dean_ccs: { email: 'dean.ccs@yopmail.com', password: 'password' },
-  dean_cba: { email: 'dean.cba@yopmail.com', password: 'password' },
+  dean_camp: deanCamp,
+  dean_cba: deanCamp,
   ovpri: { email: 'ovpri@yopmail.com', password: 'password' },
   cdaic: { email: 'cdaic@yopmail.com', password: 'password' },
   admin: { email: 'admin@yopmail.com', password: 'password' },
@@ -24,6 +31,13 @@ export function authStatePath(role: AuthRole | string): string {
   return path.join(AUTH_DIR, `${role}.json`);
 }
 
+export function shortEmployeeNumber(prefix: string, stamp: number): string {
+  const prefixDigits = prefix.replace(/\D/g, '').slice(0, 2);
+  const suffix = String(stamp).replace(/\D/g, '').slice(-8);
+
+  return `${prefixDigits}${suffix}`.slice(0, 10);
+}
+
 const emailToRole: Record<string, AuthRole> = {
   [credentials.faculty_ccs.email]: 'faculty',
   [credentials.dean_ccs.email]: 'dean',
@@ -34,7 +48,7 @@ const emailToRole: Record<string, AuthRole> = {
 
 const keepAliveTimers = new WeakMap<Page, ReturnType<typeof setInterval>>();
 
-/** Keep the 1-minute idle logout from firing during long Playwright waits. */
+/** Keep the idle-timeout modal from firing during long Playwright waits. */
 export function startKeepAlive(page: Page): void {
   stopKeepAlive(page);
   const timer = setInterval(async () => {

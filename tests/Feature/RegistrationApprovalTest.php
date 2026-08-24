@@ -1,6 +1,8 @@
 <?php
 
+use App\Mail\EmailVerificationMail;
 use App\Mail\UserApprovedMail;
+use App\Models\PasswordResetOtp;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -21,7 +23,8 @@ function approvalMakeSuperAdmin(): User
 
 describe('Self-registration approval', function () {
 
-    it('creates a pending inactive viewer and does not log them in', function () {
+    it('creates a pending inactive viewer after email OTP verification', function () {
+        Mail::fake();
         $college = makeCollege(false);
 
         $this->post(route('register.store'), [
@@ -29,13 +32,24 @@ describe('Self-registration approval', function () {
             'last_name' => 'Faculty',
             'middle_name' => null,
             'suffix' => null,
-            'employee_number' => 'REG-PEND-001',
+            'employee_number' => '1234567890',
             'college_id' => $college->id,
             'user_type' => 'faculty',
             'email' => 'pending.faculty@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ])
+            ->assertRedirect(route('register.verify-email'));
+
+        $this->assertGuest();
+        expect(User::query()->where('email', 'pending.faculty@example.com')->exists())->toBeFalse();
+
+        Mail::assertSent(EmailVerificationMail::class);
+
+        $otp = PasswordResetOtp::query()->where('email', 'pending.faculty@example.com')->value('otp');
+        expect($otp)->toHaveLength(6);
+
+        $this->post(route('register.confirm-email'), ['otp' => $otp])
             ->assertRedirect(route('login'))
             ->assertSessionHas('info');
 
@@ -49,7 +63,33 @@ describe('Self-registration approval', function () {
             ->and($user->user_type)->toBe('faculty');
     });
 
-    it('saves institution for external affiliate registrations', function () {
+    it('rejects an invalid or expired verification code', function () {
+        Mail::fake();
+        $college = makeCollege(false);
+
+        $this->post(route('register.store'), [
+            'first_name' => 'Pending',
+            'last_name' => 'Faculty',
+            'middle_name' => null,
+            'suffix' => null,
+            'employee_number' => '1234567891',
+            'college_id' => $college->id,
+            'user_type' => 'faculty',
+            'email' => 'pending.badotp@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect(route('register.verify-email'));
+
+        $this->from(route('register.verify-email'))
+            ->post(route('register.confirm-email'), ['otp' => '000000'])
+            ->assertRedirect(route('register.verify-email'))
+            ->assertSessionHasErrors('otp');
+
+        expect(User::query()->where('email', 'pending.badotp@example.com')->exists())->toBeFalse();
+    });
+
+    it('saves institution for external affiliate registrations after OTP', function () {
+        Mail::fake();
         $college = makeCollege(false);
 
         $this->post(route('register.store'), [
@@ -64,13 +104,73 @@ describe('Self-registration approval', function () {
             'email' => 'pending.external@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
-        ])->assertRedirect(route('login'));
+        ])->assertRedirect(route('register.verify-email'));
+
+        $otp = PasswordResetOtp::query()->where('email', 'pending.external@example.com')->value('otp');
+
+        $this->post(route('register.confirm-email'), ['otp' => $otp])
+            ->assertRedirect(route('login'));
 
         $user = User::query()->where('email', 'pending.external@example.com')->first();
         expect($user)->not->toBeNull()
             ->and($user->institution)->toBe('De La Salle University')
             ->and($user->employee_number)->toBeNull()
             ->and($user->is_pending)->toBeTrue();
+    });
+
+    it('sends a second confirmation to login after the account was already created', function () {
+        Mail::fake();
+        $college = makeCollege(false);
+
+        $this->post(route('register.store'), [
+            'first_name' => 'Pending',
+            'last_name' => 'Faculty',
+            'middle_name' => null,
+            'suffix' => null,
+            'employee_number' => '1234567892',
+            'college_id' => $college->id,
+            'user_type' => 'faculty',
+            'email' => 'pending.twice@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertRedirect(route('register.verify-email'));
+
+        $otp = PasswordResetOtp::query()->where('email', 'pending.twice@example.com')->value('otp');
+
+        $this->post(route('register.confirm-email'), [
+            'otp' => $otp,
+            'email' => 'pending.twice@example.com',
+        ])->assertRedirect(route('login'));
+
+        $this->post(route('register.confirm-email'), [
+            'otp' => $otp,
+            'email' => 'pending.twice@example.com',
+        ])
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('info');
+
+        expect(User::query()->where('email', 'pending.twice@example.com')->count())->toBe(1);
+    });
+
+    it('redirects to login when the session is gone but the pending account already exists', function () {
+        $user = User::factory()->create([
+            'email' => 'pending.sessionlost@example.com',
+            'is_active' => false,
+            'is_pending' => true,
+        ]);
+        $user->assignRole('viewer');
+
+        $this->post(route('register.confirm-email'), [
+            'otp' => '123456',
+            'email' => 'pending.sessionlost@example.com',
+        ])
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('info');
+    });
+
+    it('redirects to register when verification is posted with no session and no account', function () {
+        $this->post(route('register.confirm-email'), ['otp' => '123456'])
+            ->assertRedirect(route('register'));
     });
 
     it('blocks pending users from logging in', function () {

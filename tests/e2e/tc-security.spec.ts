@@ -132,21 +132,24 @@ test.describe('Security & sad-path — UAT', () => {
 
     test('SEC-004: Login with deactivated account → specific error shown', async ({ page }) => {
       runTinker(
-        "App\\Models\\User::where('email', 'faculty.ccs3@yopmail.com')->update(['is_active' => false]);",
+        `App\\Models\\User::where('email', '${credentials.faculty_camp2.email}')->update(['is_active' => false]);`,
       );
       await page.goto('/login');
-      await page.fill('input[name="login"]', 'faculty.ccs3@yopmail.com');
-      await page.fill('input[name="password"]', 'password');
+      await page.fill('input[name="login"]', credentials.faculty_camp2.email);
+      await page.fill('input[name="password"]', credentials.faculty_camp2.password);
       await page.click('button[type="submit"]');
       await expect(page).toHaveURL(/\/login/);
       await expect(page.getByText(/This account is inactive/i)).toBeVisible();
+      runTinker(
+        `App\\Models\\User::where('email', '${credentials.faculty_camp2.email}')->update(['is_active' => true]);`,
+      );
     });
 
     test('SEC-005: Register with duplicate email → validation error shown', async ({ page }) => {
       await page.goto('/register');
       await page.fill('#first_name', 'SEC');
       await page.fill('#last_name', 'DUPLICATE');
-      await page.fill('#employee_number', `SEC${Date.now()}`.slice(0, 20));
+      await page.fill('#employee_number', String(Date.now()).slice(-10));
       await page.locator('#college_id').selectOption({ index: 1 });
       await page.locator('#user_type').selectOption('faculty');
       await page.fill('#email', credentials.faculty_ccs.email);
@@ -525,12 +528,14 @@ test.describe('Security & sad-path — UAT', () => {
 
   // -------------------------------------------------------------------------
   test.describe('Session security', () => {
-    test('SEC-027b: Idle timeout modal appears after one minute', async ({ page }) => {
+    test('SEC-027b: Idle timeout modal appears after the configured idle period', async ({ page }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       stopKeepAlive(page);
       await page.clock.install();
       await page.goto('/research');
-      await page.clock.fastForward(60_000);
+      const idleMs = Number(await page.locator('#kmsar-idle-modal').getAttribute('data-idle-ms'));
+      expect(idleMs).toBeGreaterThan(0);
+      await page.clock.fastForward(idleMs);
 
       await expect(page.locator('#kmsar-idle-modal')).toHaveClass(/is-open/);
       await expect(page.getByRole('heading', { name: 'Are you still there?' })).toBeVisible();

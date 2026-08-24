@@ -40,7 +40,6 @@ class ReportController extends Controller
     ];
 
     private const APPROVAL_STAGE_VALUES = [
-        'draft',
         'dean_review',
         'ovpri_review',
         'approved',
@@ -91,7 +90,12 @@ class ReportController extends Controller
                 'collegeName' => null,
                 'reportStats' => [
                     'matching' => $totalCount,
-                    'scopus' => $this->countWithExtraWhere($filters, false, null, fn (Builder $q) => $q->where('status', 'published_scopus')),
+                    'scopus' => $this->countWithExtraWhere($filters, false, null, function (Builder $q) {
+                        $q->where(function (Builder $inner) {
+                            $inner->where('is_scopus_indexed', true)
+                                ->orWhere('status', 'published_scopus');
+                        });
+                    }),
                     'colleges_or_faculty' => $this->distinctCollegeCount($filters),
                 ],
             ]);
@@ -286,13 +290,13 @@ class ReportController extends Controller
         }
 
         if (! empty($filters['date_from'])) {
-            $lines[] = __('Date From: :d', [
+            $lines[] = __('OVPRI approved from: :d', [
                 'd' => Carbon::parse($filters['date_from'])->format('F d, Y'),
             ]);
         }
 
         if (! empty($filters['date_to'])) {
-            $lines[] = __('Date To: :d', [
+            $lines[] = __('OVPRI approved to: :d', [
                 'd' => Carbon::parse($filters['date_to'])->format('F d, Y'),
             ]);
         }
@@ -380,6 +384,10 @@ class ReportController extends Controller
             $filters['include_rejected'] = '0';
         }
 
+        if (($filters['approval_stage'] ?? null) === 'draft') {
+            unset($filters['approval_stage']);
+        }
+
         return $filters;
     }
 
@@ -393,6 +401,7 @@ class ReportController extends Controller
             'primaryAuthor.program',
             'motherCollege',
             'researchAuthors',
+            'latestOvpriApproval',
         ]);
 
         if ($collegeScoped && $scopedCollegeId !== null) {
@@ -409,13 +418,10 @@ class ReportController extends Controller
             $query->where('registration_type', $filters['registration_type']);
         }
 
-        if (! empty($filters['date_from'])) {
-            $query->whereDate('created_at', '>=', $filters['date_from']);
-        }
-
-        if (! empty($filters['date_to'])) {
-            $query->whereDate('created_at', '<=', $filters['date_to']);
-        }
+        $query->whereOvpriApprovedBetween(
+            $filters['date_from'] ?? null,
+            $filters['date_to'] ?? null
+        );
 
         if (! empty($filters['research_classification'])) {
             $query->where('research_classification', $filters['research_classification']);
@@ -427,14 +433,12 @@ class ReportController extends Controller
             $query->whereIn('status', config('kmsar.completed_statuses'));
         }
 
+        $query->where('approval_stage', '!=', 'draft');
+
         if (! empty($filters['approval_stage'])) {
             $query->where('approval_stage', $filters['approval_stage']);
-        } else {
-            $excludedStages = ['draft'];
-            if (($filters['include_rejected'] ?? '0') !== '1') {
-                $excludedStages[] = 'rejected';
-            }
-            $query->whereNotIn('approval_stage', $excludedStages);
+        } elseif (($filters['include_rejected'] ?? '0') !== '1') {
+            $query->where('approval_stage', '!=', 'rejected');
         }
 
         if (! empty($filters['sdg'])) {

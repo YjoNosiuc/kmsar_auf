@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
 import { runTinker } from './helpers/db';
+import { completeRegistrationOtp } from './helpers/register';
 import { selectCurrentUserAsPrimary } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
@@ -17,7 +18,7 @@ async function registerAs(page: Page, userType: string): Promise<string> {
   await page.fill('#last_name', userType);
   await page.locator('#user_type').selectOption(userType);
   if (userType !== 'external_affiliate') {
-    await page.fill('#employee_number', `E2E-${id}`.slice(0, 20));
+    await page.fill('#employee_number', id.replace(/\D/g, '').slice(-10));
   } else {
     await page.fill('#institution', 'De La Salle University');
   }
@@ -26,8 +27,7 @@ async function registerAs(page: Page, userType: string): Promise<string> {
   await page.fill('#password', 'password123');
   await page.fill('#password_confirmation', 'password123');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/login/);
-  await expect(page.getByText(/submitted for approval/i)).toBeVisible();
+  await completeRegistrationOtp(page, email);
   return email;
 }
 
@@ -166,8 +166,8 @@ test.describe('Registration and author wizard — UAT', () => {
   test('REG-013: Multiple co-authors can be added', async ({ page }) => {
     await startAuthors(page, `REG013 ${stamp()}`);
     await selectCurrentUserAsPrimary(page);
-    await addCoAuthor(page, 'faculty.ccs2@yopmail.com');
-    await addCoAuthor(page, 'faculty.ccs3@yopmail.com');
+    await addCoAuthor(page, credentials.faculty_ccs2.email);
+    await addCoAuthor(page, credentials.faculty_camp.email);
     await expect(page.locator('input[name$="[user_id]"]')).toHaveCount(2);
   });
 

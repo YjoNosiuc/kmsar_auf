@@ -86,13 +86,14 @@ test.describe('Faculty — UAT Test Suite', () => {
   });
 
   test('TC-004: login with inactive account shows error message', async ({ page }) => {
-    runTinker('App\\Models\\User::where(\'email\', \'faculty.ccs3@yopmail.com\')->update([\'is_active\' => false]);');
+    runTinker(`App\\Models\\User::where('email', '${credentials.faculty_camp2.email}')->update(['is_active' => false]);`);
     await page.goto('/login');
-    await page.fill('input[name="login"]', 'faculty.ccs3@yopmail.com');
-    await page.fill('input[name="password"]', 'password');
+    await page.fill('input[name="login"]', credentials.faculty_camp2.email);
+    await page.fill('input[name="password"]', credentials.faculty_camp2.password);
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/login/);
     await expect(page.getByText(/This account is inactive/i)).toBeVisible();
+    runTinker(`App\\Models\\User::where('email', '${credentials.faculty_camp2.email}')->update(['is_active' => true]);`);
   });
 
   test('TC-005: logout redirects to login and back button does not show protected page', async ({
@@ -127,9 +128,9 @@ test.describe('Faculty — UAT Test Suite', () => {
 
   test('TC-008: change password — old password no longer works', async ({ page }) => {
     const newPassword = `Pass${Date.now()}!`;
-    await login(page, credentials.faculty_cba.email, credentials.faculty_cba.password);
+    await login(page, credentials.faculty_camp.email, credentials.faculty_camp.password);
     await page.goto('/profile');
-    await page.fill('#profile_current_password', credentials.faculty_cba.password);
+    await page.fill('#profile_current_password', credentials.faculty_camp.password);
     await page.fill('#profile_password', newPassword);
     await page.fill('#profile_password_confirmation', newPassword);
     await page.click('button:has-text("Change password")');
@@ -137,8 +138,8 @@ test.describe('Faculty — UAT Test Suite', () => {
 
     await logout(page);
     await page.goto('/login');
-    await page.fill('input[name="login"]', credentials.faculty_cba.email);
-    await page.fill('input[name="password"]', credentials.faculty_cba.password);
+    await page.fill('input[name="login"]', credentials.faculty_camp.email);
+    await page.fill('input[name="password"]', credentials.faculty_camp.password);
     await page.click('button[type="submit"]');
     await expect(page.getByText(/credentials do not match/i)).toBeVisible();
 
@@ -146,7 +147,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.click('button[type="submit"]');
     await expect(page).toHaveURL(/\/research/);
 
-    runTinker(`use Illuminate\\Support\\Facades\\Hash; App\\Models\\User::where('email', 'faculty.cba1@yopmail.com')->update(['password' => Hash::make('password')]);`);
+    runTinker(`use Illuminate\\Support\\Facades\\Hash; App\\Models\\User::where('email', '${credentials.faculty_camp.email}')->update(['password' => Hash::make('password')]);`);
   });
 
   test('TC-009: click New Research redirects to Wizard Step 1', async ({ page }) => {

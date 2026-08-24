@@ -252,10 +252,13 @@
                         name="employee_number"
                         value="{{ old('employee_number') }}"
                         class="kmsar-input"
-                        style="text-transform:uppercase"
-                        placeholder="Enter your number"
+                        inputmode="numeric"
+                        pattern="[0-9]*"
+                        maxlength="10"
+                        placeholder="Up to 10 digits"
                         x-bind:required="idRequired"
                         autocomplete="off"
+                        x-on:input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 10)"
                     >
                     @error('employee_number')
                         <p class="kmsar-form-error">{{ $message }}</p>

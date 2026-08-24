@@ -14,7 +14,9 @@
             ['label' => __('My Research')],
         ]"
     >
-        <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new') }}</x-button>
+        @unless(auth()->user()->hasRole('viewer'))
+            <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new') }}</x-button>
+        @endunless
     </x-page-header>
 
     @if (session('success'))
@@ -81,56 +83,52 @@
 
     @endphp
 
-    <div
-        x-data="{
-            search: '',
-            stage: '',
-            status: '',
-            items: @js($filterItems ?? []),
-            get filtered() {
-                return this.items.filter((item) => {
-                    const matchSearch = !this.search ||
-                        (item.title || '').toLowerCase().includes(this.search.toLowerCase());
-                    const matchStage = !this.stage || item.stage === this.stage;
-                    const matchStatus = !this.status || item.status === this.status;
-                    return matchSearch && matchStage && matchStatus;
-                });
-            }
-        }"
-    >
-        @if ($research->isNotEmpty())
-            <div class="mb-4" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-                <div class="kmsar-form-group" style="margin:0;flex:1 1 220px;min-width:200px;">
-                    <label class="kmsar-form-label" for="faculty-research-search">{{ __('Search') }}</label>
-                    <input
-                        id="faculty-research-search"
-                        type="search"
-                        class="kmsar-input"
-                        placeholder="{{ __('Search by title…') }}"
-                        x-model="search"
-                        autocomplete="off"
-                    >
-                </div>
-                <div class="kmsar-form-group" style="margin:0;flex:0 1 200px;min-width:160px;">
-                    <label class="kmsar-form-label" for="faculty-research-stage">{{ __('Approval stage') }}</label>
-                    <select id="faculty-research-stage" class="kmsar-select" x-model="stage">
-                        <option value="">{{ __('All stages') }}</option>
-                        @foreach ($stageOptions as $value => $label)
-                            <option value="{{ $value }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="kmsar-form-group" style="margin:0;flex:0 1 220px;min-width:180px;">
-                    <label class="kmsar-form-label" for="faculty-research-status">{{ __('Progress status') }}</label>
-                    <select id="faculty-research-status" class="kmsar-select" x-model="status">
-                        <option value="">{{ __('All statuses') }}</option>
-                        @foreach ($statusOptions as $value => $label)
-                            <option value="{{ $value }}">{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
+    @php
+        $activeFilters = $filters ?? ['search' => '', 'approval_stage' => '', 'status' => ''];
+        $hasActiveFilters = filled($activeFilters['search'] ?? '')
+            || filled($activeFilters['approval_stage'] ?? '')
+            || filled($activeFilters['status'] ?? '');
+    @endphp
+
+    <div>
+        <form method="GET" action="{{ route('research.index') }}" class="mb-4" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+            <div class="kmsar-form-group" style="margin:0;flex:1 1 220px;min-width:200px;">
+                <label class="kmsar-form-label" for="faculty-research-search">{{ __('Search') }}</label>
+                <input
+                    id="faculty-research-search"
+                    type="search"
+                    name="search"
+                    class="kmsar-input"
+                    placeholder="{{ __('Search by title or reference…') }}"
+                    value="{{ $activeFilters['search'] ?? '' }}"
+                    autocomplete="off"
+                >
             </div>
-        @endif
+            <div class="kmsar-form-group" style="margin:0;flex:0 1 200px;min-width:160px;">
+                <label class="kmsar-form-label" for="faculty-research-stage">{{ __('Approval stage') }}</label>
+                <select id="faculty-research-stage" name="approval_stage" class="kmsar-select" onchange="this.form.submit()">
+                    <option value="">{{ __('All stages') }}</option>
+                    @foreach ($stageOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(($activeFilters['approval_stage'] ?? '') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="kmsar-form-group" style="margin:0;flex:0 1 220px;min-width:180px;">
+                <label class="kmsar-form-label" for="faculty-research-status">{{ __('Progress status') }}</label>
+                <select id="faculty-research-status" name="status" class="kmsar-select" onchange="this.form.submit()">
+                    <option value="">{{ __('All statuses') }}</option>
+                    @foreach ($statusOptions as $value => $label)
+                        <option value="{{ $value }}" @selected(($activeFilters['status'] ?? '') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="submit" class="kmsar-btn kmsar-btn--primary kmsar-btn--sm">{{ __('Apply') }}</button>
+                @if ($hasActiveFilters)
+                    <a href="{{ route('research.index') }}" class="kmsar-btn kmsar-btn--secondary kmsar-btn--sm">{{ __('Reset') }}</a>
+                @endif
+            </div>
+        </form>
 
         <div class="mb-2">
             <h2 class="kmsar-h3" style="margin:0 0 4px 0;">{{ __('Submissions') }}</h2>
@@ -145,8 +143,6 @@
             @endphp
             <div
                 class="kmsar-research-card"
-                x-show="filtered.some(f => f.id === {{ $item->id }})"
-                x-cloak
                 style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px;border-left:4px solid {{ $leftBorder }};"
             >
                 <div style="flex:1;min-width:0;">
@@ -186,27 +182,25 @@
                 </div>
             </div>
         @empty
-            <div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:48px 24px;text-align:center;max-width:520px;margin:0 auto;">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:48px;height:48px;margin:0 auto;color:#94A3B8;" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                </svg>
-                <p style="margin:16px 0 0;font-size:15px;font-weight:600;color:#0F172A;">{{ __('No research records yet') }}</p>
-                <p style="margin:8px 0 0;font-size:13px;color:#64748B;line-height:1.5;">{{ __('Start the registration wizard to create your first submission.') }}</p>
-                <div style="margin-top:20px;">
-                    <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
+            @if ($hasActiveFilters)
+                <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:24px;text-align:center;color:#64748B;font-size:13px;">
+                    {{ __('No results found') }}
                 </div>
-            </div>
+            @else
+                <div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:48px 24px;text-align:center;max-width:520px;margin:0 auto;">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:48px;height:48px;margin:0 auto;color:#94A3B8;" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                    </svg>
+                    <p style="margin:16px 0 0;font-size:15px;font-weight:600;color:#0F172A;">{{ __('No research records yet') }}</p>
+                    <p style="margin:8px 0 0;font-size:13px;color:#64748B;line-height:1.5;">{{ __('Start the registration wizard to create your first submission.') }}</p>
+                    @unless(auth()->user()->hasRole('viewer'))
+                        <div style="margin-top:20px;">
+                            <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
+                        </div>
+                    @endunless
+                </div>
+            @endif
         @endforelse
-
-        @if ($research->isNotEmpty())
-            <div
-                x-show="filtered.length === 0"
-                x-cloak
-                style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:24px;text-align:center;color:#64748B;font-size:13px;"
-            >
-                {{ __('No results found') }}
-            </div>
-        @endif
     </div>
 
     @if ($research instanceof \Illuminate\Contracts\Pagination\Paginator && $research->hasPages())

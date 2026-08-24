@@ -381,7 +381,15 @@
         }
     </style>
 
-    <div id="kmsar-idle-modal" role="dialog" aria-modal="true" aria-labelledby="kmsar-idle-title" aria-hidden="true">
+    <div
+        id="kmsar-idle-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kmsar-idle-title"
+        aria-hidden="true"
+        data-idle-ms="{{ max(1, (int) config('kmsar.idle_timeout_minutes', 2)) * 60 * 1000 }}"
+        data-countdown-ms="{{ max(10, (int) config('kmsar.idle_countdown_seconds', 30)) * 1000 }}"
+    >
         <div class="kmsar-idle-card">
             <div class="kmsar-idle-icon" aria-hidden="true">
                 <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -394,7 +402,7 @@
                 You've been inactive for a while. For your security, you will be
                 automatically logged out in:
             </p>
-            <div id="kmsar-idle-countdown">15</div>
+            <div id="kmsar-idle-countdown">{{ (int) config('kmsar.idle_countdown_seconds', 30) }}</div>
             <p class="kmsar-idle-seconds">seconds</p>
             <div class="kmsar-idle-actions">
                 <button type="button" class="kmsar-idle-btn kmsar-idle-btn--primary" onclick="kmsarIdleReset()">
@@ -437,74 +445,143 @@
             };
         })();
 
-        // Idle timeout warning — 1 minute idle → 15s countdown → logout.
+        // Idle timeout — show the warning before logout. Hidden tabs pause so
+        // background timer throttling cannot skip the modal and dump the user
+        // on /login?expired=1 with no explanation.
         (function () {
-            const IDLE_MINUTES = 1;
-            const COUNTDOWN_SECS = 15;
-            const IDLE_MS = IDLE_MINUTES * 60 * 1000;
-            const logoutUrl = @json(route('logout'));
-            const loginExpiredUrl = @json(route('login', ['expired' => 1]));
-            const csrfToken = @json(csrf_token());
-
-            let idleTimer = null;
-            let countdownTimer = null;
-            let countdown = COUNTDOWN_SECS;
-            let isWarningShown = false;
-
             const modal = document.getElementById('kmsar-idle-modal');
             const countEl = document.getElementById('kmsar-idle-countdown');
+            const IDLE_MS = parseInt(modal.getAttribute('data-idle-ms') || '120000', 10);
+            const COUNTDOWN_MS = parseInt(modal.getAttribute('data-countdown-ms') || '30000', 10);
+            const COUNTDOWN_SECS = Math.round(COUNTDOWN_MS / 1000);
+            const logoutUrl = @json(route('logout'));
+            const pingUrl = @json(route('session.ping'));
+            const loginExpiredUrl = @json(route('login', ['expired' => 1]));
+            let csrfToken = @json(csrf_token());
+
+            let lastActivity = Date.now();
+            let countdownEndsAt = null;
+            let isWarningShown = false;
+            let isLoggingOut = false;
+            let ticking = false;
+
+            function currentCsrf() {
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                return (meta && meta.getAttribute('content')) || csrfToken;
+            }
+
+            function applyCsrf(token) {
+                if (!token) return;
+                csrfToken = token;
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta) {
+                    meta.setAttribute('content', token);
+                }
+            }
+
+            function hideWarning() {
+                modal.classList.remove('is-open');
+                modal.setAttribute('aria-hidden', 'true');
+                countEl.classList.remove('is-urgent');
+                isWarningShown = false;
+                countdownEndsAt = null;
+            }
 
             function showWarning() {
                 if (isWarningShown) return;
                 isWarningShown = true;
-                countdown = COUNTDOWN_SECS;
-                countEl.textContent = countdown;
+                countdownEndsAt = Date.now() + COUNTDOWN_MS;
+                countEl.textContent = COUNTDOWN_SECS;
                 countEl.classList.remove('is-urgent');
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
-
-                countdownTimer = setInterval(function () {
-                    countdown--;
-                    countEl.textContent = countdown;
-                    if (countdown <= 5) {
-                        countEl.classList.add('is-urgent');
-                    }
-                    if (countdown <= 0) {
-                        clearInterval(countdownTimer);
-                        kmsarIdleLogout();
-                    }
-                }, 1000);
             }
 
-            function resetIdle() {
-                if (isWarningShown) return;
-                clearTimeout(idleTimer);
-                idleTimer = setTimeout(showWarning, IDLE_MS);
+            function paintCountdown() {
+                if (!isWarningShown || countdownEndsAt === null) return;
+                const remaining = Math.max(0, Math.ceil((countdownEndsAt - Date.now()) / 1000));
+                countEl.textContent = remaining;
+                if (remaining <= 5) {
+                    countEl.classList.add('is-urgent');
+                }
+                if (remaining <= 0) {
+                    kmsarIdleLogout();
+                }
             }
 
-            window.kmsarIdleReset = function () {
-                clearInterval(countdownTimer);
-                modal.classList.remove('is-open');
-                modal.setAttribute('aria-hidden', 'true');
-                isWarningShown = false;
-                countEl.classList.remove('is-urgent');
-                resetIdle();
+            function markActivity() {
+                if (isWarningShown || document.hidden) return;
+                lastActivity = Date.now();
+            }
+
+            function tick() {
+                if (ticking || document.hidden || isLoggingOut) return;
+                ticking = true;
+                try {
+                    if (!isWarningShown && (Date.now() - lastActivity) >= IDLE_MS) {
+                        showWarning();
+                    }
+                    paintCountdown();
+                } finally {
+                    ticking = false;
+                }
+            }
+
+            function pingSession() {
+                return fetch(pingUrl, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': currentCsrf(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                }).then(function (response) {
+                    if (!response.ok) {
+                        return null;
+                    }
+                    return response.json();
+                }).then(function (data) {
+                    if (data && data.csrf) {
+                        applyCsrf(data.csrf);
+                    }
+                    return data;
+                }).catch(function () {
+                    return null;
+                });
+            }
+
+            window.kmsarIdleReset = function (fromOtherTab) {
+                hideWarning();
+                lastActivity = Date.now();
+                pingSession();
+                if (!fromOtherTab) {
+                    try {
+                        localStorage.setItem('kmsar-idle-reset', String(Date.now()));
+                    } catch (e) {
+                        /* private mode */
+                    }
+                }
             };
 
-            window.kmsarIdleLogout = function () {
-                clearInterval(countdownTimer);
-                clearTimeout(idleTimer);
-                modal.classList.remove('is-open');
-                modal.setAttribute('aria-hidden', 'true');
+            window.kmsarIdleLogout = function (fromOtherTab) {
+                if (isLoggingOut) return;
+                isLoggingOut = true;
+                hideWarning();
+                if (!fromOtherTab) {
+                    try {
+                        localStorage.setItem('kmsar-auth-logout', String(Date.now()));
+                    } catch (e) {
+                        /* private mode */
+                    }
+                }
 
-                // POST logout with CSRF, then land on login with the expired banner.
-                // (LoginController::destroy redirects to /, which would skip ?expired=1.)
                 fetch(logoutUrl, {
                     method: 'POST',
                     headers: {
-                        'X-CSRF-TOKEN': csrfToken,
+                        'X-CSRF-TOKEN': currentCsrf(),
                         'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'text/html',
+                        'Accept': 'application/json',
                     },
                     credentials: 'same-origin',
                     redirect: 'manual',
@@ -515,10 +592,25 @@
 
             ['mousemove', 'mousedown', 'keypress', 'keydown', 'scroll', 'touchstart', 'click']
                 .forEach(function (event) {
-                    document.addEventListener(event, resetIdle, { passive: true });
+                    document.addEventListener(event, markActivity, { passive: true });
                 });
 
-            resetIdle();
+            document.addEventListener('visibilitychange', function () {
+                if (document.hidden) return;
+                tick();
+            });
+
+            window.addEventListener('storage', function (event) {
+                if (event.key === 'kmsar-idle-reset') {
+                    window.kmsarIdleReset(true);
+                }
+                if (event.key === 'kmsar-auth-logout') {
+                    window.location.href = loginExpiredUrl;
+                }
+            });
+
+            setInterval(tick, 1000);
+            tick();
         })();
     </script>
     @endauth

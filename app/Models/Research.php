@@ -4,11 +4,14 @@ namespace App\Models;
 
 use App\Support\TextNormalizer;
 use Database\Factories\ResearchFactory;
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use OwenIt\Auditing\Auditable as AuditableTrait;
@@ -140,6 +143,39 @@ class Research extends Model implements AuditableContract
     public function approvals(): HasMany
     {
         return $this->hasMany(Approval::class);
+    }
+
+    public function latestOvpriApproval(): HasOne
+    {
+        return $this->hasOne(Approval::class)
+            ->ofMany(['acted_at' => 'max', 'id' => 'max'], function (Builder $query) {
+                $query->where('stage', 'ovpri')
+                    ->where('action', 'approved');
+            });
+    }
+
+    public function ovpriApprovedAt(): ?CarbonInterface
+    {
+        return $this->latestOvpriApproval?->acted_at;
+    }
+
+    /**
+     * Reports always use OVPRI approval. Blank dates = all approved years.
+     */
+    public function scopeWhereOvpriApprovedBetween(Builder $query, ?string $from, ?string $to): Builder
+    {
+        return $query->whereHas('approvals', function (Builder $q) use ($from, $to) {
+            $q->where('stage', 'ovpri')
+                ->where('action', 'approved');
+
+            if (filled($from)) {
+                $q->whereDate('acted_at', '>=', $from);
+            }
+
+            if (filled($to)) {
+                $q->whereDate('acted_at', '<=', $to);
+            }
+        });
     }
 
     public function documents(): HasMany

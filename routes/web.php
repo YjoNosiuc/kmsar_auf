@@ -57,6 +57,9 @@ Route::middleware('guest')->group(function () {
         ->name('register');
     Route::post('/register', [RegisterController::class, 'store'])
         ->name('register.store');
+    Route::get('/verify-email', [RegisterController::class, 'showVerifyEmail'])->name('register.verify-email');
+    Route::post('/verify-email', [RegisterController::class, 'confirmEmail'])->name('register.confirm-email');
+    Route::post('/verify-email/resend', [RegisterController::class, 'resendVerification'])->name('register.resend-verification');
 
     Route::get('/forgot-password', [PasswordResetController::class, 'showForgotForm'])->name('password.request');
     Route::post('/forgot-password', [PasswordResetController::class, 'sendOtp'])->name('password.email');
@@ -68,6 +71,15 @@ Route::middleware('guest')->group(function () {
 Route::post('/logout', [LoginController::class, 'destroy'])
     ->middleware('auth')
     ->name('logout');
+
+Route::post('/session/ping', function (Request $request) {
+    $request->session()->put('kmsar_last_ping_at', now()->getTimestamp());
+
+    return response()->json([
+        'ok' => true,
+        'csrf' => csrf_token(),
+    ]);
+})->middleware('auth')->name('session.ping');
 
 Route::get('/api/programs', function (Request $request) {
     $programs = Program::query()
@@ -244,8 +256,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'sdgCounts' => array_fill(1, 17, 0),
                     'researchByStatus' => $researchByStatus,
                     'researchByStage' => [
-                        'labels' => ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'],
-                        'counts' => [0, 0, 0, 0, 0],
+                        'labels' => ['Dean review', 'OVPRI review', 'Approved', 'Rejected'],
+                        'counts' => [0, 0, 0, 0],
                     ],
                     'researchByClassification' => $classificationEmpty,
                     'monthlySubmissions' => $emptyMonthly,
@@ -275,7 +287,9 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             ];
 
             $pendingApprovals = (int) $applyDates(
-                Research::query()->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
+                Research::query()
+                    ->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
+                    ->whereNotNull('submitted_at')
             )->count();
 
             // Chart is colleges via research.mother_college_id only — never users.office.
@@ -329,8 +343,8 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 }
             }
 
-            $statusKeys = ['draft', 'dean_review', 'ovpri_review', 'approved', 'rejected'];
-            $statusLabels = ['Draft', 'Dean review', 'OVPRI review', 'Approved', 'Rejected'];
+            $statusKeys = ['dean_review', 'ovpri_review', 'approved', 'rejected'];
+            $statusLabels = ['Dean review', 'OVPRI review', 'Approved', 'Rejected'];
             $statusCounts = $applyDates(Research::query())
                 ->select('approval_stage', DB::raw('count(*) as total'))
                 ->groupBy('approval_stage')

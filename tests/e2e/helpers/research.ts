@@ -137,38 +137,16 @@ export async function setupEndorsedResearch(page: Page, title: string): Promise<
   return researchId;
 }
 
-/** Clear My Research search/filters and optionally search by title. */
+/** Open My Research, applying an optional title/reference search on the server. */
 export async function openFacultyResearchList(page: Page, searchTitle?: string): Promise<void> {
-  await page.goto('/research');
+  const url = searchTitle
+    ? `/research?search=${encodeURIComponent(searchTitle)}`
+    : '/research';
+  await page.goto(url);
   await page.waitForLoadState('domcontentloaded');
-
-  const search = page.locator('#faculty-research-search');
-  const stage = page.locator('#faculty-research-stage');
-  const status = page.locator('#faculty-research-status');
-
-  await page
-    .waitForFunction(() => document.querySelectorAll('.kmsar-research-card[x-cloak]').length === 0)
-    .catch(() => undefined);
-
-  if (await search.isVisible().catch(() => false)) {
-    await search.fill('');
-    await page.keyboard.press('Escape');
-  }
-  if (await stage.isVisible().catch(() => false)) {
-    await stage.selectOption('');
-  }
-  if (await status.isVisible().catch(() => false)) {
-    await status.selectOption('');
-  }
-  await page.waitForTimeout(500);
-
-  if (searchTitle && (await search.isVisible().catch(() => false))) {
-    await search.fill(searchTitle);
-    await page.waitForTimeout(500);
-  }
 }
 
-/** Visible research card on My Research (Alpine x-show hides non-matching cards). */
+/** Visible research card on My Research. */
 export function facultyResearchCard(page: Page, title: string) {
   return page.locator('.kmsar-research-card').filter({ hasText: title }).filter({ visible: true });
 }

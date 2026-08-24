@@ -192,11 +192,10 @@ test.describe('Import Data — UAT Test Suite', () => {
       await adminLogin(page);
     });
 
-    test('IMPORT-001: Import Data link visible in admin sidebar under Administration', async ({ page }) => {
+    test('IMPORT-001: Import Data is hidden from the admin sidebar for now', async ({ page }) => {
       await page.goto('/admin/dashboard');
       const link = page.locator('a.kmsar-nav-item', { hasText: 'Import Data' });
-      await expect(link).toBeVisible({ timeout: 30_000 });
-      await expect(link).toHaveAttribute('href', /\/admin\/import\/users/);
+      await expect(link).toHaveCount(0);
     });
 
     test('IMPORT-002: GET /admin/import/users loads correctly with upload form', async ({ page }) => {

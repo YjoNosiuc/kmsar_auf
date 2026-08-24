@@ -51,7 +51,7 @@ class OvpriController extends Controller
         $cacheSuffix = ($dateFrom ?? 'all').'_'.($dateTo ?? 'all');
 
         $stats = Cache::remember(
-            'ovpri_dash_v3_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
+            'ovpri_dash_v4_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
             3600,
             fn () => $this->buildDashboardStats($dateFrom, $dateTo)
         );
@@ -109,6 +109,7 @@ class OvpriController extends Controller
 
         $pendingApprovals = (clone $base)
             ->where('approval_stage', 'ovpri_review')
+            ->whereNotNull('submitted_at')
             ->count();
 
         $publishedCount = (clone $base)
@@ -429,7 +430,7 @@ class OvpriController extends Controller
     private function baseResearchQuery(?string $dateFrom, ?string $dateTo): Builder
     {
         $query = Research::query()
-            ->whereNotIn('approval_stage', ['draft', 'dean_review', 'rejected']);
+            ->whereNotIn('approval_stage', ['draft', 'rejected']);
 
         if ($dateFrom) {
             $query->whereDate('start_date', '>=', $dateFrom);

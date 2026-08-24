@@ -11,8 +11,10 @@ function uniqueTitle(prefix: string): string {
 }
 
 function shortEmployeeNumber(prefix: string, stamp: number): string {
-  const suffix = String(stamp).slice(-6);
-  return `AUF-${prefix}-${suffix}`.slice(0, 20);
+  const prefixDigits = prefix.replace(/\D/g, '').slice(0, 2);
+  const suffix = String(stamp).replace(/\D/g, '').slice(-8);
+
+  return `${prefixDigits}${suffix}`.slice(0, 10);
 }
 
 async function adminLogin(page: Page): Promise<void> {
@@ -130,7 +132,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'My research' })).toBeVisible();
   });
 
-  test('TC-003: Admin dashboard loads with system-wide stats AND research breakdown by status (draft, dean_review, ovpri_review, approved, rejected)', async ({
+  test('TC-003: Admin dashboard loads with system-wide stats AND research breakdown by status (dean_review, ovpri_review, approved, rejected)', async ({
     page,
   }) => {
     await adminLogin(page);
@@ -138,7 +140,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     await expect(page.getByText('Research by approval stage')).toBeVisible();
     await expect(page.getByRole('region', { name: /Research approval stage breakdown/i })).toBeVisible();
-    await expect(page.getByRole('region', { name: /Research approval stage breakdown/i }).getByText('Draft')).toBeVisible();
+    await expect(page.getByRole('region', { name: /Research approval stage breakdown/i }).getByText('Draft')).toHaveCount(0);
     await expect(page.getByText('Dean review').first()).toBeVisible();
     await expect(page.getByText('OVPRI review').first()).toBeVisible();
     await expect(page.getByText('Approved').first()).toBeVisible();
@@ -198,7 +200,6 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     const total = await getDashboardStat(page, 'Total research');
     const pending = await getDashboardStat(page, 'Pending approvals');
-    const draft = await getStageBreakdownCount(page, 'Draft');
     const deanReview = await getStageBreakdownCount(page, 'Dean review');
     const ovpriReview = await getStageBreakdownCount(page, 'OVPRI review');
     const approved = await getStageBreakdownCount(page, 'Approved');
@@ -206,7 +207,7 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     expect(total).toBeGreaterThan(0);
     expect(pending).toBeGreaterThanOrEqual(0);
-    expect(draft + deanReview + ovpriReview + approved + rejected).toBeGreaterThanOrEqual(total);
+    expect(deanReview + ovpriReview + approved + rejected).toBeGreaterThanOrEqual(total);
     expect(rejected).toBeGreaterThanOrEqual(0);
     // Pending approvals = research awaiting dean or OVPRI action
     expect(pending).toBe(deanReview + ovpriReview);

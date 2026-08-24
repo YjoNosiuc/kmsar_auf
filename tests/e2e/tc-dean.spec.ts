@@ -23,8 +23,8 @@ async function openNotificationBell(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Notifications' }).click();
 }
 
-async function createAndSubmitResearchAsCba(page: Page, title: string): Promise<string | undefined> {
-  await login(page, credentials.faculty_cba.email, credentials.faculty_cba.password);
+async function createAndSubmitResearchAsCamp(page: Page, title: string): Promise<string | undefined> {
+  await login(page, credentials.faculty_camp.email, credentials.faculty_camp.password);
   await page.goto('/research/create');
   await page.waitForURL(/\/research\/\d+\/details/, { timeout: 90_000 });
 
@@ -149,12 +149,12 @@ test.describe('Dean/Head — UAT Test Suite', () => {
     await deanLogin(page);
     await page.goto('/dean/dashboard');
 
-    await expect(page.getByText('AUF-2024-CCS-0001')).toBeVisible();
-    await expect(page.getByText('AUF-2024-CBA-0001')).toHaveCount(0);
+    await expect(page.getByText('AUF-2025-CCS-0002')).toBeVisible();
+    await expect(page.getByText('AUF-2025-CAMP-0003')).toHaveCount(0);
 
     const facultyTable = page.locator('#facultyStatsTable tbody');
     await expect(facultyTable.getByText(/MARIA SANTOS/i)).toBeVisible();
-    await expect(facultyTable.getByText(/faculty\.cba/i)).toHaveCount(0);
+    await expect(facultyTable.getByText(/ELENA CRUZ|faculty\.camp/i)).toHaveCount(0);
   });
 
   test('TC-006: Approval Queue loads with tabs Pending Endorsed Returned', async ({ page }) => {
@@ -211,13 +211,13 @@ test.describe('Dean/Head — UAT Test Suite', () => {
   });
 
   test('TC-010: Cannot see research from other colleges in queue', async ({ page }) => {
-    const cbaTitle = uniqueTitle('TC010 CBA Only');
-    await createAndSubmitResearchAsCba(page, cbaTitle);
+    const campTitle = uniqueTitle('TC010 CAMP Only');
+    await createAndSubmitResearchAsCamp(page, campTitle);
 
     await deanLogin(page);
     await page.goto('/approval/queue');
-    await expect(page.getByText(cbaTitle)).toHaveCount(0);
-    await expect(page.getByText('AUF-2024-CBA-0002')).toHaveCount(0);
+    await expect(page.getByText(campTitle)).toHaveCount(0);
+    await expect(page.getByText('AUF-2025-CAMP-0004')).toHaveCount(0);
   });
 
   test('TC-011: Endorse research with valid remarks → moves to OVPRI Review queue', async ({
@@ -396,8 +396,8 @@ test.describe('Dean/Head — UAT Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
     await expect(page.getByLabel('SDG')).toBeVisible();
     await expect(page.getByLabel('Classification')).toBeVisible();
-    await expect(page.getByLabel(/Date from/i)).toBeVisible();
-    await expect(page.getByLabel(/Date to/i)).toBeVisible();
+    await expect(page.getByLabel(/OVPRI approved from/i)).toBeVisible();
+    await expect(page.getByLabel(/OVPRI approved to/i)).toBeVisible();
     await expect(page.getByLabel('Per page')).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Program/Dept' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Approval Status' })).toBeVisible();
@@ -431,8 +431,8 @@ test.describe('Dean/Head — UAT Test Suite', () => {
 
     await expect(page.getByText(/COLLEGE OF COMPUTER STUDIES/i)).toBeVisible();
     await expect(page.locator('table.kmsar-table tbody tr').first()).toBeVisible();
-    await expect(page.getByText(/Digital Transformation of MSMEs/i)).toHaveCount(0);
-    await expect(page.locator('table.kmsar-table tbody').getByText(/CBA|Business and Accountancy/i)).toHaveCount(0);
+    await expect(page.getByText(/Telerehabilitation Outcomes/i)).toHaveCount(0);
+    await expect(page.locator('table.kmsar-table tbody').getByText(/CAMP|Allied Medical/i)).toHaveCount(0);
   });
 
   test('TC-023: Export Excel report → downloads with correct data and pagination', async ({

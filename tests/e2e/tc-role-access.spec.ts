@@ -1,6 +1,7 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, logout, credentials, authStatePath } from './helpers/auth';
 import { runTinker } from './helpers/db';
+import { completeRegistrationOtp } from './helpers/register';
 
 const CO_AUTHOR_FACULTY_EMAIL = 'faculty.ccs2@yopmail.com';
 const CO_AUTHOR_FACULTY_PASSWORD = 'password';
@@ -53,7 +54,7 @@ async function registerAndReadRole(page: Page, userType: string): Promise<string
   await page.fill('#last_name', userType);
   await page.locator('#user_type').selectOption(userType);
   if (userType !== 'external_affiliate') {
-    await page.fill('#employee_number', `RA-${id}`.slice(0, 20));
+    await page.fill('#employee_number', id.replace(/\D/g, '').slice(-10));
   } else {
     await page.fill('#institution', 'De La Salle University');
   }
@@ -62,7 +63,7 @@ async function registerAndReadRole(page: Page, userType: string): Promise<string
   await page.fill('#password', 'password123');
   await page.fill('#password_confirmation', 'password123');
   await page.getByRole('button', { name: 'Create account' }).click();
-  await expect(page).toHaveURL(/\/login/);
+  await completeRegistrationOtp(page, email);
   return (
     runTinker(
       `echo \\App\\Models\\User::where('email','${email}')->firstOrFail()->getRoleNames()->first();`,

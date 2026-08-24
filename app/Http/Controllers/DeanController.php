@@ -58,6 +58,7 @@ class DeanController extends Controller
 
             $pendingEndorsement = (clone $base)
                 ->where('approval_stage', 'dean_review')
+                ->whereNotNull('submitted_at')
                 ->count();
 
             $publishedCount = (clone $base)

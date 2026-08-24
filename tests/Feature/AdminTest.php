@@ -75,11 +75,27 @@ describe('Admin user management', function () {
             ->assertOk();
     });
 
+    it('does not list registrar accounts on the users table', function () {
+        $admin = adminMakeSuperAdmin();
+        $registrar = User::factory()->create([
+            'email' => 'hidden.registrar@example.com',
+            'is_active' => true,
+            'is_pending' => false,
+        ]);
+        $registrar->assignRole('registrar');
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.index'))
+            ->assertOk()
+            ->assertDontSee('hidden.registrar@example.com');
+    });
+
     it('super_admin can create a new user with a role', function () {
         $admin = adminMakeSuperAdmin();
 
-        $employeeNumber = fake()->unique()->bothify('??####');
+        $employeeNumber = fake()->unique()->numerify('##########');
         $email = fake()->unique()->safeEmail();
+        $college = makeCollege(false);
 
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
@@ -91,7 +107,7 @@ describe('Admin user management', function () {
                 'email' => $email,
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'college_id' => null,
+                'college_id' => $college->id,
                 'role' => 'faculty',
                 'is_active' => true,
             ])
@@ -108,7 +124,7 @@ describe('Admin user management', function () {
         $admin = adminMakeSuperAdmin();
         $target = User::factory()->create([
             'is_active' => true,
-            'employee_number' => fake()->unique()->bothify('??####'),
+            'employee_number' => fake()->unique()->numerify('##########'),
             'first_name' => 'EDIT',
             'last_name' => 'ME',
             'email' => fake()->unique()->safeEmail(),
@@ -128,7 +144,7 @@ describe('Admin user management', function () {
         $admin = adminMakeSuperAdmin();
         $target = User::factory()->create([
             'is_active' => true,
-            'employee_number' => fake()->unique()->bothify('??####'),
+            'employee_number' => fake()->unique()->numerify('##########'),
             'first_name' => 'ROLE',
             'last_name' => 'CHANGE',
             'email' => fake()->unique()->safeEmail(),
@@ -158,7 +174,7 @@ describe('Admin user management', function () {
         $admin = adminMakeSuperAdmin();
         $target = User::factory()->create([
             'is_active' => true,
-            'employee_number' => fake()->unique()->bothify('??####'),
+            'employee_number' => fake()->unique()->numerify('##########'),
             'first_name' => 'DEACT',
             'last_name' => 'IVE',
             'email' => fake()->unique()->safeEmail(),
@@ -199,8 +215,9 @@ describe('Admin user management', function () {
     it('created user is stored with name fields as typed', function () {
         $admin = adminMakeSuperAdmin();
 
-        $employeeNumber = fake()->unique()->bothify('??####');
+        $employeeNumber = fake()->unique()->numerify('##########');
         $email = fake()->unique()->safeEmail();
+        $college = makeCollege(false);
 
         $this->actingAs($admin)
             ->post(route('admin.users.store'), [
@@ -212,7 +229,7 @@ describe('Admin user management', function () {
                 'email' => $email,
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
-                'college_id' => null,
+                'college_id' => $college->id,
                 'role' => 'viewer',
                 'is_active' => true,
             ])

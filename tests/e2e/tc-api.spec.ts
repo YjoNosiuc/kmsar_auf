@@ -260,9 +260,9 @@ test.describe('API endpoint validation — UAT', () => {
       const response = await page.goto('/research');
       expect(response?.status()).toBe(200);
       await expect(page.getByRole('heading', { name: /My research/i })).toBeVisible();
-      // Seeded CBA-only reference should not appear on CCS faculty list
-      await expect(page.getByText('AUF-2024-CBA-0001')).toHaveCount(0);
-      await expect(page.getByText(/faculty\.cba1/i)).toHaveCount(0);
+      // Seeded CAMP-only reference should not appear on CCS faculty list
+      await expect(page.getByText('AUF-2025-CAMP-0003')).toHaveCount(0);
+      await expect(page.getByText(/faculty\.camp1/i)).toHaveCount(0);
     });
 
     test('API-014: GET /ovpri/research returns all colleges research for OVPRI', async ({

@@ -106,13 +106,13 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     expect(after).toBe(before + 1);
   });
 
-  test('CACHE-002: CBA submit does not increase CCS dean pending count', async ({ page }) => {
+  test('CACHE-002: CAMP submit does not increase CCS dean pending count', async ({ page }) => {
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
     await page.goto('/dean/dashboard');
     const before = await getStatCardValue(page, /Pending Endorsement/i);
 
-    const title = `CACHE-002 CBA ${Date.now()}`;
-    await submitAsFaculty(page, credentials.faculty_cba.email, credentials.faculty_cba.password, title);
+    const title = `CACHE-002 CAMP ${Date.now()}`;
+    await submitAsFaculty(page, credentials.faculty_camp.email, credentials.faculty_camp.password, title);
 
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
     await page.goto('/dean/dashboard');

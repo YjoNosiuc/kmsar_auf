@@ -126,6 +126,11 @@ class ReportGeneratorService
         return $query->count();
     }
 
+    public function reportDate(?\Carbon\CarbonInterface $date): string
+    {
+        return $date?->format('M d, Y') ?? '—';
+    }
+
     public function statusLabel(string $status): string
     {
         return match ($status) {
@@ -257,7 +262,7 @@ class ReportGeneratorService
         }
 
         if (! empty($filters['date_from']) || ! empty($filters['date_to'])) {
-            $lines[] = __('Created: :from — :to', [
+            $lines[] = __('OVPRI approved: :from — :to', [
                 'from' => $filters['date_from'] ?? '—',
                 'to' => $filters['date_to'] ?? '—',
             ]);
@@ -284,6 +289,7 @@ class ReportGeneratorService
             'primaryAuthor',
             'motherCollege',
             'researchAuthors',
+            'latestOvpriApproval',
         ]);
     }
 
@@ -316,13 +322,10 @@ class ReportGeneratorService
      */
     protected function applySharedFilters(Builder $query, array $filters): void
     {
-        if (! empty($filters['date_from'])) {
-            $query->whereDate('created_at', '>=', $filters['date_from']);
-        }
-
-        if (! empty($filters['date_to'])) {
-            $query->whereDate('created_at', '<=', $filters['date_to']);
-        }
+        $query->whereOvpriApprovedBetween(
+            $filters['date_from'] ?? null,
+            $filters['date_to'] ?? null
+        );
 
         if (! empty($filters['research_classification'])) {
             $query->where('research_classification', $filters['research_classification']);

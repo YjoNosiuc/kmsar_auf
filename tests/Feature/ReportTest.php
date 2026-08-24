@@ -10,6 +10,7 @@
  * - Seed enough Research records per test to keep reports meaningful.
  */
 
+use App\Models\Approval;
 use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
@@ -50,14 +51,24 @@ function reportSeedCollegeResearchBundle(int $count = 5): array
 
     $researches = collect();
     for ($i = 0; $i < $count; $i++) {
-        $researches->push(Research::factory()->approved()->create([
+        $research = Research::factory()->approved()->create([
             'mother_college_id' => $college->id,
             'primary_author_id' => $faculty->id,
             'status' => 'completed_unpublished',
             'research_classification' => 'internally_funded',
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
-        ]));
+        ]);
+
+        Approval::query()->create([
+            'research_id' => $research->id,
+            'approver_id' => $faculty->id,
+            'stage' => 'ovpri',
+            'action' => 'approved',
+            'acted_at' => $research->created_at ?? now(),
+        ]);
+
+        $researches->push($research);
     }
 
     return ['college' => $college, 'faculty' => $faculty, 'researches' => $researches];
@@ -294,5 +305,193 @@ describe('Reports college scoping', function () {
             ->and($response->viewData('totalCount'))->toBe($expectedTotal)
             ->and($distinctMotherColleges->contains($bundleA['college']->id))->toBeTrue()
             ->and($distinctMotherColleges->contains($bundleB['college']->id))->toBeTrue();
+    });
+});
+
+// ─────────────────────────────────────────────
+// DRAFT EXCLUSION + ADMIN / OVPRI PARITY
+// ─────────────────────────────────────────────
+
+describe('Reports draft exclusion', function () {
+
+    it('never includes draft research for admin or OVPRI, even if draft is requested', function () {
+        $bundle = reportSeedCollegeResearchBundle(2);
+
+        Research::factory()->create([
+            'mother_college_id' => $bundle['college']->id,
+            'primary_author_id' => $bundle['faculty']->id,
+            'status' => 'completed_unpublished',
+            'approval_stage' => 'draft',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ]);
+
+        $admin = reportMakeUser('super_admin');
+        $ovpri = reportMakeUser('ovpri_admin');
+
+        $adminResponse = $this->actingAs($admin)
+            ->get(route('reports.index'))
+            ->assertOk();
+        $ovpriResponse = $this->actingAs($ovpri)
+            ->get(route('reports.index'))
+            ->assertOk();
+
+        expect($adminResponse->viewData('totalCount'))->toBe($bundle['researches']->count())
+            ->and($ovpriResponse->viewData('totalCount'))->toBe($bundle['researches']->count())
+            ->and($adminResponse->viewData('preview')->every(fn (Research $r) => $r->approval_stage !== 'draft'))->toBeTrue()
+            ->and($ovpriResponse->viewData('preview')->every(fn (Research $r) => $r->approval_stage !== 'draft'))->toBeTrue();
+
+        $forcedDraft = $this->actingAs($admin)
+            ->get(route('reports.index', ['approval_stage' => 'draft']))
+            ->assertOk();
+
+        expect($forcedDraft->viewData('preview')->every(fn (Research $r) => $r->approval_stage !== 'draft'))->toBeTrue()
+            ->and($forcedDraft->viewData('totalCount'))->toBe($bundle['researches']->count());
+    });
+
+    it('counts the same in-progress and completed research on admin and OVPRI dashboards', function () {
+        Illuminate\Support\Facades\Cache::flush();
+
+        $college = makeCollege(false);
+        $faculty = makeFaculty($college);
+
+        Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => 'ongoing',
+            'approval_stage' => 'draft',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ]);
+        Research::factory()->deanReview()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => 'ongoing',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ]);
+        Research::factory()->approved()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => 'ongoing',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ]);
+        Research::factory()->deanReview()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => 'completed_unpublished',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ]);
+        Research::factory()->approved()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => 'completed_unpublished',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ]);
+
+        $admin = reportMakeUser('super_admin');
+        $ovpri = reportMakeUser('ovpri_admin');
+
+        $adminView = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
+        $ovpriView = $this->actingAs($ovpri)->get(route('ovpri.dashboard'))->assertOk();
+
+        expect($adminView->viewData('researchInProgress'))->toBe(2)
+            ->and($ovpriView->viewData('researchInProgress'))->toBe(2)
+            ->and($adminView->viewData('totalResearch'))->toBe(2)
+            ->and($ovpriView->viewData('totalResearch'))->toBe(2);
+    });
+
+    it('admin pending approvals only counts submitted dean and OVPRI review records', function () {
+        Illuminate\Support\Facades\Cache::flush();
+
+        $college = makeCollege(false);
+        $faculty = makeFaculty($college);
+        $attrs = [
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => 'proposal',
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+        ];
+
+        Research::factory()->create(array_merge($attrs, [
+            'approval_stage' => 'dean_review',
+            'submitted_at' => null,
+        ]));
+        Research::factory()->deanReview()->create($attrs);
+        Research::factory()->ovpriReview()->create($attrs);
+
+        $admin = reportMakeUser('super_admin');
+        $view = $this->actingAs($admin)->get(route('admin.dashboard'))->assertOk();
+
+        expect($view->viewData('pendingApprovals'))->toBe(2);
+    });
+});
+
+describe('Reports date filter uses OVPRI approval', function () {
+
+    it('includes all years when no dates are set, and filters by OVPRI approved date when they are', function () {
+        $bundle = reportSeedCollegeResearchBundle(1);
+        $inside = $bundle['researches']->first();
+        $inside->update(['title' => 'INSIDE OVPRI APPROVAL WINDOW']);
+
+        $outside = Research::factory()->approved()->create([
+            'primary_author_id' => $bundle['faculty']->id,
+            'mother_college_id' => $bundle['college']->id,
+            'status' => 'completed_unpublished',
+            'research_classification' => 'internally_funded',
+            'title' => 'OUTSIDE OVPRI APPROVAL WINDOW',
+            'created_at' => '2024-06-01 09:00:00',
+        ]);
+
+        Approval::query()
+            ->where('research_id', $inside->id)
+            ->where('stage', 'ovpri')
+            ->where('action', 'approved')
+            ->update(['acted_at' => '2025-03-15 10:00:00']);
+
+        Approval::query()->create([
+            'research_id' => $outside->id,
+            'approver_id' => $bundle['faculty']->id,
+            'stage' => 'ovpri',
+            'action' => 'approved',
+            'acted_at' => '2024-01-10 10:00:00',
+        ]);
+
+        Research::factory()->approved()->create([
+            'primary_author_id' => $bundle['faculty']->id,
+            'mother_college_id' => $bundle['college']->id,
+            'status' => 'completed_unpublished',
+            'research_classification' => 'internally_funded',
+            'title' => 'NO OVPRI APPROVAL YET',
+        ]);
+
+        $user = reportMakeUser('ovpri_admin');
+
+        $allYears = $this->actingAs($user)->get(route('reports.index'))->assertOk();
+        expect($allYears->viewData('totalCount'))->toBe(2)
+            ->and($allYears->viewData('preview')->pluck('title'))
+            ->not->toContain('NO OVPRI APPROVAL YET');
+
+        $filtered = $this->actingAs($user)
+            ->get(route('reports.index', [
+                'date_from' => '2025-03-01',
+                'date_to' => '2025-03-31',
+            ]))
+            ->assertOk();
+
+        expect($filtered->viewData('totalCount'))->toBe(1)
+            ->and($filtered->viewData('preview')->pluck('title')->all())
+            ->toBe(['INSIDE OVPRI APPROVAL WINDOW']);
     });
 });

@@ -54,6 +54,8 @@
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Registration Type') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Classification') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Research Progress') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Registered') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('OVPRI approved') }}</th>
                 @else
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Faculty') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __("Author's Name") }}</th>
@@ -62,6 +64,8 @@
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Registration Type') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Title of Research') }}</th>
                     <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Research Progress') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('Registered') }}</th>
+                    <th style="background: #1E3A8A; color: #ffffff; font-size: 9px; padding: 6px 8px; text-align: left; font-weight: 700;">{{ __('OVPRI approved') }}</th>
                 @endif
             </tr>
         </thead>
@@ -93,6 +97,8 @@
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->registrationTypeLabel($research->registration_type) }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->classificationLabel($research->research_classification) }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->statusLabel($research->status) }}</td>
+                        <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->reportDate($research->created_at) }}</td>
+                        <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->reportDate($research->ovpriApprovedAt()) }}</td>
                     @else
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $facultyLine }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $authorName }}</td>
@@ -101,11 +107,13 @@
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->registrationTypeLabel($research->registration_type) }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $research->title }}</td>
                         <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->statusLabel($research->status) }}</td>
+                        <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->reportDate($research->created_at) }}</td>
+                        <td style="font-size: 8px; padding: 5px 8px; border-bottom: 1px solid #E2E8F0; vertical-align: top;">{{ $reportGenerator->reportDate($research->ovpriApprovedAt()) }}</td>
                     @endif
                 </tr>
             @empty
                 <tr style="background: #ffffff;">
-                    <td colspan="{{ $isOvpri ? 11 : 9 }}" style="font-size: 8px; padding: 14px 8px; border-bottom: 1px solid #E2E8F0; text-align: center; color: #64748b;">
+                    <td colspan="{{ $isOvpri ? 13 : 11 }}" style="font-size: 8px; padding: 14px 8px; border-bottom: 1px solid #E2E8F0; text-align: center; color: #64748b;">
                         {{ __('No records found for the selected filters.') }}
                     </td>
                 </tr>

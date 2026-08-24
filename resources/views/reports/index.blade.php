@@ -31,7 +31,6 @@
             'other',
         ];
         $approvalStageKeys = [
-            'draft' => __('Draft'),
             'dean_review' => __('Dean Review'),
             'ovpri_review' => __('OVPRI Review'),
             'approved' => __('Approved'),
@@ -74,7 +73,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
             <div>
                 <span style="font-size:13px;font-weight:600;color:#0F172A;">{{ __('Filter Report') }}</span>
-                <span style="font-size:12px;color:#94A3B8;margin-left:8px;">{{ __('Leave blank to include all records') }}</span>
+                <span style="font-size:12px;color:#94A3B8;margin-left:8px;">{{ __('Only OVPRI-approved research. Leave dates blank for all approved years.') }}</span>
             </div>
             <a href="{{ route('reports.index') }}" style="font-size:12px;color:#94A3B8;text-decoration:none;">{{ __('Reset filters') }}</a>
         </div>
@@ -115,7 +114,7 @@
                 <div>
                     <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="status">{{ __('Research progress') }}</label>
                     <select id="status" name="status" class="kmsar-select" style="width:100%;">
-                        <option value="">{{ __('All') }}</option>
+                        <option value="">{{ __('All completed outputs') }}</option>
                         @foreach ($statusKeys as $sk)
                             <option value="{{ $sk }}" @selected(($filters['status'] ?? '') === $sk)>{{ $reportGenerator->statusLabel($sk) }}</option>
                         @endforeach
@@ -148,12 +147,12 @@
                 </div>
 
                 <div>
-                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="date_from">{{ __('Date from') }}</label>
+                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="date_from">{{ __('OVPRI approved from') }}</label>
                     <input id="date_from" type="date" name="date_from" class="kmsar-input" style="width:100%;" value="{{ $filters['date_from'] ?? '' }}">
                 </div>
 
                 <div>
-                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="date_to">{{ __('Date to') }}</label>
+                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="date_to">{{ __('OVPRI approved to') }}</label>
                     <input id="date_to" type="date" name="date_to" class="kmsar-input" style="width:100%;" value="{{ $filters['date_to'] ?? '' }}">
                 </div>
 
@@ -265,6 +264,8 @@
                             <th scope="col">{{ __('Title of Research') }}</th>
                             <th scope="col">{{ __('Research Progress') }}</th>
                         @endif
+                        <th scope="col">{{ __('Registered') }}</th>
+                        <th scope="col">{{ __('OVPRI approved') }}</th>
                         <th scope="col">{{ __('Approval Status') }}</th>
                     </tr>
                 </thead>
@@ -288,6 +289,8 @@
                                 <td>{{ str($row->title)->limit(60) }}</td>
                                 <td class="kmsar-table-cell-sub">{{ $reportGenerator->statusLabel($row->status) }}</td>
                             @endif
+                            <td class="kmsar-table-cell-sub">{{ $reportGenerator->reportDate($row->created_at) }}</td>
+                            <td class="kmsar-table-cell-sub">{{ $reportGenerator->reportDate($row->ovpriApprovedAt()) }}</td>
                             <td>
                                 @if ($row->approval_stage === 'rejected')
                                     <span class="kmsar-badge kmsar-badge--rejected">{{ __('Rejected') }}</span>
@@ -298,7 +301,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $reportScope === 'ovpri' ? 9 : 6 }}" class="kmsar-body" style="text-align:center;padding:var(--space-6);">{{ __('No records to preview.') }}</td>
+                            <td colspan="{{ $reportScope === 'ovpri' ? 11 : 8 }}" class="kmsar-body" style="text-align:center;padding:var(--space-6);">{{ __('No records to preview.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

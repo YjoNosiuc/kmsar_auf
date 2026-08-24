@@ -486,6 +486,7 @@ class ApprovalController extends Controller
     {
         foreach ([now(), now()->subHour()] as $moment) {
             $hourKey = $moment->format('Y-m-d-H');
+            Cache::forget('ovpri_dash_v4_all_all_'.$hourKey);
             Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
             Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
             Cache::forget('ovpri_stats_all_all_'.$hourKey);

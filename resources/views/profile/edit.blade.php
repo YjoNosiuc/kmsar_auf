@@ -28,7 +28,8 @@
     {{-- LEFT — Personal info --}}
     <x-card title="Personal information">
         <form method="POST"
-              action="{{ route('profile.update') }}">
+              action="{{ route('profile.update') }}"
+              x-data>
             @csrf
             @method('PATCH')
 
@@ -108,60 +109,113 @@
             </div>
 
             <div class="kmsar-form-group">
-                <label class="kmsar-form-label" for="profile_email">
-                    Email Address
-                    <span class="kmsar-form-required" aria-hidden="true">*</span>
-                </label>
+                <label class="kmsar-form-label">Email Address</label>
                 <input type="email"
-                       name="email"
                        id="profile_email"
-                       class="kmsar-input {{ $errors->profile->has('email') ? 'kmsar-input--error' : '' }}"
-                       value="{{ old('email', $user->email) }}"
-                       required>
-                @error('email', 'profile')
+                       class="kmsar-input"
+                       value="{{ $user->email }}"
+                       disabled
+                       style="background:var(--color-surface);
+                              color:var(--color-text-muted);
+                              cursor:not-allowed;">
+            </div>
+
+            <div class="kmsar-form-group">
+                <label class="kmsar-form-label" for="profile_employee_number">ID Number</label>
+                <input type="text"
+                       name="employee_number"
+                       id="profile_employee_number"
+                       class="kmsar-input {{ $errors->profile->has('employee_number') ? 'kmsar-input--error' : '' }}"
+                       value="{{ old('employee_number', $user->employee_number) }}"
+                       inputmode="numeric"
+                       pattern="[0-9]*"
+                       maxlength="10"
+                       autocomplete="off"
+                       x-on:input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 10)">
+                @error('employee_number', 'profile')
                     <p class="kmsar-form-error">{{ $message }}</p>
                 @enderror
             </div>
 
-            {{-- Read-only fields --}}
-            <div class="kmsar-form-group">
-                <label class="kmsar-form-label">
-                    ID Number
-                </label>
-                <input type="text"
-                       class="kmsar-input"
-                       value="{{ $user->employee_number }}"
-                       disabled
-                       style="background:var(--color-surface);
-                              color:var(--color-text-muted);
-                              cursor:not-allowed;">
-                <p class="kmsar-form-hint">
-                    ID number cannot be changed.
-                </p>
-            </div>
-
-            <div class="kmsar-form-group">
-                <label class="kmsar-form-label">College</label>
-                <input type="text"
-                       class="kmsar-input"
-                       value="{{ $user->college?->name ?? '—' }}"
-                       disabled
-                       style="background:var(--color-surface);
-                              color:var(--color-text-muted);
-                              cursor:not-allowed;">
-                <p class="kmsar-form-hint">
-                    Contact admin to change college.
-                </p>
-            </div>
-
-            <div class="kmsar-form-group">
-                <label class="kmsar-form-label">Program/Dept</label>
-                <div class="kmsar-input" style="background:#F8FAFC; color:#64748B;">
-                    {{ $user->program
-                        ? $user->program->code.' — '.$user->program->name
-                        : 'Not assigned' }}
+            <div
+                x-data="{
+                    selectedCollegeId: @js(old('college_id', $user->college_id) ? (string) old('college_id', $user->college_id) : ''),
+                    selectedProgramId: @js(old('program_id', $user->program_id) ? (string) old('program_id', $user->program_id) : ''),
+                    programs: [],
+                    programsUrl: @js(route('api.programs')),
+                    init() {
+                        if (this.selectedCollegeId) {
+                            this.loadPrograms(this.selectedCollegeId);
+                        }
+                    },
+                    loadPrograms(collegeId) {
+                        this.programs = [];
+                        if (!collegeId) return;
+                        fetch(`${this.programsUrl}?college_id=${encodeURIComponent(collegeId)}`, {
+                            headers: { Accept: 'application/json' },
+                        })
+                            .then((r) => r.json())
+                            .then((data) => { this.programs = Array.isArray(data) ? data : []; });
+                    }
+                }"
+            >
+                <div class="kmsar-form-group">
+                    <label class="kmsar-form-label" for="profile_college_id">College/Office</label>
+                    <select
+                        id="profile_college_id"
+                        name="college_id"
+                        class="kmsar-select {{ $errors->profile->has('college_id') ? 'kmsar-input--error' : '' }}"
+                        x-model="selectedCollegeId"
+                        x-on:change="selectedProgramId = ''; loadPrograms($event.target.value)"
+                    >
+                        <option value="">{{ __('— Select College/Office —') }}</option>
+                        @foreach ($colleges as $college)
+                            <option value="{{ $college->id }}">
+                                {{ $college->code }} — {{ $college->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('college_id', 'profile')
+                        <p class="kmsar-form-error">{{ $message }}</p>
+                    @enderror
                 </div>
-                <p class="kmsar-form-hint">Contact admin to update your Program/Dept.</p>
+
+                <div class="kmsar-form-group">
+                    <label class="kmsar-form-label" for="profile_program_id">Program/Dept</label>
+                    <input type="hidden" x-bind:name="programs.length === 0 ? 'program_id' : null" x-bind:value="selectedProgramId">
+                    <select
+                        id="profile_program_id"
+                        name="program_id"
+                        class="kmsar-select {{ $errors->profile->has('program_id') ? 'kmsar-input--error' : '' }}"
+                        x-model="selectedProgramId"
+                        x-bind:disabled="programs.length === 0"
+                    >
+                        <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
+                        <template x-for="program in programs" :key="program.id">
+                            <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
+                        </template>
+                    </select>
+                    @error('program_id', 'profile')
+                        <p class="kmsar-form-error">{{ $message }}</p>
+                    @enderror
+                </div>
+            </div>
+
+            <div class="kmsar-form-group">
+                <label class="kmsar-form-label">User Type</label>
+                <input type="text"
+                       class="kmsar-input"
+                       value="{{ match ($user->user_type) {
+                           'faculty' => 'Faculty',
+                           'staff' => 'Staff',
+                           'student' => 'Student',
+                           'external_affiliate' => 'External Affiliate',
+                           default => '—',
+                       } }}"
+                       disabled
+                       style="background:var(--color-surface);
+                              color:var(--color-text-muted);
+                              cursor:not-allowed;">
             </div>
 
             <div class="kmsar-form-group">

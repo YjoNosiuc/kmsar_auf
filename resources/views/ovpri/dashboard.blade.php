@@ -81,6 +81,7 @@
         <div class="kmsar-stat-card kmsar-card--accent-primary">
             <div class="kmsar-stat-card-label">{{ __('Total research') }}</div>
             <div class="kmsar-stat-card-value">{{ number_format($totalResearch) }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Completed records only') }}</div>
         </div>
         <div class="kmsar-stat-card" data-stat-card="in-progress">
             <div class="kmsar-stat-card-label">{{ __('Research In Progress') }}</div>
@@ -94,10 +95,12 @@
         <div class="kmsar-stat-card kmsar-card--accent-success">
             <div class="kmsar-stat-card-label">{{ __('Published') }}</div>
             <div class="kmsar-stat-card-value kmsar-stat-card-value--approved">{{ number_format($publishedCount) }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Part of total — not added on top') }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-gold">
             <div class="kmsar-stat-card-label">{{ __('Scopus/WoS Indexed') }}</div>
             <div class="kmsar-stat-card-value" style="color: var(--color-gold);">{{ number_format($scopusCount) }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Part of published — not added on top') }}</div>
         </div>
         <div class="kmsar-stat-card" data-stat-card="engaged">
             <div class="kmsar-stat-card-label">{{ __('Faculty/Staff Engaged') }}</div>

@@ -41,18 +41,42 @@ class ResearchController extends Controller
     {
         $this->authorize('viewAny', Research::class);
 
-        $research = $this->approvalService->paginateResearchForUser($request->user());
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:200'],
+            'approval_stage' => ['nullable', 'string', Rule::in([
+                'draft',
+                'dean_review',
+                'ovpri_review',
+                'approved',
+                'rejected',
+                'returned_to_faculty',
+            ])],
+            'status' => ['nullable', 'string', Rule::in([
+                'proposal',
+                'ongoing',
+                'completed_unpublished',
+                'presented_internal',
+                'presented_external',
+                'published_non_indexed',
+                'published_scopus',
+                'patent_submitted',
+                'patent_granted',
+            ])],
+        ]);
 
-        $filterItems = $research->map(fn ($r) => [
-            'id' => $r->id,
-            'title' => $r->title,
-            'stage' => $r->approval_stage,
-            'status' => $r->status,
-        ])->values();
+        $research = $this->approvalService->paginateResearchForUser(
+            $request->user(),
+            15,
+            $filters
+        );
 
         return view('faculty.research.index', [
             'research' => $research,
-            'filterItems' => $filterItems,
+            'filters' => [
+                'search' => $filters['search'] ?? '',
+                'approval_stage' => $filters['approval_stage'] ?? '',
+                'status' => $filters['status'] ?? '',
+            ],
         ]);
     }
 
@@ -687,6 +711,7 @@ class ResearchController extends Controller
     {
         foreach ([now(), now()->subHour()] as $moment) {
             $hourKey = $moment->format('Y-m-d-H');
+            Cache::forget('ovpri_dash_v4_all_all_'.$hourKey);
             Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
             Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
             Cache::forget('ovpri_stats_all_all_'.$hourKey);

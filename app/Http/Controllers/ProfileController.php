@@ -2,16 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\College;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
 {
     public function edit()
     {
         $user = auth()->user()->loadMissing(['college', 'program', 'roles']);
-        $colleges = \App\Models\College::orderBy('name')->get();
+        $colleges = College::query()
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get();
 
         return view('profile.edit', compact('user', 'colleges'));
     }
@@ -20,12 +25,31 @@ class ProfileController extends Controller
     {
         $user = auth()->user();
 
+        $currentEmployeeNumber = $user->employee_number;
+
         $validator = Validator::make($request->all(), [
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:20'],
-            'email' => ['required', 'email', 'unique:users,email,'.$user->id],
+            'employee_number' => [
+                'nullable',
+                'string',
+                Rule::unique('users', 'employee_number')->ignore($user->id),
+                function (string $attribute, mixed $value, \Closure $fail) use ($currentEmployeeNumber): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+                    if ((string) $value === (string) $currentEmployeeNumber) {
+                        return;
+                    }
+                    if (! preg_match('/^[0-9]{1,10}$/', (string) $value)) {
+                        $fail(__('The ID number must be 1 to 10 digits.'));
+                    }
+                },
+            ],
+            'college_id' => ['nullable', 'exists:colleges,id'],
+            'program_id' => ['nullable', 'exists:programs,id'],
         ]);
 
         if ($validator->fails()) {
@@ -42,7 +66,9 @@ class ProfileController extends Controller
             'middle_name' => $validated['middle_name'] ?: null,
             'suffix' => $validated['suffix'] ?? null,
             'name' => trim($validated['first_name'].' '.$validated['last_name']),
-            'email' => strtolower($validated['email']),
+            'employee_number' => $validated['employee_number'] ?? null,
+            'college_id' => $validated['college_id'] ?? null,
+            'program_id' => $validated['program_id'] ?? null,
         ]);
 
         return back()->with('success',

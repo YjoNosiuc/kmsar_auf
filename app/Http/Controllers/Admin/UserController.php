@@ -46,6 +46,7 @@ class UserController extends Controller
     {
         $users = User::query()
             ->where('is_pending', false)
+            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'registrar'))
             ->with(['roles', 'college', 'program'])
             ->orderBy('name')
             ->get();
@@ -82,8 +83,8 @@ class UserController extends Controller
             'employee_number' => [
                 'nullable',
                 'string',
-                'max:50',
-                'unique:users,employee_number',
+                'regex:/^[0-9]{1,10}$/',
+                Rule::unique('users', 'employee_number'),
                 Rule::requiredIf(fn () => $request->input('user_type') !== 'external_affiliate'),
             ],
             'first_name' => ['required', 'string', 'max:100'],
@@ -92,7 +93,7 @@ class UserController extends Controller
             'suffix' => ['nullable', 'string', 'max:20'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'college_id' => ['nullable', 'exists:colleges,id'],
+            'college_id' => ['required', 'exists:colleges,id'],
             'program_id' => ['nullable', 'exists:programs,id'],
             'office' => ['nullable', 'string', 'max:100'],
             'user_type' => ['nullable', 'in:faculty,staff,student,external_affiliate'],
@@ -160,9 +161,19 @@ class UserController extends Controller
             'employee_number' => [
                 'nullable',
                 'string',
-                'max:50',
                 Rule::unique('users', 'employee_number')->ignore($user->id),
                 Rule::requiredIf(fn () => $request->input('user_type') !== 'external_affiliate'),
+                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+                    if ((string) $value === (string) $user->employee_number) {
+                        return;
+                    }
+                    if (! preg_match('/^[0-9]{1,10}$/', (string) $value)) {
+                        $fail(__('The ID number must be 1 to 10 digits.'));
+                    }
+                },
             ],
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],

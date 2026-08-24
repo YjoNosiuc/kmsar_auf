@@ -4,16 +4,24 @@
 
 @push('styles')
 <style>
+    html:has(.kmsar-login--register),
+    html:has(.kmsar-login--register) body.kmsar-auth-shell {
+        height: 100%;
+        overflow: hidden;
+    }
     .kmsar-auth-shell {
         margin: 0;
-        min-height: 100vh;
+        height: 100vh;
+        overflow: hidden;
         font-family: var(--font-sans, 'Inter', system-ui, sans-serif);
         background: var(--color-surface, #F8FAFC);
     }
     .kmsar-login {
         display: flex;
-        min-height: 100vh;
+        height: 100%;
+        min-height: 0;
         flex-direction: column;
+        overflow: hidden;
     }
     @media (min-width: 768px) {
         .kmsar-login {
@@ -21,7 +29,7 @@
         }
     }
     .kmsar-login-brand {
-        flex: 1;
+        flex: 0 0 auto;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -67,47 +75,113 @@
         color: rgba(255, 255, 255, 0.88);
     }
     .kmsar-login-panel {
-        flex: 1;
+        flex: 1 1 auto;
+        min-height: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 2rem 1.5rem 3rem;
+        overflow: hidden;
+        padding: 1.25rem 1.5rem;
         background: var(--color-card, #fff);
     }
     @media (min-width: 768px) {
+        .kmsar-login-brand {
+            flex: 0 0 40%;
+            min-height: 0;
+            height: 100%;
+        }
         .kmsar-login-panel {
+            flex: 1 1 60%;
+            height: 100%;
             box-shadow: -12px 0 40px rgba(15, 23, 42, 0.06);
         }
     }
     .kmsar-login-card {
         width: 100%;
-        max-width: 22rem;
+        max-width: 36rem;
     }
     .kmsar-login-heading {
-        font-size: 1.375rem;
+        font-size: 1.25rem;
         font-weight: 700;
         color: var(--color-text-primary, #0F172A);
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.15rem;
     }
     .kmsar-login-lead {
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
         color: var(--color-text-secondary, #475569);
-        margin-bottom: 1.5rem;
+        margin-bottom: 0.75rem;
+    }
+    .kmsar-login--register .kmsar-form-group {
+        margin-bottom: 0.55rem;
+    }
+    .kmsar-login--register .kmsar-form-label {
+        margin-bottom: 0.2rem;
+        font-size: 0.75rem;
+    }
+    .kmsar-login--register .kmsar-input,
+    .kmsar-login--register .kmsar-select {
+        padding: 0.4rem 0.7rem;
+    }
+    .kmsar-login--register .kmsar-form-row-2,
+    .kmsar-login--register .kmsar-form-row-3 {
+        gap: 0.65rem;
+    }
+    .kmsar-login--register .kmsar-form-row-2,
+    .kmsar-login--register .kmsar-form-row-3 {
+        grid-template-columns: 1fr 1fr;
+    }
+    .kmsar-login--register .kmsar-form-row-3 {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+    .kmsar-login--register .kmsar-btn--lg {
+        padding: 0.55rem 1.25rem;
+        font-size: 0.875rem;
+    }
+    .kmsar-login--register .kmsar-register-submit {
+        margin-top: 0.5rem;
+        margin-bottom: 0;
+    }
+    .kmsar-login--register .kmsar-register-signin {
+        margin-top: 0.75rem;
+        margin-bottom: 0;
+        text-align: center;
+    }
+    .kmsar-login--register .kmsar-register-submit-btn {
+        width: 100%;
+    }
+    .kmsar-login--register .kmsar-register-signin-link {
+        color: #1E3A8A;
+        font-weight: 600;
+        text-decoration: underline;
     }
     [x-cloak] { display: none !important; }
-    .kmsar-login-ldap {
-        margin-top: 1.5rem;
-        padding-top: 1.25rem;
-        border-top: 1px solid var(--color-border, #E2E8F0);
-        font-size: 0.75rem;
-        line-height: 1.5;
-        color: var(--color-text-muted, #94A3B8);
+    @media (max-width: 767px) {
+        .kmsar-login-brand {
+            padding: 0.75rem 1rem;
+        }
+        .kmsar-login-brand-title {
+            font-size: 1.05rem;
+            margin-bottom: 0;
+        }
+        .kmsar-login-brand-sub {
+            display: none;
+        }
+        .kmsar-login-brand-inst {
+            margin-bottom: 0.2rem;
+        }
+        .kmsar-login-panel {
+            padding: 0.85rem 0.85rem 1rem;
+        }
+        .kmsar-login-card {
+            width: 100%;
+            max-width: 100%;
+        }
     }
 </style>
 @endpush
 
 @section('content')
-<div class="kmsar-login">
+<div class="kmsar-login kmsar-login--register">
     <aside class="kmsar-login-brand" aria-label="Angeles University Foundation">
         <div class="kmsar-login-brand-inner">
             <p class="kmsar-login-brand-inst">Angeles University Foundation</p>
@@ -241,94 +315,98 @@
                     </div>
                 </div>
 
-                <div class="kmsar-form-group" x-show="userType !== 'external_affiliate'" x-cloak>
-                    <label class="kmsar-form-label" for="employee_number">
-                        <span x-text="idLabel"></span>
-                        <span class="kmsar-form-required" x-show="idRequired">*</span>
-                    </label>
-                    <input
-                        id="employee_number"
-                        type="text"
-                        name="employee_number"
-                        value="{{ old('employee_number') }}"
-                        class="kmsar-input"
-                        inputmode="numeric"
-                        pattern="[0-9]*"
-                        maxlength="10"
-                        placeholder="Up to 10 digits"
-                        x-bind:required="idRequired"
-                        autocomplete="off"
-                        x-on:input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 10)"
-                    >
-                    @error('employee_number')
-                        <p class="kmsar-form-error">{{ $message }}</p>
-                    @enderror
+                <div class="kmsar-form-row-2">
+                    <div class="kmsar-form-group" x-show="userType !== 'external_affiliate'" x-cloak>
+                        <label class="kmsar-form-label" for="employee_number">
+                            <span x-text="idLabel"></span>
+                            <span class="kmsar-form-required" x-show="idRequired">*</span>
+                        </label>
+                        <input
+                            id="employee_number"
+                            type="text"
+                            name="employee_number"
+                            value="{{ old('employee_number') }}"
+                            class="kmsar-input"
+                            inputmode="numeric"
+                            pattern="[0-9]*"
+                            maxlength="10"
+                            placeholder="Up to 10 digits"
+                            x-bind:required="idRequired"
+                            autocomplete="off"
+                            x-on:input="$event.target.value = $event.target.value.replace(/[^0-9]/g, '').slice(0, 10)"
+                        >
+                        @error('employee_number')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="kmsar-form-group" x-show="showInstitution" x-cloak>
+                        <label class="kmsar-form-label" for="institution">Institution</label>
+                        <input
+                            id="institution"
+                            type="text"
+                            name="institution"
+                            value="{{ old('institution') }}"
+                            class="kmsar-input"
+                            placeholder="e.g. De La Salle University"
+                            autocomplete="organization"
+                        >
+                        @error('institution')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div class="kmsar-form-group">
+                        <label class="kmsar-form-label" for="email">Email Address <span class="kmsar-form-required">*</span></label>
+                        <input
+                            id="email"
+                            type="email"
+                            name="email"
+                            value="{{ old('email') }}"
+                            class="kmsar-input"
+                            placeholder="your@email.com"
+                            required
+                            autocomplete="email"
+                        >
+                    </div>
                 </div>
 
-                <div class="kmsar-form-group" x-show="showInstitution" x-cloak>
-                    <label class="kmsar-form-label" for="institution">Institution</label>
-                    <input
-                        id="institution"
-                        type="text"
-                        name="institution"
-                        value="{{ old('institution') }}"
-                        class="kmsar-input"
-                        placeholder="e.g. De La Salle University"
-                        autocomplete="organization"
-                    >
-                    @error('institution')
-                        <p class="kmsar-form-error">{{ $message }}</p>
-                    @enderror
-                </div>
+                <div class="kmsar-form-row-2">
+                    <div class="kmsar-form-group">
+                        <label class="kmsar-form-label" for="college_id">College/Office <span class="kmsar-form-required">*</span></label>
+                        <select
+                            id="college_id"
+                            name="college_id"
+                            class="kmsar-select"
+                            required
+                            x-model="selectedCollegeId"
+                            x-on:change="selectedProgramId = ''; loadPrograms($event.target.value)"
+                        >
+                            <option value="">{{ __('— Select College/Office —') }}</option>
+                            @foreach ($colleges as $college)
+                                <option value="{{ $college->id }}">
+                                    {{ $college->code }} — {{ $college->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
 
-                <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="college_id">College/Office <span class="kmsar-form-required">*</span></label>
-                    <select
-                        id="college_id"
-                        name="college_id"
-                        class="kmsar-select"
-                        required
-                        x-model="selectedCollegeId"
-                        x-on:change="selectedProgramId = ''; loadPrograms($event.target.value)"
-                    >
-                        <option value="">{{ __('— Select College/Office —') }}</option>
-                        @foreach ($colleges as $college)
-                            <option value="{{ $college->id }}">
-                                {{ $college->code }} — {{ $college->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="program_id">Program/Dept</label>
-                    <input type="hidden" x-bind:name="programs.length === 0 ? 'program_id' : null" x-bind:value="selectedProgramId">
-                    <select
-                        id="program_id"
-                        name="program_id"
-                        class="kmsar-select"
-                        x-model="selectedProgramId"
-                        x-bind:disabled="programs.length === 0"
-                    >
-                        <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
-                        <template x-for="program in programs" :key="program.id">
-                            <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
-                        </template>
-                    </select>
-                </div>
-
-                <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="email">Email Address <span class="kmsar-form-required">*</span></label>
-                    <input
-                        id="email"
-                        type="email"
-                        name="email"
-                        value="{{ old('email') }}"
-                        class="kmsar-input"
-                        placeholder="your@email.com"
-                        required
-                        autocomplete="email"
-                    >
+                    <div class="kmsar-form-group">
+                        <label class="kmsar-form-label" for="program_id">Program/Dept</label>
+                        <input type="hidden" x-bind:name="programs.length === 0 ? 'program_id' : null" x-bind:value="selectedProgramId">
+                        <select
+                            id="program_id"
+                            name="program_id"
+                            class="kmsar-select"
+                            x-model="selectedProgramId"
+                            x-bind:disabled="programs.length === 0"
+                        >
+                            <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
+                            <template x-for="program in programs" :key="program.id">
+                                <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
+                            </template>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="kmsar-form-row-2">
@@ -358,21 +436,16 @@
                     </div>
                 </div>
 
-                <div class="kmsar-form-group" style="margin-top: 1.25rem;">
-                    <button type="submit" class="kmsar-btn kmsar-btn--primary kmsar-btn--lg" style="width: 100%;">
+                <div class="kmsar-form-group kmsar-register-submit">
+                    <button type="submit" class="kmsar-btn kmsar-btn--primary kmsar-btn--lg kmsar-register-submit-btn">
                         Create account
                     </button>
                 </div>
             </form>
 
-            <p class="kmsar-login-lead" style="margin-top: 1.25rem; margin-bottom: 0; text-align: center;">
+            <p class="kmsar-login-lead kmsar-register-signin">
                 Already have an account?
-                <a href="{{ route('login') }}" style="color: #1E3A8A; font-weight: 600; text-decoration: underline;">Sign in</a>
-            </p>
-
-            <p class="kmsar-login-ldap">
-                Authentication is checked against the university <strong style="color: var(--color-text-secondary); font-weight: 600;">LDAP</strong> directory.
-                Use the same employee number and password as your AUF network account. Contact IT if you cannot sign in.
+                <a href="{{ route('login') }}" class="kmsar-register-signin-link">Sign in</a>
             </p>
         </div>
     </div>

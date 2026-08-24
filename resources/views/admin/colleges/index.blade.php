@@ -104,6 +104,20 @@
         outline: 2px solid var(--color-primary);
         outline-offset: 2px;
     }
+    #section-colleges,
+    #section-programs {
+        overflow: visible;
+    }
+    .kmsar-card-sticky {
+        position: sticky;
+        top: 0;
+        z-index: 8;
+        background: var(--color-card);
+        border-bottom: 1px solid var(--color-border);
+    }
+    .kmsar-card-sticky .kmsar-card-header {
+        border-bottom: 0;
+    }
 </style>
 @endpush
 
@@ -146,23 +160,23 @@
     </div>
 
     <div id="section-colleges" class="kmsar-card kmsar-card--accent-primary" style="margin-bottom: var(--space-6);">
-        <div class="kmsar-card-header">
-            <div>
-                <h3 class="kmsar-card-title">Colleges/Offices</h3>
-                <span class="kmsar-hint">
-                    {{ $colleges->count() }} colleges/offices
-                </span>
+        <div class="kmsar-card-sticky">
+            <div class="kmsar-card-header">
+                <div>
+                    <h3 class="kmsar-card-title">Colleges/Offices</h3>
+                    <span class="kmsar-hint">
+                        {{ $colleges->count() }} colleges/offices
+                    </span>
+                </div>
+                <div class="kmsar-page-header-actions">
+                    <button type="button"
+                            class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
+                            @@click="showAddCollege = true">
+                        + Add College/Office
+                    </button>
+                </div>
             </div>
-            <div class="kmsar-page-header-actions">
-                <button type="button"
-                        class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
-                        @@click="showAddCollege = true">
-                    + Add College/Office
-                </button>
-            </div>
-        </div>
-        <div class="kmsar-card-body" style="padding-top: 0;">
-            <div style="padding:14px 20px 0;">
+            <div style="padding:0 20px 14px;">
                 <input
                     type="text"
                     x-model="collegeSearch"
@@ -172,6 +186,8 @@
                     style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
                 >
             </div>
+        </div>
+        <div class="kmsar-card-body" style="padding-top: 0;">
             <div class="kmsar-table-wrap">
                 <table class="kmsar-table">
                     <thead>
@@ -253,23 +269,23 @@
     </div>
 
     <div id="section-programs" class="kmsar-card kmsar-card--accent-primary">
-        <div class="kmsar-card-header">
-            <div>
-                <h3 class="kmsar-card-title">Programs/Depts</h3>
-                <span class="kmsar-hint">
-                    {{ $programs->count() }} programs/depts
-                </span>
+        <div class="kmsar-card-sticky">
+            <div class="kmsar-card-header">
+                <div>
+                    <h3 class="kmsar-card-title">Programs/Depts</h3>
+                    <span class="kmsar-hint">
+                        {{ $programs->count() }} programs/depts
+                    </span>
+                </div>
+                <div class="kmsar-page-header-actions">
+                    <button type="button"
+                            class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
+                            @@click="showAddProgram = true">
+                        + Add Program/Dept
+                    </button>
+                </div>
             </div>
-            <div class="kmsar-page-header-actions">
-                <button type="button"
-                        class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
-                        @@click="showAddProgram = true">
-                    + Add Program/Dept
-                </button>
-            </div>
-        </div>
-        <div class="kmsar-card-body" style="padding-top: 0;">
-            <div style="padding:14px 20px 0;">
+            <div style="padding:0 20px 14px;">
                 <input
                     type="text"
                     x-model="programSearch"
@@ -280,6 +296,8 @@
                     style="width:100%;max-width:420px;padding:8px 12px;border:1px solid #E2E8F0;border-radius:6px;font-size:13px;font-family:inherit;"
                 >
             </div>
+        </div>
+        <div class="kmsar-card-body" style="padding-top: 0;">
             <div class="kmsar-table-wrap">
                 <table class="kmsar-table">
                     <thead>

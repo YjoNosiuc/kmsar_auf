@@ -276,6 +276,12 @@ ul, ol { list-style: none; }
    4. LAYOUT — APP SHELL
    ============================================================ */
 
+html:has(.kmsar-app),
+html:has(.kmsar-app) body {
+  height: 100%;
+  overflow: hidden;
+}
+
 .kmsar-app {
   display: flex;
   height: 100vh;
@@ -1283,6 +1289,7 @@ button.kmsar-nav-item {
 
 .kmsar-table-wrap {
   overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .kmsar-table {
@@ -2468,6 +2475,7 @@ button.kmsar-nav-item {
 
   .kmsar-table-wrap {
     overflow-x: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
 }
@@ -2542,6 +2550,7 @@ button.kmsar-nav-item {
   .kmsar-table-wrap,
   .kmsar-table-wrapper {
     overflow-x: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
   }
   /* Tables without a scroll wrapper become their own scroll container */
@@ -2690,6 +2699,6 @@ button.kmsar-nav-item {
   .kmsar-stats-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .kmsar-page-container { padding: 16px; }
   .kmsar-table-wrap,
-  .kmsar-table-wrapper { overflow-x: auto; }
+  .kmsar-table-wrapper { overflow-x: auto; overflow-y: hidden; }
   canvas { max-width: 100% !important; }
 }

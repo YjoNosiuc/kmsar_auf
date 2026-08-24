@@ -160,6 +160,56 @@ class Research extends Model implements AuditableContract
     }
 
     /**
+     * Default reports preview/export eligibility: completed progress, not draft,
+     * rejected excluded unless opted in. Pair with whereOvpriApprovedBetween().
+     */
+    public function scopeReportEligible(Builder $query, bool $includeRejected = false): Builder
+    {
+        $query->whereIn('status', config('kmsar.completed_statuses'))
+            ->where('approval_stage', '!=', 'draft');
+
+        if (! $includeRejected) {
+            $query->where('approval_stage', '!=', 'rejected');
+        }
+
+        return $query;
+    }
+
+    public static function isInProgressStatus(?string $status): bool
+    {
+        return $status !== null
+            && in_array($status, config('kmsar.in_progress_statuses'), true);
+    }
+
+    /**
+     * Dashboard-aligned in-progress pipeline (proposal / ongoing).
+     */
+    public function scopeDashboardInProgress(Builder $query, ?string $status = null): Builder
+    {
+        $query->whereNotIn('approval_stage', ['draft', 'rejected'])
+            ->whereIn('status', config('kmsar.in_progress_statuses'));
+
+        if ($status !== null) {
+            $query->where('status', $status);
+        }
+
+        return $query;
+    }
+
+    public function scopeWhereStartDateBetween(Builder $query, ?string $from, ?string $to): Builder
+    {
+        if (filled($from)) {
+            $query->whereDate('start_date', '>=', $from);
+        }
+
+        if (filled($to)) {
+            $query->whereDate('start_date', '<=', $to);
+        }
+
+        return $query;
+    }
+
+    /**
      * Reports always use OVPRI approval. Blank dates = all approved years.
      */
     public function scopeWhereOvpriApprovedBetween(Builder $query, ?string $from, ?string $to): Builder

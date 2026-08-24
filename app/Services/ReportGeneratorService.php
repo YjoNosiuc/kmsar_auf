@@ -322,17 +322,32 @@ class ReportGeneratorService
      */
     protected function applySharedFilters(Builder $query, array $filters): void
     {
-        $query->whereOvpriApprovedBetween(
-            $filters['date_from'] ?? null,
-            $filters['date_to'] ?? null
-        );
+        $status = $filters['status'] ?? null;
+        $includeRejected = ($filters['include_rejected'] ?? '0') === '1';
+        $inProgressFilter = Research::isInProgressStatus($status);
+
+        if ($inProgressFilter) {
+            $query->where('status', $status)
+                ->where('approval_stage', '!=', 'draft');
+
+            if (! $includeRejected) {
+                $query->where('approval_stage', '!=', 'rejected');
+            }
+
+            $query->whereStartDateBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null);
+        } else {
+            $query->whereOvpriApprovedBetween(
+                $filters['date_from'] ?? null,
+                $filters['date_to'] ?? null
+            );
+        }
 
         if (! empty($filters['research_classification'])) {
             $query->where('research_classification', $filters['research_classification']);
         }
 
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+        if (! $inProgressFilter && ! empty($status)) {
+            $query->where('status', $status);
         }
     }
 }

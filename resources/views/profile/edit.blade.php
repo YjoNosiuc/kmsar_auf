@@ -137,28 +137,7 @@
                 @enderror
             </div>
 
-            <div
-                x-data="{
-                    selectedCollegeId: @js(old('college_id', $user->college_id) ? (string) old('college_id', $user->college_id) : ''),
-                    selectedProgramId: @js(old('program_id', $user->program_id) ? (string) old('program_id', $user->program_id) : ''),
-                    programs: [],
-                    programsUrl: @js(route('api.programs')),
-                    init() {
-                        if (this.selectedCollegeId) {
-                            this.loadPrograms(this.selectedCollegeId);
-                        }
-                    },
-                    loadPrograms(collegeId) {
-                        this.programs = [];
-                        if (!collegeId) return;
-                        fetch(`${this.programsUrl}?college_id=${encodeURIComponent(collegeId)}`, {
-                            headers: { Accept: 'application/json' },
-                        })
-                            .then((r) => r.json())
-                            .then((data) => { this.programs = Array.isArray(data) ? data : []; });
-                    }
-                }"
-            >
+            <div x-data="profileCollegeProgram(@js($profileCollegeProgramInitial))">
                 <div class="kmsar-form-group">
                     <label class="kmsar-form-label" for="profile_college_id">College/Office</label>
                     <select
@@ -166,7 +145,7 @@
                         name="college_id"
                         class="kmsar-select {{ $errors->profile->has('college_id') ? 'kmsar-input--error' : '' }}"
                         x-model="selectedCollegeId"
-                        x-on:change="selectedProgramId = ''; loadPrograms($event.target.value)"
+                        x-on:change="loadPrograms($event.target.value, true)"
                     >
                         <option value="">{{ __('— Select College/Office —') }}</option>
                         @foreach ($colleges as $college)
@@ -182,18 +161,20 @@
 
                 <div class="kmsar-form-group">
                     <label class="kmsar-form-label" for="profile_program_id">Program/Dept</label>
-                    <input type="hidden" x-bind:name="programs.length === 0 ? 'program_id' : null" x-bind:value="selectedProgramId">
+                    <input type="hidden" name="program_id" x-bind:value="selectedProgramId || ''">
                     <select
                         id="profile_program_id"
-                        name="program_id"
                         class="kmsar-select {{ $errors->profile->has('program_id') ? 'kmsar-input--error' : '' }}"
                         x-model="selectedProgramId"
-                        x-bind:disabled="programs.length === 0"
+                        x-ref="programSelect"
+                        x-bind:disabled="!selectedCollegeId"
                     >
                         <option value="">{{ __('— Select Program/Dept (optional) —') }}</option>
-                        <template x-for="program in programs" :key="program.id">
-                            <option :value="String(program.id)" x-text="program.code + ' — ' + program.name"></option>
-                        </template>
+                        @foreach ($programsForSelect as $program)
+                            <option value="{{ $program['id'] }}">
+                                {{ $program['code'] }} — {{ $program['name'] }}
+                            </option>
+                        @endforeach
                     </select>
                     @error('program_id', 'profile')
                         <p class="kmsar-form-error">{{ $message }}</p>
@@ -329,3 +310,56 @@
 
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('profileCollegeProgram', (config = {}) => ({
+        selectedCollegeId: config.selectedCollegeId ?? '',
+        selectedProgramId: config.selectedProgramId ?? '',
+        programs: Array.isArray(config.programs) ? config.programs : [],
+        programsUrl: config.programsUrl ?? '',
+        syncProgramOptions(programs) {
+            const select = this.$refs.programSelect;
+            if (!select) {
+                return;
+            }
+            const placeholder = select.options[0];
+            select.replaceChildren(placeholder);
+            programs.forEach((program) => {
+                const option = document.createElement('option');
+                option.value = String(program.id);
+                option.textContent = `${program.code} — ${program.name}`;
+                select.appendChild(option);
+            });
+        },
+        loadPrograms(collegeId, clearSelection = false) {
+            if (clearSelection) {
+                this.selectedProgramId = '';
+            }
+            const keepProgramId = this.selectedProgramId;
+            if (!collegeId) {
+                this.programs = [];
+                this.syncProgramOptions([]);
+                return;
+            }
+            fetch(`${this.programsUrl}?college_id=${encodeURIComponent(collegeId)}`, {
+                headers: { Accept: 'application/json' },
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    this.programs = Array.isArray(data) ? data : [];
+                    this.syncProgramOptions(this.programs);
+                    if (
+                        !clearSelection
+                        && keepProgramId
+                        && this.programs.some((program) => String(program.id) === String(keepProgramId))
+                    ) {
+                        this.selectedProgramId = String(keepProgramId);
+                    }
+                });
+        },
+    }));
+});
+</script>
+@endpush

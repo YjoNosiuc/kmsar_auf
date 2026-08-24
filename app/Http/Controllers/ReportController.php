@@ -290,15 +290,23 @@ class ReportController extends Controller
         }
 
         if (! empty($filters['date_from'])) {
-            $lines[] = __('OVPRI approved from: :d', [
-                'd' => Carbon::parse($filters['date_from'])->format('F d, Y'),
-            ]);
+            $lines[] = Research::isInProgressStatus($filters['status'] ?? null)
+                ? __('Start date from: :d', [
+                    'd' => Carbon::parse($filters['date_from'])->format('F d, Y'),
+                ])
+                : __('OVPRI approved from: :d', [
+                    'd' => Carbon::parse($filters['date_from'])->format('F d, Y'),
+                ]);
         }
 
         if (! empty($filters['date_to'])) {
-            $lines[] = __('OVPRI approved to: :d', [
-                'd' => Carbon::parse($filters['date_to'])->format('F d, Y'),
-            ]);
+            $lines[] = Research::isInProgressStatus($filters['status'] ?? null)
+                ? __('Start date to: :d', [
+                    'd' => Carbon::parse($filters['date_to'])->format('F d, Y'),
+                ])
+                : __('OVPRI approved to: :d', [
+                    'd' => Carbon::parse($filters['date_to'])->format('F d, Y'),
+                ]);
         }
 
         if (! empty($filters['research_classification'])) {
@@ -418,26 +426,42 @@ class ReportController extends Controller
             $query->where('registration_type', $filters['registration_type']);
         }
 
-        $query->whereOvpriApprovedBetween(
-            $filters['date_from'] ?? null,
-            $filters['date_to'] ?? null
-        );
+        $status = $filters['status'] ?? null;
+        $includeRejected = ($filters['include_rejected'] ?? '0') === '1';
+        $inProgressFilter = Research::isInProgressStatus($status);
+
+        if ($inProgressFilter) {
+            $query->where('status', $status)
+                ->where('approval_stage', '!=', 'draft');
+
+            if (! $includeRejected) {
+                $query->where('approval_stage', '!=', 'rejected');
+            }
+
+            $query->whereStartDateBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null);
+        } else {
+            $query->whereOvpriApprovedBetween(
+                $filters['date_from'] ?? null,
+                $filters['date_to'] ?? null
+            );
+        }
 
         if (! empty($filters['research_classification'])) {
             $query->where('research_classification', $filters['research_classification']);
         }
 
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+        if ($inProgressFilter) {
+            // Status and pipeline rules applied above.
+        } elseif (! empty($status)) {
+            $query->where('status', $status)
+                ->where('approval_stage', '!=', 'draft');
         } else {
-            $query->whereIn('status', config('kmsar.completed_statuses'));
+            $query->reportEligible($includeRejected);
         }
-
-        $query->where('approval_stage', '!=', 'draft');
 
         if (! empty($filters['approval_stage'])) {
             $query->where('approval_stage', $filters['approval_stage']);
-        } elseif (($filters['include_rejected'] ?? '0') !== '1') {
+        } elseif (! $includeRejected && ! $inProgressFilter) {
             $query->where('approval_stage', '!=', 'rejected');
         }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\College;
+use App\Models\Program;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -18,7 +19,49 @@ class ProfileController extends Controller
             ->orderBy('code')
             ->get();
 
-        return view('profile.edit', compact('user', 'colleges'));
+        $programCollegeId = old('college_id', $user->college_id);
+
+        $programs = $programCollegeId
+            ? Program::query()
+                ->where('college_id', $programCollegeId)
+                ->where('is_active', true)
+                ->orderBy('code')
+                ->get(['id', 'code', 'name'])
+            : collect();
+
+        $savedProgramId = old('program_id', $user->program_id);
+        if ($savedProgramId && $programCollegeId && ! $programs->contains('id', (int) $savedProgramId)) {
+            $savedProgram = Program::query()->find($savedProgramId);
+            if ($savedProgram !== null && (int) $savedProgram->college_id === (int) $programCollegeId) {
+                $programs->push($savedProgram);
+                $programs = $programs->sortBy('code')->values();
+            }
+        }
+
+        $programsForSelect = $programs->map(fn (Program $program) => [
+            'id' => $program->id,
+            'code' => $program->code,
+            'name' => $program->name,
+        ])->values();
+
+        $profileCollegeProgramInitial = [
+            'selectedCollegeId' => old('college_id', $user->college_id)
+                ? (string) old('college_id', $user->college_id)
+                : '',
+            'selectedProgramId' => old('program_id', $user->program_id)
+                ? (string) old('program_id', $user->program_id)
+                : '',
+            'programs' => $programsForSelect,
+            'programsUrl' => route('api.programs'),
+        ];
+
+        return view('profile.edit', compact(
+            'user',
+            'colleges',
+            'programs',
+            'programsForSelect',
+            'profileCollegeProgramInitial',
+        ));
     }
 
     public function update(Request $request)
@@ -49,7 +92,26 @@ class ProfileController extends Controller
                 },
             ],
             'college_id' => ['nullable', 'exists:colleges,id'],
-            'program_id' => ['nullable', 'exists:programs,id'],
+            'program_id' => [
+                'nullable',
+                Rule::exists('programs', 'id'),
+                function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+                    if ($value === null || $value === '') {
+                        return;
+                    }
+                    $collegeId = $request->input('college_id');
+                    if (! $collegeId) {
+                        return;
+                    }
+                    $belongsToCollege = Program::query()
+                        ->whereKey($value)
+                        ->where('college_id', $collegeId)
+                        ->exists();
+                    if (! $belongsToCollege) {
+                        $fail(__('The selected program does not belong to the selected college.'));
+                    }
+                },
+            ],
         ]);
 
         if ($validator->fails()) {

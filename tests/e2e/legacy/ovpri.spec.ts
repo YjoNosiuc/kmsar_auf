@@ -29,7 +29,7 @@ test.describe('OVPRI / CDAIC approval workflow', () => {
     await expect(page.getByRole('heading', { name: /University dashboard/i })).toBeVisible();
     await expect(page.getByText('Total research')).toBeVisible();
     await expect(page.getByText('Pending approval')).toBeVisible();
-    await expect(page.getByText('Published')).toBeVisible();
+    await expect(page.getByText('Scopus/WoS Indexed')).toBeVisible();
   });
 
   test('H-05: All Research page shows records from all colleges with filters', async ({ page }) => {

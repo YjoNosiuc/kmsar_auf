@@ -269,11 +269,13 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             $completedStatuses = config('kmsar.completed_statuses');
             $inProgressStatuses = config('kmsar.in_progress_statuses');
 
-            // Dashboard totals exclude drafts and rejected; Total Research is completed statuses only.
+            // Total Research matches Reports: completed statuses + OVPRI approval recorded.
             $activeResearch = fn () => $applyDates(
                 Research::query()->whereNotIn('approval_stage', ['draft', 'rejected'])
             );
-            $completedResearch = fn () => $activeResearch()->whereIn('status', $completedStatuses);
+            $completedResearch = fn () => Research::query()
+                ->reportEligible()
+                ->whereOvpriApprovedBetween($dateFrom, $dateTo);
 
             $totalResearch = (int) $completedResearch()->count();
             $researchInProgress = (int) $activeResearch()->whereIn('status', $inProgressStatuses)->count();
@@ -304,13 +306,12 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 ->get()
                 ->map(fn (College $college) => [
                     'label' => $college->code,
-                    'count' => (int) $applyDates(
-                        Research::query()
-                            ->whereNotNull('mother_college_id')
-                            ->where('mother_college_id', $college->id)
-                            ->whereNotIn('approval_stage', ['draft', 'rejected'])
-                            ->whereIn('status', $completedStatuses)
-                    )->count(),
+                    'count' => (int) Research::query()
+                        ->whereNotNull('mother_college_id')
+                        ->where('mother_college_id', $college->id)
+                        ->reportEligible()
+                        ->whereOvpriApprovedBetween($dateFrom, $dateTo)
+                        ->count(),
                 ])
                 ->filter(fn (array $row) => filled($row['label']))
                 ->values();
@@ -325,11 +326,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             ])->values();
 
             $sdgCounts = array_fill(1, 17, 0);
-            $sdgTags = $applyDates(
-                Research::query()
-                    ->whereNotIn('approval_stage', ['draft', 'rejected'])
-                    ->whereIn('status', $completedStatuses)
-            )
+            $sdgTags = $completedResearch()
                 ->whereNotNull('sdg_tags')
                 ->pluck('sdg_tags');
 

@@ -157,6 +157,7 @@
                 @if (! empty($collegeBreakdown) && count($collegeBreakdown))
                     <div class="kmsar-chart-legend kmsar-chart-legend--horizontal">
                         @foreach ($collegeBreakdown as $row)
+                            @continue(! filled($row['code'] ?? null) || ($row['code'] ?? '') === 'IS')
                             <div class="kmsar-legend-item">
                                 <span class="kmsar-legend-dot kmsar-legend-dot--navy"></span>
                                 <span>{{ $row['code'] }}: {{ number_format($row['count']) }} ({{ $row['percentage'] }}%)</span>
@@ -174,6 +175,7 @@
                             </thead>
                             <tbody>
                                 @foreach ($collegeBreakdown as $row)
+                                    @continue(! filled($row['code'] ?? null) || ($row['code'] ?? '') === 'IS')
                                     <tr>
                                         <td class="kmsar-table-cell-title">{{ $row['code'] }}</td>
                                         <td>{{ number_format($row['count']) }}</td>
@@ -276,10 +278,16 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const collegeBreakdown = @json(collect($collegeBreakdown ?? []));
+    const collegeBreakdown = @json(collect($collegeBreakdown ?? [])).filter(function (r) {
+        const code = (r.code || r.label || '').toString().trim();
+        return code !== '' && code !== 'IS';
+    });
     const researchByCollege = collegeBreakdown.length
         ? collegeBreakdown.map(function (r) { return { label: r.code, count: r.count, percentage: r.percentage }; })
-        : @json(collect($researchByCollege ?? []));
+        : @json(collect($researchByCollege ?? [])).filter(function (r) {
+            const code = (r.label || r.code || '').toString().trim();
+            return code !== '' && code !== 'IS';
+        });
     const researchByStage = @json($researchByStage ?? ['labels' => [], 'counts' => []]);
     const monthlySubmissions = @json($monthlySubmissions ?? ['labels' => [], 'counts' => []]);
     const researchByClassification = @json($researchByClassification ?? ['labels' => [], 'counts' => [], 'colors' => []]);

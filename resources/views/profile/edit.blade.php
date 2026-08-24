@@ -126,7 +126,7 @@
             {{-- Read-only fields --}}
             <div class="kmsar-form-group">
                 <label class="kmsar-form-label">
-                    Employee Number
+                    ID Number
                 </label>
                 <input type="text"
                        class="kmsar-input"
@@ -136,7 +136,7 @@
                               color:var(--color-text-muted);
                               cursor:not-allowed;">
                 <p class="kmsar-form-hint">
-                    Employee number cannot be changed.
+                    ID number cannot be changed.
                 </p>
             </div>
 

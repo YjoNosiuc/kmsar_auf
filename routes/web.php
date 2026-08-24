@@ -278,18 +278,27 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 Research::query()->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
             )->count();
 
+            // Chart is colleges via research.mother_college_id only — never users.office.
+            // Office codes (IS, OVPRI, …) are stored on users.office, not colleges.
+            $nonCollegeOfficeCodes = ['IS', 'CCFP', 'OVPRI', 'CDAIC', 'CARI', 'CARE', 'OVPAA', 'UL'];
+
             $researchByCollege = College::query()
+                ->whereNotNull('code')
+                ->where('code', '!=', '')
+                ->whereNotIn('code', $nonCollegeOfficeCodes)
                 ->orderBy('code')
                 ->get()
                 ->map(fn (College $college) => [
                     'label' => $college->code,
                     'count' => (int) $applyDates(
                         Research::query()
+                            ->whereNotNull('mother_college_id')
                             ->where('mother_college_id', $college->id)
                             ->whereNotIn('approval_stage', ['draft', 'rejected'])
                             ->whereIn('status', $completedStatuses)
                     )->count(),
                 ])
+                ->filter(fn (array $row) => filled($row['label']))
                 ->values();
 
             $collegeChartTotal = (int) $researchByCollege->sum('count');

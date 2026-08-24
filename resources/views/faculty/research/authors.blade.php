@@ -90,7 +90,7 @@
                         @input.debounce.300ms="searchPrimary()"
                         @focus="if (primarySearch.trim()) primaryOpen = true"
                         @keydown.escape="closePrimary()"
-                        placeholder="{{ __('Search by name, email, or employee number') }}"
+                        placeholder="{{ __('Search by name, email, or ID number') }}"
                         autocomplete="off"
                         aria-label="{{ __('Search primary author') }}"
                     >
@@ -127,7 +127,7 @@
                         <span class="author-tag-me" x-show="iAmPrimary">{{ __('This is me') }}</span>
                     </div>
                     <dl class="author-details-grid">
-                        <div><dt>{{ __('Employee Number') }}</dt><dd x-text="primaryAuthor?.employee_number || '—'"></dd></div>
+                        <div><dt>{{ __('ID Number') }}</dt><dd x-text="primaryAuthor?.employee_number || '—'"></dd></div>
                         <div><dt>{{ __('College / Office') }}</dt><dd x-text="primaryAuthor?.college || '—'"></dd></div>
                         <div><dt>{{ __('Program / Dept') }}</dt><dd x-text="primaryAuthor?.program || '—'"></dd></div>
                         <div><dt>{{ __('Role') }}</dt><dd x-text="roleLabel(primaryAuthor?.role)"></dd></div>
@@ -158,7 +158,7 @@
                     @focus="if (primaryAuthor && coAuthorSearch.trim()) coAuthorOpen = true"
                     @keydown.escape="closeCoAuthors()"
                     :disabled="!primaryAuthor"
-                    placeholder="{{ __('Search by name, email, or employee number') }}"
+                    placeholder="{{ __('Search by name, email, or ID number') }}"
                     autocomplete="off"
                     aria-label="{{ __('Search co-author') }}"
                 >

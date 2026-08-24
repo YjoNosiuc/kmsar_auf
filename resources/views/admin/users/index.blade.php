@@ -58,6 +58,7 @@
             'program_id' => $user->program_id,
             'office' => $user->office,
             'user_type' => $user->user_type,
+            'institution' => $user->institution,
             'is_active' => (bool) $user->is_active,
         ];
     })->values()->all();
@@ -226,8 +227,9 @@
                                 <th>{{ __('Name') }}</th>
                                 <th>{{ __('Email') }}</th>
                                 <th>{{ __('ID Number') }}</th>
-                                <th>{{ __('College/Office') }}</th>
                                 <th>{{ __('User Type') }}</th>
+                                <th>{{ __('College/Office') }}</th>
+                                <th>{{ __('Program/Dept') }}</th>
                                 <th>{{ __('Institution') }}</th>
                                 <th>{{ __('Registered') }}</th>
                                 <th>{{ __('Action') }}</th>
@@ -239,9 +241,24 @@
                                     <td>{{ $pendingUser->name }}</td>
                                     <td>{{ $pendingUser->email }}</td>
                                     <td>{{ $pendingUser->employee_number ?? '—' }}</td>
-                                    <td>{{ $pendingUser->college?->code ?? '—' }}</td>
                                     <td>{{ $userTypeLabels[$pendingUser->user_type] ?? '—' }}</td>
-                                    <td>{{ $pendingUser->institution ?? '—' }}</td>
+                                    <td>
+                                        @if ($pendingUser->college)
+                                            <span class="kmsar-table-cell-title">{{ $pendingUser->college->code }}</span>
+                                            <span class="kmsar-table-cell-sub block">{{ $pendingUser->college->name }}</span>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if ($pendingUser->program)
+                                            <span class="kmsar-table-cell-title">{{ $pendingUser->program->code }}</span>
+                                            <span class="kmsar-table-cell-sub block">{{ $pendingUser->program->name }}</span>
+                                        @else
+                                            —
+                                        @endif
+                                    </td>
+                                    <td>{{ filled($pendingUser->institution) ? $pendingUser->institution : '—' }}</td>
                                     <td>{{ $pendingUser->created_at->diffForHumans() }}</td>
                                     <td>
                                         <button
@@ -276,7 +293,7 @@
     <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px 20px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;" role="search" aria-label="{{ __('Filter users') }}">
         <input
             type="text"
-            placeholder="{{ __('Search name, email, employee no...') }}"
+            placeholder="{{ __('Search name, email, ID number...') }}"
             x-model="search"
             autocomplete="off"
             aria-label="{{ __('Search users') }}"
@@ -314,10 +331,11 @@
                 <table class="kmsar-table">
                     <thead>
                         <tr>
-                            <th scope="col">{{ __('Employee No.') }}</th>
+                            <th scope="col">{{ __('ID Number') }}</th>
                             <th scope="col">{{ __('Name') }}</th>
                             <th scope="col">{{ __('Role') }}</th>
                             <th scope="col">{{ __('User Type') }}</th>
+                            <th scope="col">{{ __('Institution') }}</th>
                             <th scope="col">{{ __('College/Office') }}</th>
                             <th scope="col">{{ __('Status') }}</th>
                             <th scope="col" class="kmsar-col-hide-mobile">{{ __('Last login') }}</th>
@@ -364,6 +382,9 @@
                                     {{ $userTypeLabels[$user->user_type] ?? '—' }}
                                 </td>
                                 <td class="px-4 py-3 align-middle text-sm">
+                                    {{ filled($user->institution) ? $user->institution : '—' }}
+                                </td>
+                                <td class="px-4 py-3 align-middle text-sm">
                                     @if ($user->college)
                                         <span class="kmsar-table-cell-title">{{ $user->college->code }}</span>
                                         <span class="kmsar-table-cell-sub block">{{ $user->college->name }}</span>
@@ -397,14 +418,14 @@
                             </tr>
                         @empty
                             <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                <td colspan="8" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
+                                <td colspan="9" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
                                     {{ __('No users found.') }}
                                 </td>
                             </tr>
                         @endforelse
                         @if ($users->isNotEmpty())
                             <tr x-show="visibleCount === 0" x-cloak class="border-b border-slate-100">
-                                <td colspan="8" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
+                                <td colspan="9" class="kmsar-body px-4 py-3 align-middle text-center text-sm" style="color: var(--color-text-muted);">
                                     {{ __('No users match your filters.') }}
                                 </td>
                             </tr>
@@ -1039,7 +1060,7 @@ document.addEventListener('alpine:init', () => {
         idFieldLabel(type) {
             if (type === 'student') return @json(__('Student Number'));
             if (type === 'external_affiliate') return @json(__('ID Number (optional)'));
-            return @json(__('Employee Number'));
+            return @json(__('ID Number'));
         },
         idFieldRequired(type) {
             return type !== 'external_affiliate';

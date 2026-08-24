@@ -52,7 +52,7 @@ class UserController extends Controller
 
         $pendingUsers = User::query()
             ->where('is_pending', true)
-            ->with(['college', 'roles'])
+            ->with(['college', 'program', 'roles'])
             ->orderByDesc('created_at')
             ->get();
 

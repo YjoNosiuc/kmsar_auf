@@ -145,7 +145,7 @@
                     get idLabel() {
                         if (this.userType === 'student') return 'Student Number';
                         if (this.userType === 'external_affiliate') return 'ID Number (optional)';
-                        return 'Employee Number';
+                        return 'ID Number';
                     },
                     get showInstitution() {
                         return this.userType === 'external_affiliate';

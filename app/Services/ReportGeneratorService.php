@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Research;
+use App\Support\ResearchStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -89,7 +90,7 @@ class ReportGeneratorService
     {
         $query = $this->baseResearchQueryWithRelations();
         $this->applyOvpriFilters($query, $filters);
-        $query->where('status', 'published_scopus');
+        $query->withOutcomeCodes(config('kmsar.scopus_outcome_code', 'published_scopus'));
 
         return $query->count();
     }
@@ -103,7 +104,7 @@ class ReportGeneratorService
     {
         $query = $this->baseResearchQueryWithRelations()
             ->where('mother_college_id', $collegeId)
-            ->whereIn('status', ['published_scopus', 'published_non_indexed']);
+            ->withOutcomeCodes(config('kmsar.published_outcome_codes', []));
 
         $this->applyCollegeFilters($query, $filters);
 
@@ -119,7 +120,7 @@ class ReportGeneratorService
     {
         $query = $this->baseResearchQueryWithRelations()
             ->where('mother_college_id', $collegeId)
-            ->whereIn('status', ['presented_internal', 'presented_external']);
+            ->withOutcomeCodes(config('kmsar.presented_outcome_codes', []));
 
         $this->applyCollegeFilters($query, $filters);
 
@@ -134,39 +135,63 @@ class ReportGeneratorService
     public function statusLabel(string $status): string
     {
         return match ($status) {
-            'published_scopus' => 'Scopus/WoS Indexed',
-            'published_non_indexed' => 'Published (Non-Indexed)',
-            'presented_external' => 'Conference Presentation — External',
-            'presented_internal' => 'Conference Presentation — Internal',
-            'patent_granted' => 'Patent Granted',
-            'patent_submitted' => 'Patent Filed',
-            'completed_unpublished' => 'Completed (Unpublished)',
-            'ongoing' => 'Ongoing',
-            'proposal' => 'Proposal Stage',
+            ResearchStatus::PROPOSAL => __('Proposal'),
+            ResearchStatus::ONGOING => __('Ongoing'),
+            ResearchStatus::RESEARCH_ACCEPTED => __('Research accepted'),
+            ResearchStatus::INITIAL_DEAN_REVIEW => __('Initial dean review'),
+            ResearchStatus::INITIAL_OVPRI_REVIEW => __('Initial OVPRI review'),
+            ResearchStatus::INITIAL_REJECTED => __('Initial returned'),
+            ResearchStatus::FINAL_DEAN_REVIEW => __('Final dean review'),
+            ResearchStatus::FINAL_OVPRI_REVIEW => __('Final OVPRI review'),
+            ResearchStatus::FINAL_REJECTED => __('Final returned'),
+            'completed_not_presented_submitted' => __('Completed Research but NOT Presented/Submitted'),
+            'presented_conference_auf' => __('Presented in a conference inside AUF'),
+            'presented_conference_outside_auf' => __('Presented in a conference outside AUF (local/international)'),
+            'published_non_scopus_wos' => __('Published in non-scopus/WoS indexed journals'),
+            'submitted_scopus_isi' => __('Submitted in Scopus or ISI (Web of Science) indexed journals'),
+            'accepted_scopus_isi' => __('Accepted in Scopus or ISI (Web of Science) indexed journals'),
+            'submitted_patent_ipophl' => __('Submitted for patent application at IPOPHL'),
+            'published_scopus_isi' => __('Published in Scopus or ISI (Web of Science) indexed journals'),
+            'granted_patent_ipophl' => __('Granted Philippine Patent by IPOPHL'),
             default => str_replace('_', ' ', $status),
         };
+    }
+
+    public function progressDisplay(Research $research): string
+    {
+        if ($research->status === ResearchStatus::RESEARCH_ACCEPTED) {
+            $codes = $research->outcomeClassificationCodes();
+
+            if ($codes === []) {
+                return $this->statusLabel(ResearchStatus::RESEARCH_ACCEPTED);
+            }
+
+            return collect($codes)
+                ->map(fn (string $code) => $this->statusLabel($code))
+                ->implode('; ');
+        }
+
+        return $this->statusLabel((string) $research->status);
     }
 
     public function registrationTypeLabel(?string $registrationType): string
     {
         return match ($registrationType) {
             'new' => __('New registration'),
-            'update' => __('Update'),
+            'existing' => __('Existing research'),
             default => '—',
         };
     }
 
     public function classificationLabel(?string $classification): string
     {
-        return match ($classification) {
-            'self_funded' => __('Self-funded'),
-            'internally_funded' => __('Internally funded'),
-            'externally_funded' => __('Externally funded'),
-            'thesis' => __('Thesis / dissertation'),
-            'collaboration' => __('Collaboration'),
-            'other' => __('Other'),
-            default => $classification ? (string) $classification : '—',
-        };
+        if (! $classification) {
+            return '—';
+        }
+
+        $labels = config('kmsar.research_classifications', []);
+
+        return $labels[$classification] ?? str_replace('_', ' ', $classification);
     }
 
     /**
@@ -174,15 +199,19 @@ class ReportGeneratorService
      */
     public function journalConferencePresentation(Research $research): string
     {
-        if (in_array($research->status, ['published_scopus', 'published_non_indexed'], true)) {
+        $codes = $research->relationLoaded('outcomeClassifications')
+            ? $research->outcomeClassifications->pluck('code')->all()
+            : $research->outcomeClassificationCodes();
+
+        if (array_intersect($codes, config('kmsar.published_outcome_codes', [])) !== []) {
             return __('Journal publication');
         }
 
-        if (in_array($research->status, ['presented_internal', 'presented_external'], true)) {
+        if (array_intersect($codes, config('kmsar.presented_outcome_codes', [])) !== []) {
             return __('Conference presentation');
         }
 
-        if (in_array($research->status, ['patent_submitted', 'patent_granted'], true)) {
+        if (in_array('patent_granted', $codes, true)) {
             return __('Patent');
         }
 
@@ -327,19 +356,25 @@ class ReportGeneratorService
         $inProgressFilter = Research::isInProgressStatus($status);
 
         if ($inProgressFilter) {
-            $query->where('status', $status)
-                ->where('approval_stage', '!=', 'draft');
+            $query->where('status', $status);
 
             if (! $includeRejected) {
-                $query->where('approval_stage', '!=', 'rejected');
+                $query->whereNotIn('status', [
+                    ResearchStatus::INITIAL_REJECTED,
+                    ResearchStatus::FINAL_REJECTED,
+                ]);
             }
 
-            $query->whereStartDateBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null);
+            $query->whereResearchRegisteredBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null);
         } else {
-            $query->whereOvpriApprovedBetween(
-                $filters['date_from'] ?? null,
-                $filters['date_to'] ?? null
-            );
+            $query->reportingCompleted($includeRejected);
+
+            if (filled($filters['date_from'] ?? null) || filled($filters['date_to'] ?? null)) {
+                $query->whereFirstCompletedBetween(
+                    $filters['date_from'] ?? null,
+                    $filters['date_to'] ?? null
+                );
+            }
         }
 
         if (! empty($filters['research_classification'])) {
@@ -347,7 +382,11 @@ class ReportGeneratorService
         }
 
         if (! $inProgressFilter && ! empty($status)) {
-            $query->where('status', $status);
+            if (in_array($status, config('kmsar.completed_statuses', []), true)) {
+                $query->whereHas('outcomeClassifications', fn (Builder $q) => $q->where('code', $status));
+            } else {
+                $query->where('status', $status);
+            }
         }
     }
 }

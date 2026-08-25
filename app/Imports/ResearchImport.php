@@ -2,7 +2,7 @@
 
 namespace App\Imports;
 
-use App\Models\College;
+use App\Support\ResearchStatus;
 use App\Models\Document;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
@@ -81,7 +81,7 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             }
 
             $registrationType = strtolower(trim((string) ($data['registration_type'] ?? '')));
-            if (! in_array($registrationType, ['new', 'update'], true)) {
+            if (! in_array($registrationType, ['new', 'existing'], true)) {
                 $registrationType = 'new';
             }
 
@@ -110,15 +110,24 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                 return;
             }
 
+            $approvalStage = strtolower(trim((string) ($data['approval_stage'] ?? '')));
             $status = strtolower(trim((string) ($data['status'] ?? '')));
             if ($status === '') {
                 $status = 'proposal';
             }
 
-            $approvalStage = strtolower(trim((string) ($data['approval_stage'] ?? '')));
-            if ($approvalStage === '') {
-                $approvalStage = 'approved';
-            }
+            $workflowStatus = match ($approvalStage) {
+                'draft' => ResearchStatus::PROPOSAL,
+                'dean_review' => ResearchStatus::INITIAL_DEAN_REVIEW,
+                'ovpri_review' => ResearchStatus::INITIAL_OVPRI_REVIEW,
+                'approved' => in_array($status, config('kmsar.completed_statuses', []), true)
+                    ? ResearchStatus::RESEARCH_ACCEPTED
+                    : ResearchStatus::ONGOING,
+                'rejected', 'returned_to_faculty' => in_array($status, config('kmsar.completed_statuses', []), true)
+                    ? ResearchStatus::FINAL_REJECTED
+                    : ResearchStatus::INITIAL_REJECTED,
+                default => $status,
+            };
 
             $isScopus = (bool) (int) ($data['is_scopus_indexed'] ?? 0);
             $otherCollegeIds = $this->parseOtherCollegeIds(
@@ -149,7 +158,7 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                 $startDate,
                 $endDate,
                 $status,
-                $approvalStage,
+                $workflowStatus,
                 $isScopus,
                 $coauthorEmails,
                 $coauthorCanEdit,
@@ -171,10 +180,19 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                     'expected_output_other' => $expectedOutputOther,
                     'start_date' => $startDate,
                     'estimated_completion_date' => $endDate,
-                    'status' => $status,
-                    'approval_stage' => $approvalStage,
-                    'submitted_at' => now(),
+                    'status' => $workflowStatus,
+                    'submitted_at' => $workflowStatus !== ResearchStatus::PROPOSAL ? now() : null,
+                    'research_registered_at' => in_array($workflowStatus, [
+                        ResearchStatus::ONGOING,
+                        ResearchStatus::RESEARCH_ACCEPTED,
+                        ResearchStatus::INITIAL_OVPRI_REVIEW,
+                        ResearchStatus::INITIAL_DEAN_REVIEW,
+                        ResearchStatus::FINAL_DEAN_REVIEW,
+                        ResearchStatus::FINAL_OVPRI_REVIEW,
+                    ], true) ? now() : null,
+                    'research_accepted_at' => $workflowStatus === ResearchStatus::RESEARCH_ACCEPTED ? now() : null,
                     'revision_count' => 0,
+                    'final_review_count' => $workflowStatus === ResearchStatus::RESEARCH_ACCEPTED ? 1 : 0,
                     'is_scopus_indexed' => $isScopus,
                 ]);
 

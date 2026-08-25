@@ -3,12 +3,9 @@
 namespace App\Notifications;
 
 use App\Models\Research;
-use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 
-class ResearchProgressUpdated extends Notification
+class ResearchProgressUpdated extends QueuedResearchNotification
 {
-    use Queueable;
     use SendsResearchNotificationMail;
 
     public function __construct(
@@ -20,10 +17,7 @@ class ResearchProgressUpdated extends Notification
     {
         $status = (string) ($this->research->status ?? '');
 
-        return [
-            'research_id'      => $this->research->id,
-            'reference_number' => $this->research->reference_number,
-            'title'            => $this->research->title,
+        return $this->baseResearchPayload($this->research, [
             'message'          => 'Research '
                                   . $this->research->reference_number
                                   . ' progress has been updated to: '
@@ -35,6 +29,6 @@ class ResearchProgressUpdated extends Notification
             'action_url'       => route('approval.review',
                                     $this->research),
             'type'             => 'progress_updated',
-        ];
+        ]);
     }
 }

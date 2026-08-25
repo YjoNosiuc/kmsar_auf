@@ -32,6 +32,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            if ($request->is('login') && $request->isMethod('post')) {
+                if ($request->hasSession()) {
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                }
+            }
+
             return redirect()->route('login', ['expired' => 1]);
         });
     })->create();

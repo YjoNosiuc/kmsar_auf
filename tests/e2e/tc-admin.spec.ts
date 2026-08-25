@@ -132,15 +132,15 @@ test.describe('Super Admin — UAT Test Suite', () => {
     await expect(page.getByRole('heading', { name: 'My research' })).toBeVisible();
   });
 
-  test('TC-003: Admin dashboard loads with system-wide stats AND research breakdown by status (dean_review, ovpri_review, approved, rejected)', async ({
+  test('TC-003: Admin dashboard loads with system-wide stats AND research progress chart', async ({
     page,
   }) => {
     await adminLogin(page);
     await page.goto('/admin/dashboard');
 
     await expect(page.getByText('Research by approval stage')).toBeVisible();
-    await expect(page.getByRole('region', { name: /Research approval stage breakdown/i })).toBeVisible();
-    await expect(page.getByRole('region', { name: /Research approval stage breakdown/i }).getByText('Draft')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Research progress' })).toBeVisible();
+    await expect(page.locator('#progressChart')).toBeVisible();
     await expect(page.getByText('Dean review').first()).toBeVisible();
     await expect(page.getByText('OVPRI review').first()).toBeVisible();
     await expect(page.getByText('Approved').first()).toBeVisible();

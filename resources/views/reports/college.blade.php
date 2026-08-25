@@ -33,33 +33,19 @@
         $previewRows = $preview ?? $previewRows ?? collect();
         $exportFilters = array_merge(['include_rejected' => '0'], $filters ?? []);
         $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
-        $statusOpts = [
+        $statusOpts = collect([
             'proposal' => __('Proposal / abstract'),
             'ongoing' => __('Ongoing'),
-            'completed_unpublished' => __('Completed (unpublished)'),
-            'presented_internal' => __('Presented (internal)'),
-            'presented_external' => __('Presented (external)'),
-            'published_non_indexed' => __('Published (non-indexed)'),
-            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
-            'patent_submitted' => __('Patent submitted'),
-            'patent_granted' => __('Patent granted'),
-        ];
-        $classOpts = [
-            'self_funded' => __('Self-funded'),
-            'internally_funded' => __('Internally funded'),
-            'externally_funded' => __('Externally funded'),
-            'thesis' => __('Thesis / dissertation'),
-            'thesis_dissertation' => __('Thesis/Dissertation of Student/Advisee'),
-            'collaboration' => __('Collaboration'),
-            'other' => __('Other'),
-        ];
-        $approvalStageOpts = [
-            'draft' => __('Draft'),
-            'dean_review' => __('Dean Review'),
-            'ovpri_review' => __('OVPRI Review'),
-            'approved' => __('Approved'),
-            'rejected' => __('Rejected'),
-        ];
+        ])->merge(
+            \App\Models\OutcomeClassification::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->pluck('name', 'code')
+        )->all();
+        $classOpts = config('kmsar.research_classifications', []);
+        $workflowStatusOptions = collect(\App\Support\ResearchStatus::all())
+            ->mapWithKeys(fn (string $value) => [$value => \App\Support\ResearchStatus::label($value)])
+            ->all();
         $facultyOpts = ($faculties ?? collect())->mapWithKeys(fn ($u) => [$u->id => $u->name])->all();
         $page = max(1, (int) ($page ?? 1));
         $perPage = max(10, (int) ($perPage ?? 10));
@@ -76,7 +62,7 @@
                 <x-form.select name="faculty" :label="__('Faculty (primary author)')" :placeholder="__('Any faculty')" :options="$facultyOpts" :value="$filters['faculty'] ?? ''" />
                 <x-form.select name="research_classification" :label="__('Classification')" :placeholder="__('Any')" :options="$classOpts" :value="$filters['research_classification'] ?? ''" />
                 <x-form.select name="status" :label="__('Research progress')" :placeholder="__('Any')" :options="$statusOpts" :value="$filters['status'] ?? ''" />
-                <x-form.select name="approval_stage" :label="__('Approval status')" :placeholder="__('Any')" :options="$approvalStageOpts" :value="$filters['approval_stage'] ?? ''" />
+                <x-form.select name="workflow_status" :label="__('Workflow status')" :placeholder="__('Any')" :options="$workflowStatusOptions" :value="$filters['workflow_status'] ?? ''" />
                 <x-form.select name="sdg" :label="__('SDG')" :placeholder="__('Any SDG')" :options="collect(range(1, 17))->mapWithKeys(fn ($n) => [$n => __('SDG :n', ['n' => $n])])->all()" :value="$filters['sdg'] ?? ''" />
                 <x-form.input name="funding_agency" :label="__('Funding agency')" :value="$filters['funding_agency'] ?? ''" :hint="__('Partial match')" />
                 <x-form.input name="date_from" type="date" :label="__('Created from')" :value="$filters['date_from'] ?? ''" />
@@ -87,7 +73,7 @@
                 <input type="hidden" name="include_rejected" value="0">
                 <label class="flex items-center gap-2 text-sm text-slate-600">
                     <input type="checkbox" name="include_rejected" value="1" @checked(($filters['include_rejected'] ?? '0') === '1') class="rounded border-slate-300 text-[#1E3A8A]">
-                    {{ __('Include rejected records in preview and export') }}
+                    {{ __('Include returned records in preview and export') }}
                 </label>
             </div>
             <div class="flex flex-wrap items-center gap-3">
@@ -144,10 +130,10 @@
                             <td>{{ $row->primaryAuthor?->program?->code ?? '—' }}</td>
                             <td class="kmsar-table-cell-sub">{{ $reportGenerator->statusLabel($row->status) }}</td>
                             <td>
-                                @if ($row->approval_stage === 'rejected')
-                                    <span class="kmsar-badge kmsar-badge--rejected">{{ __('Rejected') }}</span>
+                                @if (in_array($row->status, [\App\Support\ResearchStatus::INITIAL_REJECTED, \App\Support\ResearchStatus::FINAL_REJECTED], true))
+                                    <span class="kmsar-badge kmsar-badge--rejected">{{ \App\Support\ResearchStatus::label($row->status) }}</span>
                                 @else
-                                    <span class="kmsar-badge kmsar-badge--draft">{{ $approvalStageOpts[$row->approval_stage] ?? ucwords(str_replace('_', ' ', $row->approval_stage)) }}</span>
+                                    <span class="kmsar-badge kmsar-badge--draft">{{ \App\Support\ResearchStatus::label($row->status) }}</span>
                                 @endif
                             </td>
                             <td class="whitespace-nowrap kmsar-table-cell-sub">{{ $row->created_at->format('M j, Y') }}</td>

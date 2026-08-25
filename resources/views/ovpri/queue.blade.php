@@ -143,6 +143,14 @@
 
 @section('content')
 
+@php
+    use App\Support\ResearchStatus;
+
+    $pendingInitial = $pending->filter(fn ($r) => $r->status === ResearchStatus::INITIAL_OVPRI_REVIEW)->values();
+    $pendingFinal = $pending->filter(fn ($r) => $r->status === ResearchStatus::FINAL_OVPRI_REVIEW)->values();
+    $activeCycleTab = in_array($cycleTab ?? 'initial', ['initial', 'final'], true) ? ($cycleTab ?? 'initial') : 'initial';
+@endphp
+
 {{-- Page header --}}
 <div class="kmsar-page-header" style="margin-bottom:24px;">
     <div>
@@ -231,26 +239,76 @@
                     <div class="queue-empty-sub">{{ __('No submissions awaiting final approval.') }}</div>
                 </div>
             @else
-                <div class="queue-meta-row">
-                    <span>{{ __('Showing :count submissions awaiting final approval', ['count' => $pending->count()]) }}</span>
-                    <span>{{ __('Sorted by submission date — newest first') }}</span>
+                <div class="kmsar-tab-bar" role="tablist" style="margin-bottom:16px;">
+                    <button type="button" role="tab" aria-selected="{{ $activeCycleTab === 'initial' ? 'true' : 'false' }}"
+                        class="kmsar-tab-btn {{ $activeCycleTab === 'initial' ? 'active' : '' }}" id="cycle-tab-initial"
+                        onclick="switchCycleTab('initial')">
+                        {{ __('Initial Review') }}
+                        <span class="kmsar-tab-badge pending">{{ $pendingInitial->count() }}</span>
+                    </button>
+                    <button type="button" role="tab" aria-selected="{{ $activeCycleTab === 'final' ? 'true' : 'false' }}"
+                        class="kmsar-tab-btn {{ $activeCycleTab === 'final' ? 'active' : '' }}" id="cycle-tab-final"
+                        onclick="switchCycleTab('final')">
+                        {{ __('Final Review') }}
+                        <span class="kmsar-tab-badge pending">{{ $pendingFinal->count() }}</span>
+                    </button>
                 </div>
-                @foreach ($pending as $research)
-                    <div class="queue-card" style="border-left:4px solid #2563EB;">
-                        <div style="flex:1;min-width:0;">
-                            <div class="queue-card-ref" style="color:#2563EB;">{{ $research->reference_number }}</div>
-                            <div class="queue-card-title">{{ str($research->title)->limit(90) }}</div>
-                            <div class="queue-card-meta">
-                                <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('Submitted:') }}</span> {{ $research->created_at->format('M d, Y') }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('Classification:') }}</span> {{ ucwords(str_replace('_', ' ', $research->research_classification)) }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
-                            </div>
+
+                <div class="kmsar-tab-panel {{ $activeCycleTab === 'initial' ? 'active' : '' }}" id="cycle-panel-initial" role="tabpanel">
+                    @if ($pendingInitial->isEmpty())
+                        <div class="queue-empty" style="padding:32px 20px;">
+                            <div class="queue-empty-sub">{{ __('No initial review submissions pending.') }}</div>
                         </div>
-                        <a href="{{ route('ovpri.review', $research) }}" class="queue-card-action-primary">{{ __('View') }} →</a>
-                    </div>
-                @endforeach
+                    @else
+                        <div class="queue-meta-row">
+                            <span>{{ __('Showing :count initial review submissions', ['count' => $pendingInitial->count()]) }}</span>
+                            <span>{{ __('Sorted by submission date — newest first') }}</span>
+                        </div>
+                        @foreach ($pendingInitial as $research)
+                            <div class="queue-card" style="border-left:4px solid #2563EB;">
+                                <div style="flex:1;min-width:0;">
+                                    <div class="queue-card-ref" style="color:#2563EB;">{{ $research->reference_number }}</div>
+                                    <div class="queue-card-title">{{ str($research->title)->limit(90) }}</div>
+                                    <div class="queue-card-meta">
+                                        <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
+                                        <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
+                                        <span><span class="queue-card-meta-label">{{ __('Submitted:') }}</span> {{ $research->created_at->format('M d, Y') }}</span>
+                                        <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ResearchStatus::label($research->status) }}</span>
+                                    </div>
+                                </div>
+                                <a href="{{ route('ovpri.review', $research) }}" class="queue-card-action-primary">{{ __('View') }} →</a>
+                            </div>
+                        @endforeach
+                    @endif
+                </div>
+
+                <div class="kmsar-tab-panel {{ $activeCycleTab === 'final' ? 'active' : '' }}" id="cycle-panel-final" role="tabpanel">
+                    @if ($pendingFinal->isEmpty())
+                        <div class="queue-empty" style="padding:32px 20px;">
+                            <div class="queue-empty-sub">{{ __('No final review submissions pending.') }}</div>
+                        </div>
+                    @else
+                        <div class="queue-meta-row">
+                            <span>{{ __('Showing :count final review submissions', ['count' => $pendingFinal->count()]) }}</span>
+                            <span>{{ __('Sorted by submission date — newest first') }}</span>
+                        </div>
+                        @foreach ($pendingFinal as $research)
+                            <div class="queue-card" style="border-left:4px solid #D4AF37;">
+                                <div style="flex:1;min-width:0;">
+                                    <div class="queue-card-ref" style="color:#D4AF37;">{{ $research->reference_number }}</div>
+                                    <div class="queue-card-title">{{ str($research->title)->limit(90) }}</div>
+                                    <div class="queue-card-meta">
+                                        <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
+                                        <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
+                                        <span><span class="queue-card-meta-label">{{ __('Submitted:') }}</span> {{ $research->created_at->format('M d, Y') }}</span>
+                                        <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ResearchStatus::label($research->status) }}</span>
+                                    </div>
+                                </div>
+                                <a href="{{ route('ovpri.review', $research) }}" class="queue-card-action-primary">{{ __('View') }} →</a>
+                            </div>
+                        @endforeach
+                    @endif
+                </div>
             @endif
         </div>
 
@@ -275,7 +333,7 @@
                             <div class="queue-card-meta">
                                 <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
+                                <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ResearchStatus::label($research->status) }}</span>
                                 <span style="color:#059669;font-weight:600;">✓ {{ __('Approved') }}</span>
                             </div>
                         </div>
@@ -291,11 +349,11 @@
                 <div class="queue-empty">
                     <div class="queue-empty-icon">👍</div>
                     <div class="queue-empty-title">{{ __('No returned submissions') }}</div>
-                    <div class="queue-empty-sub">{{ __('Research returned or rejected at the university level will appear here.') }}</div>
+                    <div class="queue-empty-sub">{{ __('Research returned at the university level will appear here.') }}</div>
                 </div>
             @else
                 <div class="queue-meta-row">
-                    <span>{{ __(':count returned / rejected submissions', ['count' => $returned->count()]) }}</span>
+                    <span>{{ __(':count returned submissions', ['count' => $returned->count()]) }}</span>
                 </div>
                 @foreach ($returned as $research)
                     <div class="queue-card" style="border-left:4px solid #DC2626;">
@@ -305,11 +363,11 @@
                             <div class="queue-card-meta">
                                 <span><span class="queue-card-meta-label">{{ __('Author:') }}</span> {{ $research->primaryAuthor?->name ?? '—' }}</span>
                                 <span><span class="queue-card-meta-label">{{ __('College/Office:') }}</span> {{ $research->motherCollege?->code ?? '—' }}</span>
-                                <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ucwords(str_replace('_', ' ', $research->status)) }}</span>
-                                @if ($research->approval_stage === 'rejected')
-                                    <span style="color:#DC2626;font-weight:600;">{{ __('Rejected') }}</span>
-                                @elseif ($research->approval_stage === 'returned_to_faculty')
-                                    <span style="color:#D97706;font-weight:600;">{{ __('Returned to Faculty') }}</span>
+                                <span><span class="queue-card-meta-label">{{ __('Status:') }}</span> {{ ResearchStatus::label($research->status) }}</span>
+                                @if ($research->status === ResearchStatus::INITIAL_REJECTED)
+                                    <span style="color:#DC2626;font-weight:600;">{{ ResearchStatus::label(ResearchStatus::INITIAL_REJECTED) }}</span>
+                                @elseif ($research->status === ResearchStatus::FINAL_REJECTED)
+                                    <span style="color:#DC2626;font-weight:600;">{{ ResearchStatus::label(ResearchStatus::FINAL_REJECTED) }}</span>
                                 @else
                                     <span style="color:#D97706;font-weight:600;">{{ __('Returned for revision') }}</span>
                                 @endif
@@ -327,17 +385,15 @@
 @push('scripts')
 <script>
 function switchTab(name) {
-    document.querySelectorAll('.kmsar-tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-        btn.setAttribute('aria-selected', 'false');
+    ['pending', 'approved', 'returned'].forEach(function (tab) {
+        var btn = document.getElementById('tab-' + tab);
+        var panel = document.getElementById('panel-' + tab);
+        if (!btn || !panel) return;
+        var isActive = tab === name;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        panel.classList.toggle('active', isActive);
     });
-    document.getElementById('tab-' + name).classList.add('active');
-    document.getElementById('tab-' + name).setAttribute('aria-selected', 'true');
-
-    document.querySelectorAll('.kmsar-tab-panel').forEach(panel => {
-        panel.classList.remove('active');
-    });
-    document.getElementById('panel-' + name).classList.add('active');
 
     const tabInput = document.getElementById('queueActiveTab');
     if (tabInput) {
@@ -348,6 +404,18 @@ function switchTab(name) {
     params.set('tab', name);
     const nextUrl = window.location.pathname + '?' + params.toString();
     window.history.replaceState({}, '', nextUrl);
+}
+
+function switchCycleTab(name) {
+    ['initial', 'final'].forEach(function (cycle) {
+        var btn = document.getElementById('cycle-tab-' + cycle);
+        var panel = document.getElementById('cycle-panel-' + cycle);
+        if (!btn || !panel) return;
+        var isActive = cycle === name;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        panel.classList.toggle('active', isActive);
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function () {

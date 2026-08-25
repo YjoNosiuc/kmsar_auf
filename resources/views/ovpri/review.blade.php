@@ -1,18 +1,18 @@
 @php
+    use App\Support\ResearchStatus;
+
     $queueRoute = route('ovpri.queue');
-    $statusLabel = ucwords(str_replace('_', ' ', (string) $research->status));
-    $approvalStageLabel = ucwords(str_replace('_', ' ', (string) $research->approval_stage));
-    $progressBadge = match ($research->status) {
-        'published_scopus', 'published_non_indexed', 'presented_external', 'presented_internal', 'completed_unpublished' => 'approved',
-        'proposal', 'ongoing' => 'pending',
-        'patent_submitted', 'patent_granted' => 'info',
+    $statusLabel = ResearchStatus::label($research->status);
+    $statusBadgeVariant = match ($research->status) {
+        ResearchStatus::PROPOSAL => 'draft',
+        ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+        ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
+        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+        ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'returned',
+        ResearchStatus::RESEARCH_COMPLETED => 'info',
         default => 'draft',
     };
-    $stageBadgeVariant = match ($research->approval_stage) {
-        'dean_review' => 'pending',
-        'ovpri_review' => 'info',
-        default => 'draft',
-    };
+    $canOvpriReview = in_array($research->status, [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW], true);
     $externalPrimary = $research->researchAuthors->where('is_primary', true)->whereNull('user_id')->first();
     $primary = $research->primaryAuthor;
     $name = $externalPrimary?->name ?? $primary?->name ?? '';
@@ -63,8 +63,8 @@
 
 @section('content')
     <div
-        x-data="{ tab: 'info', showApprove: false, showReturn: false, showReject: false }"
-        @keydown.escape.window="showApprove = false; showReturn = false; showReject = false"
+        x-data="{ tab: 'info', showApprove: false, showReturn: false }"
+        @keydown.escape.window="showApprove = false; showReturn = false"
     >
         {{-- PAGE HEADER --}}
         <div class="kmsar-page-header">
@@ -123,10 +123,9 @@
             {{-- Action buttons — keep role-specific buttons --}}
             <div class="kmsar-page-header-actions">
                 <a href="{{ $queueRoute }}" class="kmsar-btn kmsar-btn--md kmsar-btn--outline" role="button">{{ __('Back to Queue') }}</a>
-                @if ($research->approval_stage === 'ovpri_review')
+                @if ($canOvpriReview)
                     <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--success" @click="showApprove = true">{{ __('Approve') }}</button>
                     <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--warning" @click="showReturn = true">{{ __('Return') }}</button>
-                    <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--danger-outline" @click="showReject = true">{{ __('Reject') }}</button>
                 @endif
             </div>
         </div>
@@ -303,12 +302,8 @@
                     <table style="width:100%;font-size:13px;border-collapse:collapse;">
                         <tbody>
                             <tr>
-                                <td style="color:#94A3B8;padding:6px 0;width:45%;vertical-align:middle;">{{ __('Status') }}</td>
-                                <td style="padding:6px 0;vertical-align:middle;"><span class="kmsar-badge kmsar-badge--{{ $progressBadge }} kmsar-badge--square">{{ $statusLabel }}</span></td>
-                            </tr>
-                            <tr>
-                                <td style="color:#94A3B8;padding:6px 0;vertical-align:middle;">{{ __('Stage') }}</td>
-                                <td style="padding:6px 0;vertical-align:middle;"><span class="kmsar-badge kmsar-badge--{{ $stageBadgeVariant }} kmsar-badge--square">{{ __('OVPRI') }}</span></td>
+                                <td style="color:#94A3B8;padding:6px 0;width:45%;vertical-align:middle;">{{ __('Workflow status') }}</td>
+                                <td style="padding:6px 0;vertical-align:middle;"><span class="kmsar-badge kmsar-badge--{{ $statusBadgeVariant }} kmsar-badge--square">{{ $statusLabel }}</span></td>
                             </tr>
                             <tr>
                                 <td style="color:#94A3B8;padding:6px 0;vertical-align:middle;">{{ __('Submitted') }}</td>
@@ -360,7 +355,7 @@
         </div>
 
         {{-- MODALS --}}
-        @if ($research->approval_stage === 'ovpri_review')
+        @if ($canOvpriReview)
             <div x-show="showApprove" x-cloak class="kmsar-modal-overlay" style="display: none;" @click.self="showApprove = false">
                 <div class="kmsar-modal kmsar-modal--sm" @click.stop role="dialog" aria-modal="true" aria-labelledby="kmsar-approve-title">
                     <form method="post" action="{{ route('ovpri.approve', $research) }}">
@@ -417,34 +412,6 @@
                         <div class="kmsar-modal-footer flex justify-end gap-2">
                             <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--secondary" @click="showReturn = false">{{ __('Cancel') }}</button>
                             <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--warning">{{ __('Return') }}</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            <div x-show="showReject" x-cloak class="kmsar-modal-overlay" style="display: none;" @click.self="showReject = false">
-                <div class="kmsar-modal kmsar-modal--sm" @click.stop role="dialog" aria-modal="true" aria-labelledby="kmsar-ovpri-reject-title">
-                    <div class="kmsar-modal-header">
-                        <h2 id="kmsar-ovpri-reject-title" class="kmsar-modal-title kmsar-modal-title--danger">{{ __('Reject submission') }}</h2>
-                        <button type="button" class="kmsar-modal-close" @click="showReject = false" aria-label="{{ __('Close') }}">&times;</button>
-                    </div>
-                    <form method="post" action="{{ route('ovpri.reject', $research) }}" class="kmsar-modal-body space-y-4">
-                        @csrf
-                        <p class="kmsar-body" style="font-size:var(--text-xs);color:var(--color-danger);margin:0;font-weight:600;">{{ __('This action permanently rejects the submission.') }}</p>
-                        <div>
-                            <label for="ovpri-reject-remarks" class="kmsar-label" style="display:block;margin-bottom:0.35rem;">{{ __('Remarks') }}</label>
-                            <textarea
-                                id="ovpri-reject-remarks"
-                                name="remarks"
-                                rows="4"
-                                class="kmsar-input w-full"
-                                required
-                                maxlength="5000"
-                                placeholder="{{ __('Reason for rejection…') }}"
-                            ></textarea>
-                        </div>
-                        <div class="kmsar-modal-footer flex justify-end gap-2">
-                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--secondary" @click="showReject = false">{{ __('Cancel') }}</button>
-                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--danger">{{ __('Reject') }}</button>
                         </div>
                     </form>
                 </div>

@@ -6,6 +6,7 @@ use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\Document;
 use App\Models\Approval;
+use App\Models\OutcomeClassification;
 use App\Notifications\ResearchSubmitted;
 use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
@@ -17,6 +18,7 @@ use App\Notifications\ResearchRejected;
 use App\Notifications\ResearchRejectedDean;
 use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchProgressUpdated;
+use App\Support\ResearchStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -24,29 +26,24 @@ use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
-// ─────────────────────────────────────────────
-// SUITE 1 — WIZARD / DRAFT CREATION
-// ─────────────────────────────────────────────
-
 describe('Wizard: Draft Creation', function () {
 
     it('faculty can access the research create route and get redirected to wizard', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
 
         $response = $this->actingAs($faculty)->get(route('research.create'));
 
-        // Controller creates a draft then redirects to wizard step 1
         $response->assertRedirect();
         $this->assertDatabaseHas('research', [
             'primary_author_id' => $faculty->id,
-            'approval_stage'    => 'draft',
+            'status' => ResearchStatus::PROPOSAL,
         ]);
     });
 
     it('non-faculty roles cannot access the create route', function () {
         $college = makeCollege();
-        $ovpri   = makeOvpri();
+        $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)
             ->get(route('research.create'))
@@ -54,21 +51,20 @@ describe('Wizard: Draft Creation', function () {
     });
 
     it('faculty can save wizard step 1 (registration details)', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
 
         $payload = [
-            'registration_type'         => 'new',
-            'title'                     => 'Effects of AI in Philippine Education',
-            'mother_college_id'         => $college->id,
-            'research_classification'   => 'internally_funded',
-            'funding_agency'            => 'CHED',
-            'sdg_tags'                  => [4, 8],
-            'expected_output'           => ['publication'],
-            'start_date'                => now()->toDateString(),
+            'registration_type' => 'new',
+            'title' => 'Effects of AI in Philippine Education',
+            'mother_college_id' => $college->id,
+            'research_classification' => 'internally_funded',
+            'funding_agency' => 'CHED',
+            'sdg_tags' => [4, 8],
+            'expected_output' => ['publication'],
+            'start_date' => now()->toDateString(),
             'estimated_completion_date' => now()->addYear()->toDateString(),
-            'status'                    => 'proposal',
         ];
 
         $this->actingAs($faculty)
@@ -76,24 +72,24 @@ describe('Wizard: Draft Creation', function () {
             ->assertRedirect(route('research.wizard.authors', $research));
 
         $this->assertDatabaseHas('research', [
-            'id'    => $research->id,
+            'id' => $research->id,
             'title' => 'Effects of AI in Philippine Education',
         ]);
     });
 
     it('wizard step 1 rejects missing required fields', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
 
         $this->actingAs($faculty)
             ->put(route('research.wizard.details.save', $research), [])
-            ->assertSessionHasErrors(['title', 'registration_type', 'status']);
+            ->assertSessionHasErrors(['title', 'registration_type']);
     });
 
     it('faculty can save wizard step 2 (authors)', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
 
         $payload = [
@@ -107,8 +103,8 @@ describe('Wizard: Draft Creation', function () {
     });
 
     it('faculty can view wizard step 3 (documents)', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
 
         $this->actingAs($faculty)
@@ -118,8 +114,8 @@ describe('Wizard: Draft Creation', function () {
     });
 
     it('faculty can delete a draft research record', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
 
         $this->actingAs($faculty)
@@ -129,11 +125,11 @@ describe('Wizard: Draft Creation', function () {
         $this->assertSoftDeleted('research', ['id' => $research->id]);
     });
 
-    it('faculty cannot delete research that is not in draft stage', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+    it('faculty cannot delete research that is not in proposal stage', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review']);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW]);
 
         $this->actingAs($faculty)
             ->delete(route('research.destroy', $research))
@@ -141,34 +137,45 @@ describe('Wizard: Draft Creation', function () {
     });
 });
 
-// ─────────────────────────────────────────────
-// SUITE 2 — SUBMIT (draft → dean_review)
-// ─────────────────────────────────────────────
+describe('Submit: proposal → initial dean review', function () {
 
-describe('Submit: draft → dean_review', function () {
-
-    it('faculty can submit a draft research', function () {
+    it('faculty can submit a new research proposal', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $dean     = $college->headUser;
+        $dean = $college->headUser;
 
         $this->actingAs($faculty)
             ->post(route('research.submit', $research))
             ->assertRedirect(route('research.show', $research));
 
         $research->refresh();
-        expect($research->approval_stage)->toBe('dean_review');
+        expect($research->status)->toBe(ResearchStatus::INITIAL_DEAN_REVIEW);
         expect($research->submitted_at)->not->toBeNull();
+    });
+
+    it('existing registration skips initial review and becomes ongoing', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['registration_type' => 'existing']);
+
+        $this->actingAs($faculty)
+            ->post(route('research.submit', $research))
+            ->assertRedirect(route('research.show', $research));
+
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::ONGOING);
+        expect($research->research_registered_at)->not->toBeNull();
     });
 
     it('submit sends ResearchSubmitted notification to college dean and confirmation to faculty', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $dean     = $college->headUser;
+        $dean = $college->headUser;
 
         $this->actingAs($faculty)
             ->post(route('research.submit', $research));
@@ -178,33 +185,33 @@ describe('Submit: draft → dean_review', function () {
     });
 
     it('submit fails when research has no documents', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'approval_stage'    => 'draft',
+            'registration_type' => 'new',
+            'status' => ResearchStatus::PROPOSAL,
         ]);
-        // No Document records attached
 
         $this->actingAs($faculty)
             ->post(route('research.submit', $research))
             ->assertSessionHasErrors();
 
-        expect($research->fresh()->approval_stage)->toBe('draft');
+        expect($research->fresh()->status)->toBe(ResearchStatus::PROPOSAL);
     });
 
     it('non-primary co-author without can_edit cannot submit', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $coauthor = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
 
         ResearchAuthor::factory()->create([
             'research_id' => $research->id,
-            'user_id'     => $coauthor->id,
-            'is_primary'  => false,
-            'can_edit'    => false,
+            'user_id' => $coauthor->id,
+            'is_primary' => false,
+            'can_edit' => false,
         ]);
 
         $this->actingAs($coauthor)
@@ -213,67 +220,66 @@ describe('Submit: draft → dean_review', function () {
     });
 
     it('research cannot be submitted twice', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review']);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW]);
 
         $this->actingAs($faculty)
             ->post(route('research.submit', $research))
-            ->assertForbidden();
+            ->assertRedirect(route('research.show', $research))
+            ->assertSessionHas('info');
     });
 });
 
-// ─────────────────────────────────────────────
-// SUITE 3 — DEAN ACTIONS
-// ─────────────────────────────────────────────
+describe('Dean: endorse / return (initial cycle)', function () {
 
-describe('Dean: endorse / return / reject', function () {
-
-    it('dean can endorse a research in dean_review stage', function () {
+    it('dean can endorse research in initial dean review', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $ovpri    = makeOvpri();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        makeOvpri();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)
             ->post(route('approval.endorse', $research), ['remarks' => 'Looks good.'])
-            ->assertRedirect(route('approval.queue'));
+            ->assertRedirect(route('approval.queue', ['cycle' => 'initial']));
 
-        expect($research->fresh()->approval_stage)->toBe('ovpri_review');
+        expect($research->fresh()->status)->toBe(ResearchStatus::INITIAL_OVPRI_REVIEW);
 
         $this->assertDatabaseHas('approvals', [
             'research_id' => $research->id,
-            'stage'       => 'dean',
-            'action'      => 'endorsed',
+            'stage' => 'dean',
+            'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
+            'action' => 'endorsed',
         ]);
     });
 
-    it('endorsing notifies primary author and OVPRI admins', function () {
+    it('dean can return research for initial revision', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $ovpri    = makeOvpri();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)
-            ->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
+            ->post(route('approval.return', $research), ['remarks' => 'Please revise Section 2.'])
+            ->assertRedirect(route('approval.queue', ['cycle' => 'initial']));
 
-        Notification::assertSentTo($faculty, ResearchEndorsed::class);
-        Notification::assertSentTo($ovpri, ResearchEndorsedToOvpri::class);
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::INITIAL_REJECTED);
+        expect($research->revision_count)->toBe(1);
     });
 
     it('dean cannot endorse research from a different college', function () {
         $college1 = makeCollege();
         $college2 = makeCollege(withDean: true);
-        $faculty  = makeFaculty($college1);
+        $faculty = makeFaculty($college1);
         $research = makeDraftResearch($faculty, $college1);
-        $research->update(['approval_stage' => 'dean_review']);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW]);
         $wrongDean = $college2->headUser;
 
         $this->actingAs($wrongDean)
@@ -281,76 +287,37 @@ describe('Dean: endorse / return / reject', function () {
             ->assertForbidden();
     });
 
-    it('dean can return a research for revision', function () {
+    it('routes dean queue and actions by mother college not author home college', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
 
-        $this->actingAs($dean)
-            ->post(route('approval.return', $research), ['remarks' => 'Please revise Section 2.'])
-            ->assertRedirect(route('approval.queue'));
+        $authorCollege = makeCollege(withDean: true);
+        $motherCollege = makeCollege(withDean: true);
+        $faculty = makeFaculty($authorCollege);
+        $research = makeDraftResearch($faculty, $motherCollege);
+        $research->update([
+            'status' => ResearchStatus::INITIAL_DEAN_REVIEW,
+            'submitted_at' => now(),
+        ]);
 
-        $research->refresh();
-        expect($research->approval_stage)->toBe('draft');
-        expect($research->revision_count)->toBe(1);
-    });
+        $motherDean = $motherCollege->headUser;
+        $authorDean = $authorCollege->headUser;
 
-    it('returning research notifies the primary author', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
+        $this->actingAs($motherDean)
+            ->get(route('approval.queue'))
+            ->assertOk()
+            ->assertSee($research->reference_number, false);
 
-        $this->actingAs($dean)
-            ->post(route('approval.return', $research), ['remarks' => 'Please revise and resubmit this research.']);
+        $this->actingAs($authorDean)
+            ->get(route('approval.queue'))
+            ->assertOk()
+            ->assertDontSee($research->reference_number, false);
 
-        Notification::assertSentTo($faculty, ResearchReturned::class);
-    });
+        $this->actingAs($motherDean)
+            ->post(route('approval.endorse', $research), ['remarks' => 'Endorsed to OVPRI.'])
+            ->assertRedirect(route('approval.queue', ['cycle' => 'initial']));
 
-    it('dean can reject research', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
-
-        $this->actingAs($dean)
-            ->post(route('approval.reject', $research), ['remarks' => 'Out of scope.'])
-            ->assertRedirect(route('approval.queue'));
-
-        expect($research->fresh()->approval_stage)->toBe('rejected');
-    });
-
-    it('rejection notifies the primary author and the college dean', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
-
-        $this->actingAs($dean)
-            ->post(route('approval.reject', $research), ['remarks' => 'Out of scope.']);
-
-        Notification::assertSentTo($faculty, ResearchRejected::class);
-        Notification::assertSentTo($dean, ResearchRejectedDean::class);
-    });
-
-    it('dean cannot act on research already in ovpri_review', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review']);
-        $dean = $college->headUser;
-
-        $this->actingAs($dean)
-            ->post(route('approval.endorse', $research), ['remarks' => 'Late endorse.'])
+        $this->actingAs($authorDean)
+            ->post(route('approval.return', $research->fresh()), ['remarks' => 'Wrong dean attempt.'])
             ->assertForbidden();
     });
 
@@ -364,118 +331,54 @@ describe('Dean: endorse / return / reject', function () {
     });
 });
 
-// ─────────────────────────────────────────────
-// SUITE 4 — OVPRI ACTIONS
-// ─────────────────────────────────────────────
+describe('OVPRI: approve / return (initial cycle)', function () {
 
-describe('OVPRI: approve / return / reject', function () {
-
-    it('OVPRI can approve research in ovpri_review', function () {
+    it('OVPRI can approve research in initial ovpri review', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)
             ->post(route('ovpri.approve', $research), ['remarks' => 'Approved!'])
-            ->assertRedirect(route('ovpri.queue'));
+            ->assertRedirect(route('ovpri.queue', ['cycle' => 'initial', 'tab' => 'approved']));
 
-        expect($research->fresh()->approval_stage)->toBe('approved');
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::ONGOING);
+        expect($research->research_registered_at)->not->toBeNull();
 
         $this->assertDatabaseHas('approvals', [
             'research_id' => $research->id,
-            'stage'       => 'ovpri',
-            'action'      => 'approved',
+            'stage' => 'ovpri',
+            'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
+            'action' => 'approved',
         ]);
     });
 
-    it('approval notifies both primary author and college dean', function () {
+    it('OVPRI can return research during initial review', function () {
         Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review']);
-        $ovpri = makeOvpri();
-        $dean  = $college->headUser;
-
-        $this->actingAs($ovpri)
-            ->post(route('ovpri.approve', $research), ['remarks' => 'Approved.']);
-
-        Notification::assertSentTo($faculty, ResearchApproved::class);
-        Notification::assertSentTo($dean, ResearchApprovedDean::class);
-    });
-
-    it('OVPRI can return research to faculty', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)
             ->post(route('ovpri.return', $research), ['remarks' => 'Needs more data.'])
-            ->assertRedirect(route('ovpri.queue'));
+            ->assertRedirect(route('ovpri.queue', ['cycle' => 'initial', 'tab' => 'returned']));
 
         $research->refresh();
-        expect($research->approval_stage)->toBe('returned_to_faculty');
+        expect($research->status)->toBe(ResearchStatus::INITIAL_REJECTED);
         expect($research->revision_count)->toBe(1);
     });
 
-    it('OVPRI return notifies the primary author — NOT the college dean', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+    it('OVPRI cannot approve research still in initial dean review', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review']);
-        $ovpri = makeOvpri();
-        $dean  = $college->headUser;
-
-        $this->actingAs($ovpri)
-            ->post(route('ovpri.return', $research), ['remarks' => 'Please have the dean review this again.']);
-
-        Notification::assertSentTo($faculty, ResearchReturned::class);
-        Notification::assertNotSentTo($dean, ResearchReturnedToDean::class);
-    });
-
-    it('OVPRI can reject research', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review']);
-        $ovpri = makeOvpri();
-
-        $this->actingAs($ovpri)
-            ->post(route('ovpri.reject', $research), ['remarks' => 'Not aligned.'])
-            ->assertRedirect(route('ovpri.queue'));
-
-        expect($research->fresh()->approval_stage)->toBe('rejected');
-    });
-
-    it('OVPRI rejection notifies dean and primary author', function () {
-        Notification::fake();
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review']);
-        $ovpri = makeOvpri();
-        $dean  = $college->headUser;
-
-        $this->actingAs($ovpri)
-            ->post(route('ovpri.reject', $research), ['remarks' => 'Rejected.']);
-
-        Notification::assertSentTo($dean, ResearchRejectedDean::class);
-        Notification::assertSentTo($faculty, ResearchRejected::class);
-    });
-
-    it('OVPRI cannot approve research still in dean_review', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review']);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW]);
         $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)
@@ -493,164 +396,391 @@ describe('OVPRI: approve / return / reject', function () {
     });
 });
 
-// ─────────────────────────────────────────────
-// SUITE 5 — POST-APPROVAL: REVISE & PROGRESS
-// ─────────────────────────────────────────────
+describe('Resubmit and completion (final cycle)', function () {
 
-describe('Post-Approval: revise & progress update', function () {
-
-    it('faculty can revise a rejected research (back to draft)', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+    it('faculty can resubmit after initial rejection', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'rejected']);
+        $research->update(['status' => ResearchStatus::INITIAL_REJECTED]);
 
         $this->actingAs($faculty)
             ->post(route('research.revise', $research))
             ->assertRedirect(route('research.show', $research));
 
-        expect($research->fresh()->approval_stage)->toBe('draft');
+        expect($research->fresh()->status)->toBe(ResearchStatus::INITIAL_DEAN_REVIEW);
     });
 
-    it('faculty cannot revise research that is not rejected', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+    it('faculty cannot resubmit when not in a returned status', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review']);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW]);
 
         $this->actingAs($faculty)
             ->post(route('research.revise', $research))
             ->assertForbidden();
     });
 
-    it('faculty can submit a progress update on approved research', function () {
+    it('faculty can submit completion from ongoing research', function () {
         Notification::fake();
         Storage::fake('local');
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'approved']);
-        $dean = $college->headUser;
+        seedOutcomeClassifications();
 
-        $file = UploadedFile::fake()->createWithContent(
-            'progress_report.pdf',
-            minimalPdfBinary()
-        );
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now(),
+        ]);
+        $dean = $college->headUser;
 
         $this->actingAs($faculty)
             ->put(route('research.update-progress', $research), [
-                'status'  => 'ongoing',
-                'remarks' => 'Midterm progress report attached.',
-                'files'   => [$file],
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'remarks' => 'Completion package attached.',
+                'external_link' => 'https://example.com/completion-proof',
             ])
             ->assertRedirect(route('research.show', $research));
 
         $research->refresh();
-        // Stage returns to dean_review for re-endorsement
-        expect($research->approval_stage)->toBe('dean_review');
+        expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
+        expect($research->first_completed_at)->not->toBeNull();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_type' => Research::class,
+            'auditable_id' => $research->id,
+            'action' => 'research.completion.research_completed',
+        ]);
 
         $this->assertDatabaseHas('approvals', [
             'research_id' => $research->id,
-            'stage'       => 'faculty',
-            'action'      => 'progress_update',
+            'stage' => 'faculty',
+            'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+            'action' => 'completion_submitted',
         ]);
     });
 
-    it('progress update notifies the college dean', function () {
+    it('dean approval queue shows completion submissions under final review', function () {
         Notification::fake();
         Storage::fake('local');
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $dean = $college->headUser;
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'approved']);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now(),
+        ]);
+
+        $this->actingAs($faculty)
+            ->put(route('research.update-progress', $research), [
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'remarks' => 'Completion package attached.',
+                'external_link' => 'https://example.com/completion-proof',
+            ])
+            ->assertRedirect(route('research.show', $research));
+
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
+
+        $this->actingAs($dean)
+            ->get(route('approval.queue'))
+            ->assertOk()
+            ->assertSee($research->reference_number, false);
+
+        $this->actingAs($dean)
+            ->get(route('approval.queue', ['cycle' => 'final']))
+            ->assertOk()
+            ->assertSee($research->reference_number, false);
+    });
+
+    it('completion submission notifies the college dean', function () {
+        Notification::fake();
+        Storage::fake('local');
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now(),
+        ]);
         $dean = $college->headUser;
 
         $this->actingAs($faculty)
             ->put(route('research.update-progress', $research), [
-                'status'        => 'ongoing',
-                'remarks'       => 'Update.',
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'remarks' => 'Update.',
                 'external_link' => 'https://example.com/progress-proof',
             ]);
 
         Notification::assertSentTo($dean, ResearchProgressUpdated::class);
     });
 
-    it('faculty cannot submit a progress update when research is not approved', function () {
-        $college  = makeCollege();
-        $faculty  = makeFaculty($college);
+    it('rejects disallowed links such as YouTube with a clear message on completion submit', function () {
+        Storage::fake('local');
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review']);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now(),
+        ]);
+
+        $response = $this->actingAs($faculty)
+            ->from(route('research.show', $research))
+            ->put(route('research.update-progress', $research), [
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'external_links' => ['https://youtube.com/watch?v=test'],
+            ]);
+
+        $response->assertRedirect(route('research.show', $research));
+        $response->assertSessionHasErrors('external_links.0');
+        expect(session('errors')->first('external_links.0'))
+            ->toContain('Google Drive');
+    });
+
+    it('rejects plain text such as abc as an invalid link', function () {
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now(),
+        ]);
 
         $this->actingAs($faculty)
-            ->put(route('research.update-progress', $research), ['status' => 'ongoing'])
-            ->assertForbidden();
+            ->from(route('research.show', $research))
+            ->put(route('research.update-progress', $research), [
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'external_links' => ['abc'],
+            ])
+            ->assertRedirect(route('research.show', $research))
+            ->assertSessionHasErrors('external_links.0');
+
+        expect(session('errors')->first('external_links.0'))
+            ->toContain('Invalid link');
+    });
+
+    it('allows multiple links and files together on completion submit', function () {
+        Notification::fake();
+        Storage::fake('local');
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now(),
+        ]);
+
+        $file = UploadedFile::fake()->createWithContent('proof.pdf', minimalPdfBinary());
+
+        $this->actingAs($faculty)
+            ->put(route('research.update-progress', $research), [
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'external_links' => [
+                    'https://drive.google.com/file/d/abc/view',
+                    'https://doi.org/10.1000/example',
+                ],
+                'files' => [$file],
+            ])
+            ->assertRedirect(route('research.show', $research));
+
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
+        expect($research->documents()->whereNotNull('external_link')->count())->toBe(2);
+        expect($research->documents()->whereNotNull('disk_path')->count())->toBeGreaterThanOrEqual(1);
+    });
+
+    it('faculty can resubmit final outcomes from final_rejected via update-progress', function () {
+        Notification::fake();
+        Storage::fake('local');
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::FINAL_REJECTED,
+            'final_review_count' => 1,
+            'research_registered_at' => now()->subMonth(),
+        ]);
+
+        $classificationId = OutcomeClassification::query()
+            ->where('code', 'completed_not_presented_submitted')
+            ->value('id');
+        $research->outcomeClassifications()->sync([$classificationId]);
+
+        $countBefore = (int) $research->final_review_count;
+
+        $this->actingAs($faculty)
+            ->put(route('research.update-progress', $research), [
+                'outcome_classifications' => ['presented_conference_auf'],
+                'remarks' => 'Revised outcome package.',
+                'external_link' => 'https://example.com/final-resubmit-proof',
+            ])
+            ->assertRedirect(route('research.show', $research));
+
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
+        expect($research->final_review_count)->toBe($countBefore);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_type' => Research::class,
+            'auditable_id' => $research->id,
+            'action' => 'research.completion.research_completed',
+        ]);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'auditable_type' => Research::class,
+            'auditable_id' => $research->id,
+            'action' => 'research.final.resubmitted',
+        ]);
     });
 });
 
-// ─────────────────────────────────────────────
-// SUITE 6 — FULL END-TO-END HAPPY PATH
-// ─────────────────────────────────────────────
+describe('Full Lifecycle: new registration happy path', function () {
 
-describe('Full Lifecycle: happy path end-to-end', function () {
-
-    it('completes the full draft → submit → endorse → approve flow', function () {
+    it('completes proposal → initial review → ongoing registration', function () {
         Notification::fake();
         Storage::fake('local');
 
         $college = makeCollege();
         $faculty = makeFaculty($college);
-        $dean    = $college->headUser;
-        $ovpri   = makeOvpri();
+        $dean = $college->headUser;
+        $ovpri = makeOvpri();
 
-        // 1. Create draft
         $this->actingAs($faculty)->get(route('research.create'));
         $research = Research::where('primary_author_id', $faculty->id)->latest()->first();
-        expect($research->approval_stage)->toBe('draft');
+        expect($research->status)->toBe(ResearchStatus::PROPOSAL);
 
-        // 2. Fill wizard step 1
         $this->actingAs($faculty)->put(route('research.wizard.details.save', $research), [
-            'registration_type'         => 'new',
-            'title'                     => 'AI in Pampanga Schools',
-            'mother_college_id'         => $college->id,
-            'research_classification'   => 'internally_funded',
-            'sdg_tags'                  => [4],
-            'expected_output'           => ['publication'],
-            'start_date'                => now()->toDateString(),
+            'registration_type' => 'new',
+            'title' => 'AI in Pampanga Schools',
+            'mother_college_id' => $college->id,
+            'research_classification' => 'internally_funded',
+            'sdg_tags' => [4],
+            'expected_output' => ['publication'],
+            'start_date' => now()->toDateString(),
             'estimated_completion_date' => now()->addMonths(6)->toDateString(),
-            'status'                    => 'proposal',
         ]);
 
-        // 3. Save authors
         $this->actingAs($faculty)->post(route('research.wizard.authors.save', $research), [
-            'primary_author_type' => 'self',
-            'authors' => [],
+            'primary_author_user_id' => $faculty->id,
+            'coauthors' => [],
         ]);
 
-        // 4. Upload document
         $file = UploadedFile::fake()->createWithContent('proposal.pdf', minimalPdfBinary());
         $this->actingAs($faculty)->post(route('documents.upload', $research), ['files' => [$file]]);
         expect($research->fresh()->documents()->count())->toBeGreaterThan(0);
 
-        // 5. Submit
         $this->actingAs($faculty)->post(route('research.submit', $research));
-        expect($research->fresh()->approval_stage)->toBe('dean_review');
+        expect($research->fresh()->status)->toBe(ResearchStatus::INITIAL_DEAN_REVIEW);
         Notification::assertSentTo($dean, ResearchSubmitted::class);
 
-        // 6. Dean endorses
         $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
-        expect($research->fresh()->approval_stage)->toBe('ovpri_review');
+        expect($research->fresh()->status)->toBe(ResearchStatus::INITIAL_OVPRI_REVIEW);
         Notification::assertSentTo($faculty, ResearchEndorsed::class);
         Notification::assertSentTo($ovpri, ResearchEndorsedToOvpri::class);
 
-        // 7. OVPRI approves
         $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Approved!']);
-        expect($research->fresh()->approval_stage)->toBe('approved');
+        expect($research->fresh()->status)->toBe(ResearchStatus::ONGOING);
         Notification::assertSentTo($faculty, ResearchApproved::class);
         Notification::assertSentTo($dean, ResearchApprovedDean::class);
 
-        // Verify full approval trail
         $approvals = Approval::where('research_id', $research->id)->get();
         expect($approvals->where('stage', 'dean')->where('action', 'endorsed')->count())->toBe(1);
         expect($approvals->where('stage', 'ovpri')->where('action', 'approved')->count())->toBe(1);
+    });
+});
+
+describe('Full Lifecycle: final acceptance path', function () {
+
+    it('completes ongoing → final review → research accepted', function () {
+        Notification::fake();
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $dean = $college->headUser;
+        $ovpri = makeOvpri();
+
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now()->subMonth(),
+            'submitted_at' => now()->subMonth(),
+        ]);
+
+        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
+            'outcome_classifications' => ['published_scopus_isi'],
+            'remarks' => 'Final outputs attached.',
+            'external_link' => 'https://example.com/final-output',
+        ]);
+        expect($research->fresh()->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
+
+        $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Final endorse.']);
+        expect($research->fresh()->status)->toBe(ResearchStatus::FINAL_OVPRI_REVIEW);
+
+        $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Final approved.']);
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::RESEARCH_ACCEPTED);
+        expect($research->research_accepted_at)->not->toBeNull();
+    });
+
+    it('preserves first_completed_at when submitting a later completion from research accepted', function () {
+        Notification::fake();
+        Storage::fake('local');
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $dean = $college->headUser;
+        $ovpri = makeOvpri();
+
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::ONGOING,
+            'research_registered_at' => now()->subMonths(2),
+            'submitted_at' => now()->subMonths(2),
+        ]);
+
+        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
+            'outcome_classifications' => ['completed_not_presented_submitted'],
+            'remarks' => 'First completion.',
+            'external_link' => 'https://example.com/first-completion',
+        ]);
+
+        $research->refresh();
+        $firstCompletedAt = $research->first_completed_at;
+        expect($firstCompletedAt)->not->toBeNull();
+
+        $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorse first completion.']);
+        $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Accept first completion.']);
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::RESEARCH_ACCEPTED);
+
+        $this->travel(1)->month();
+
+        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
+            'outcome_classifications' => ['published_scopus_isi'],
+            'remarks' => 'Progress update after acceptance.',
+            'external_link' => 'https://example.com/second-completion',
+        ]);
+
+        $research->refresh();
+        expect($research->first_completed_at?->toIso8601String())
+            ->toBe($firstCompletedAt->toIso8601String());
     });
 });

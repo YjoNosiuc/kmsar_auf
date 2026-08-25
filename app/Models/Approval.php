@@ -15,6 +15,8 @@ class Approval extends Model
         'research_id',
         'approver_id',
         'stage',
+        'review_cycle',
+        'final_review_iteration',
         'action',
         'remarks',
         'acted_at',
@@ -24,6 +26,7 @@ class Approval extends Model
     {
         return [
             'acted_at' => 'datetime',
+            'final_review_iteration' => 'integer',
         ];
     }
 

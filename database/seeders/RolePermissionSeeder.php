@@ -43,7 +43,6 @@ class RolePermissionSeeder extends Seeder
         'approval.endorse',
         'approval.approve',
         'approval.return',
-        'approval.reject',
         'document.upload',
         'document.download',
         'report.view_college',
@@ -89,7 +88,6 @@ class RolePermissionSeeder extends Seeder
             'research.view_all',
             'approval.approve',
             'approval.return',
-            'approval.reject',
             'document.download',
             'report.view_college',
             'report.view_university',
@@ -99,12 +97,11 @@ class RolePermissionSeeder extends Seeder
         $assign('ovpri_admin', $ovpriCdaic);
         $assign('cdaic_admin', $ovpriCdaic);
 
-        // college_dean / unit_head: own college/unit queue (endorse / return / reject), college reports
+        // college_dean / unit_head: own college/unit queue (endorse / return), college reports
         $deanUnitHead = [
             'research.view_college',
             'approval.endorse',
             'approval.return',
-            'approval.reject',
             'document.download',
             'report.view_college',
         ];

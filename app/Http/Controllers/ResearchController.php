@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SubmitCompletionRequest;
 use App\Models\Approval;
 use App\Models\College;
 use App\Models\Document;
+use App\Models\OutcomeClassification;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
-use App\Mail\ResearchSubmittedDeanMail;
-use App\Mail\ResearchSubmittedFacultyMail;
 use App\Notifications\ResearchProgressUpdated;
-use App\Notifications\ResearchSubmissionConfirmed;
-use App\Notifications\ResearchSubmitted;
 use App\Services\ApprovalService;
 use App\Services\FileValidationService;
-use App\Support\SafeMail;
+use App\Rules\ResearchExternalLink;
+use App\Support\ResearchDeanRouting;
+use App\Support\ResearchStatus;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\RedirectResponse;
@@ -43,25 +43,8 @@ class ResearchController extends Controller
 
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:200'],
-            'approval_stage' => ['nullable', 'string', Rule::in([
-                'draft',
-                'dean_review',
-                'ovpri_review',
-                'approved',
-                'rejected',
-                'returned_to_faculty',
-            ])],
-            'status' => ['nullable', 'string', Rule::in([
-                'proposal',
-                'ongoing',
-                'completed_unpublished',
-                'presented_internal',
-                'presented_external',
-                'published_non_indexed',
-                'published_scopus',
-                'patent_submitted',
-                'patent_granted',
-            ])],
+            'status' => ['nullable', 'string', Rule::in(config('kmsar.statuses', []))],
+            'review_cycle' => ['nullable', 'string', Rule::in(['initial', 'final'])],
         ]);
 
         $research = $this->approvalService->paginateResearchForUser(
@@ -74,8 +57,8 @@ class ResearchController extends Controller
             'research' => $research,
             'filters' => [
                 'search' => $filters['search'] ?? '',
-                'approval_stage' => $filters['approval_stage'] ?? '',
                 'status' => $filters['status'] ?? '',
+                'review_cycle' => $filters['review_cycle'] ?? '',
             ],
         ]);
     }
@@ -84,9 +67,14 @@ class ResearchController extends Controller
     {
         $this->authorize('create', Research::class);
 
+        $registrationType = $request->query('registration_type', 'new');
+        if (! in_array($registrationType, config('kmsar.registration_types', []), true)) {
+            $registrationType = 'new';
+        }
+
         $research = $this->approvalService->createDraftAfterRegistrationType(
             $request->user(),
-            'new'
+            $registrationType
         );
 
         return redirect()
@@ -113,6 +101,10 @@ class ResearchController extends Controller
 
         $data = $request->validate($this->researchValidationRules());
         $data = $this->finalizeResearchPayload($data, $request);
+
+        if ($research->status === ResearchStatus::PROPOSAL) {
+            $research->update(['registration_type' => $data['registration_type']]);
+        }
 
         $this->approvalService->updateResearch($research, $data);
 
@@ -338,6 +330,7 @@ class ResearchController extends Controller
             'primaryAuthor.program',
             'motherCollege',
             'documents',
+            'outcomeClassifications',
             'approvals' => fn ($q) => $q->orderBy('created_at'),
             'approvals.approver',
             'researchAuthors.college',
@@ -345,6 +338,10 @@ class ResearchController extends Controller
 
         return view('faculty.research.show', [
             'research' => $research,
+            'outcomeClassifications' => OutcomeClassification::query()
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->get(),
         ]);
     }
 
@@ -391,55 +388,25 @@ class ResearchController extends Controller
 
     public function submit(Request $request, Research $research): RedirectResponse
     {
+        if ($research->status !== ResearchStatus::PROPOSAL) {
+            return redirect()
+                ->route('research.show', $research)
+                ->with('info', __('This research has already been submitted.'));
+        }
+
         $this->authorize('submit', $research);
 
         $this->approvalService->submit($research, $request->user());
 
         $research->refresh();
 
-        $research->submitted_at = now();
-        $research->save();
-
-        $dean = User::whereHas('roles', function ($q) {
-            $q->where('name', 'college_dean');
-        })
-            ->where('college_id', $research->mother_college_id)
-            ->first();
-
-        if ($dean) {
-            $dean->notify(new ResearchSubmitted($research));
-        }
-
-        // Faculty confirmation — queue immediately; dean + co-authors staggered for Mailtrap.
-        if ($research->primaryAuthor?->email) {
-            SafeMail::send(
-                $research->primaryAuthor->email,
-                new ResearchSubmittedFacultyMail($research),
-                0
-            );
-        }
-
-        $research->primaryAuthor?->notify(new ResearchSubmissionConfirmed($research));
-
-        if ($dean?->email) {
-            SafeMail::send(
-                $dean->email,
-                new ResearchSubmittedDeanMail($research, $dean),
-                2
-            );
-        }
-
-        $research->loadMissing('researchAuthors');
-        $delay = 4;
-        $research->researchAuthors
-            ->where('is_primary', false)
-            ->filter(fn ($author) => filled($author->email))
-            ->each(function ($author) use ($research, &$delay) {
-                SafeMail::send($author->email, new ResearchSubmittedFacultyMail($research), $delay);
-                $delay += 2;
-            });
-
         $this->forgetResearchDashboardCaches($research);
+
+        if ($research->registration_type === 'existing') {
+            return redirect()
+                ->route('research.show', $research)
+                ->with('success', __('Existing research registered. Your record is now ongoing.'));
+        }
 
         return redirect()
             ->route('research.show', $research)
@@ -448,9 +415,16 @@ class ResearchController extends Controller
 
     public function revise(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('revise', $research);
+        if ($research->status === ResearchStatus::INITIAL_REJECTED) {
+            $this->authorize('resubmitInitial', $research);
+            $this->approvalService->resubmitInitial($research, $request->user());
 
-        $this->approvalService->resubmit($research, $request->user());
+            $message = __('Your research has been resubmitted for initial dean review. You can edit registration details in the wizard if needed.');
+        } elseif ($research->status === ResearchStatus::FINAL_REJECTED) {
+            abort(403, __('Use the outcome update form to revise classifications and resubmit for final review.'));
+        } else {
+            abort(403);
+        }
 
         $research->refresh();
 
@@ -458,13 +432,13 @@ class ResearchController extends Controller
 
         return redirect()
             ->route('research.show', $research)
-            ->with('info', __('Your research has been returned to draft. You can now edit the details, update authors and documents, then submit for Dean review.'));
+            ->with('info', $message);
     }
 
     public function destroy(Research $research): RedirectResponse
     {
-        if ($research->approval_stage !== 'draft') {
-            abort(403, 'Only draft stage research can be deleted.');
+        if ($research->status !== ResearchStatus::PROPOSAL) {
+            abort(403, 'Only proposal stage research can be deleted.');
         }
 
         if ($research->primary_author_id !== auth()->id()) {
@@ -477,105 +451,97 @@ class ResearchController extends Controller
             ->with('success', 'Research record deleted successfully.');
     }
 
-    public function updateProgress(Request $request, Research $research): RedirectResponse
+    public function updateProgress(SubmitCompletionRequest $request, Research $research): RedirectResponse
     {
-        $this->authorize('updateProgress', $research);
+        $isFinalResubmit = $research->status === ResearchStatus::FINAL_REJECTED;
 
-        $validated = $request->validate([
-            'status' => ['required', 'string', Rule::in([
-                'ongoing', 'completed_unpublished', 'presented_internal',
-                'presented_external', 'published_non_indexed', 'published_scopus',
-                'patent_submitted', 'patent_granted',
-            ])],
-            'remarks' => ['nullable', 'string', 'max:1000'],
-            'external_link' => ['nullable', 'string', 'max:2048'],
-        ]);
+        if ($isFinalResubmit) {
+            $this->authorize('resubmitFinal', $research);
+        } else {
+            $this->authorize('submitCompletion', $research);
+        }
 
-        $hasLink = $request->filled('external_link');
+        $validated = $request->validated();
+
+        $links = ResearchExternalLink::normalizeList($validated['external_links'] ?? []);
+
+        if ($links === [] && $request->filled('external_link')) {
+            $legacy = ResearchExternalLink::normalize((string) $request->input('external_link'));
+            if ($legacy !== null) {
+                $links = [$legacy];
+            }
+        }
+
         $hasFiles = $request->hasFile('files');
 
-        if ($hasLink && $hasFiles) {
-            return back()->withErrors(['files' => __('Please choose either a file upload or a link, not both.')]);
+        if (! $hasFiles && $links === []) {
+            $uploadType = (string) $request->input('upload_type', 'file');
+            $message = $uploadType === 'link'
+                ? __('Please add at least one link (Google Drive, OneDrive, Dropbox, or DOI).')
+                : __('Please upload at least one supporting file or switch to Add Link and paste a URL.');
+
+            return back()
+                ->withInput()
+                ->withErrors(['proof' => $message]);
         }
 
-        if (! $hasLink && ! $hasFiles) {
-            return back()->withErrors(['files' => __('Please upload supporting file(s) or paste a link.')]);
-        }
+        $nextVersion = ((int) $research->documents()->max('version')) + 1;
 
-        $docSummary = '';
-
-        if ($hasLink) {
-            $request->validate(['external_link' => ['required', 'url', 'max:2048']]);
-
+        foreach ($links as $link) {
             Document::create([
                 'research_id' => $research->id,
                 'uploaded_by' => $request->user()->id,
-                'original_filename' => $request->input('external_link'),
+                'original_filename' => $link,
                 'stored_filename' => null,
                 'disk_path' => null,
-                'external_link' => $request->input('external_link'),
+                'external_link' => $link,
                 'mime_type' => 'text/uri-list',
                 'file_size_bytes' => 0,
-                'research_status_at_upload' => $validated['status'],
-                'version' => ((int) $research->documents()->max('version')) + 1,
+                'research_status_at_upload' => $research->status,
+                'version' => $nextVersion++,
             ]);
+        }
 
-            $docSummary = $request->input('external_link');
-        } else {
-            $request->validate([
-                'files' => ['required', 'array', 'max:2'],
-                'files.*' => ['file', 'max:102400', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png'],
-            ]);
-
-            $names = [];
+        if ($hasFiles) {
             foreach ($request->file('files') as $index => $file) {
                 $this->persistProgressUploadedFile(
                     $research,
                     $request->user(),
                     $file,
-                    $validated['status'],
+                    (string) $research->status,
                     'files.'.$index
                 );
-                $names[] = $file->getClientOriginalName();
             }
-            $docSummary = implode(', ', $names);
         }
 
-        $research->update([
-            'status' => $validated['status'],
-            'approval_stage' => 'dean_review',
-        ]);
-
-        $remarksText = ($validated['remarks'] ?? '')
-            .' [New status: '.$validated['status'].'] [Document: '.$docSummary.']';
-
-        Approval::query()->create([
-            'research_id' => $research->id,
-            'approver_id' => $request->user()->id,
-            'stage' => 'faculty',
-            'action' => 'progress_update',
-            'remarks' => $remarksText,
-            'acted_at' => now(),
-        ]);
+        if ($isFinalResubmit) {
+            $this->approvalService->resubmitFinal(
+                $research,
+                $request->user(),
+                $validated['outcome_classifications'],
+                $validated['remarks'] ?? null,
+            );
+            $successMessage = __('Your outcome submission has been resubmitted for final dean review.');
+        } else {
+            $this->approvalService->submitCompletion(
+                $research,
+                $request->user(),
+                $validated['outcome_classifications'],
+                $validated['remarks'] ?? null,
+            );
+            $successMessage = __('Research completion submitted. Your Dean has been notified for final review.');
+        }
 
         $research->refresh();
 
-        $dean = User::whereHas('roles', function ($q) {
-            $q->where('name', 'college_dean');
-        })
-            ->where('college_id', $research->mother_college_id)
-            ->first();
-
-        if ($dean) {
+        foreach (ResearchDeanRouting::deanUsersFor($research) as $dean) {
             $dean->notify(new ResearchProgressUpdated($research));
         }
 
         $this->forgetResearchDashboardCaches($research);
 
-        // SendNotificationJob::dispatch($research, 'progress_updated');
-
         return redirect()->route('research.show', $research)
-            ->with('success', __('Progress updated and document uploaded. Your Dean has been notified for re-endorsement.'));
+            ->with('success', $successMessage);
     }
 
     private function persistProgressUploadedFile(
@@ -637,8 +603,8 @@ class ResearchController extends Controller
         $research = $this->approvalService->paginateAllResearch(
             perPage: 20,
             college: $request->input('college'),
-            stage: $request->input('stage'),
             status: $request->input('status'),
+            reviewCycle: $request->input('review_cycle'),
         );
 
         $colleges = \App\Models\College::where('is_active', true)->orderBy('code')->get();
@@ -703,6 +669,12 @@ class ResearchController extends Controller
             fn (int $id) => $id > 0 && $id !== $motherCollegeId,
         ));
         $data['other_college_id'] = $otherCollegeIds === [] ? null : $otherCollegeIds;
+        $data['agenda_themes'] = array_values(array_unique(array_filter(
+            array_map('strval', $data['agenda_themes'] ?? []),
+        )));
+        $data['research_classification_other'] = ($data['research_classification'] ?? '') === 'other'
+            ? ($data['research_classification_other'] ?? null)
+            : null;
 
         return $data;
     }
@@ -732,7 +704,7 @@ class ResearchController extends Controller
         ]));
 
         foreach ($collegeIds as $collegeId) {
-            foreach ($this->deanUserIdsForCollege((int) $collegeId) as $id) {
+            foreach (ResearchDeanRouting::deanUserIdsForCollege((int) $collegeId) as $id) {
                 foreach ([now(), now()->subDay()] as $day) {
                     $dayKey = $day->format('Y-m-d');
                     Cache::forget('dean_stats_v2_'.$id.'_all_all_'.$dayKey);
@@ -744,24 +716,12 @@ class ResearchController extends Controller
     }
 
     /**
-     * @return list<int>
-     */
-    private function deanUserIdsForCollege(int $collegeId): array
-    {
-        return User::query()
-            ->where('college_id', $collegeId)
-            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['college_dean', 'unit_head']))
-            ->pluck('id')
-            ->all();
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private function researchValidationRules(): array
     {
         return [
-            'registration_type' => ['required', 'in:new,update'],
+            'registration_type' => ['required', 'in:new,existing'],
             'title' => ['required', 'string'],
             'mother_college_id' => ['required', 'exists:colleges,id'],
             'other_college_id' => ['nullable', 'array'],
@@ -770,17 +730,17 @@ class ResearchController extends Controller
                 'required',
                 'string',
                 'max:60',
-                Rule::in([
-                    'self_funded',
-                    'internally_funded',
-                    'externally_funded',
-                    'thesis',
-                    'thesis_dissertation',
-                    'collaboration',
-                    'other',
-                ]),
+                Rule::in(array_keys(config('kmsar.research_classifications', []))),
+            ],
+            'research_classification_other' => [
+                'nullable',
+                'string',
+                'max:500',
+                Rule::requiredIf(fn () => request()->input('research_classification') === 'other'),
             ],
             'funding_agency' => ['nullable', 'string', 'max:100'],
+            'agenda_themes' => ['nullable', 'array'],
+            'agenda_themes.*' => ['string', Rule::in(array_keys(config('kmsar.agenda_themes', [])))],
             'sdg_tags' => ['required', 'array', 'min:1'],
             'sdg_tags.*' => ['integer', 'between:1,17'],
             'expected_output' => ['required', 'array', 'min:1'],
@@ -793,7 +753,6 @@ class ResearchController extends Controller
             ],
             'start_date' => ['required', 'date'],
             'estimated_completion_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'status' => ['required', 'string', 'max:40'],
         ];
     }
 
@@ -806,7 +765,7 @@ class ResearchController extends Controller
             && ! empty($research->research_classification)
             && ! empty($research->sdg_tags)
             && ! empty($research->start_date)
-            && ! empty($research->status);
+            && filled($research->registration_type);
     }
 
     private function wizardStep2Complete(Research $research): bool

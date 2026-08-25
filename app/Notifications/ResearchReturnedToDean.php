@@ -3,12 +3,9 @@
 namespace App\Notifications;
 
 use App\Models\Research;
-use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 
-class ResearchReturnedToDean extends Notification
+class ResearchReturnedToDean extends QueuedResearchNotification
 {
-    use Queueable;
     use SendsResearchNotificationMail;
 
     public function __construct(
@@ -18,10 +15,7 @@ class ResearchReturnedToDean extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
-            'research_id'      => $this->research->id,
-            'reference_number' => $this->research->reference_number,
-            'title'            => $this->research->title,
+        return $this->baseResearchPayload($this->research, [
             'message'          => 'Research '
                                   . $this->research->reference_number
                                   . ' has been returned by OVPRI '
@@ -29,6 +23,6 @@ class ResearchReturnedToDean extends Notification
             'action_url'       => route('approval.review',
                                     $this->research),
             'type'             => 'returned_to_dean',
-        ];
+        ]);
     }
 }

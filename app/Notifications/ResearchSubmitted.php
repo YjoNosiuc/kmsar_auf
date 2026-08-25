@@ -3,12 +3,9 @@
 namespace App\Notifications;
 
 use App\Models\Research;
-use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 
-class ResearchSubmitted extends Notification
+class ResearchSubmitted extends QueuedResearchNotification
 {
-    use Queueable;
     use SendsResearchNotificationMail;
 
     public function __construct(
@@ -18,10 +15,7 @@ class ResearchSubmitted extends Notification
 
     public function toArray(object $notifiable): array
     {
-        return [
-            'research_id'      => $this->research->id,
-            'reference_number' => $this->research->reference_number,
-            'title'            => $this->research->title,
+        return $this->baseResearchPayload($this->research, [
             'message'          => 'A new research '
                                   . $this->research->reference_number
                                   . ' has been submitted for your review by '
@@ -32,6 +26,6 @@ class ResearchSubmitted extends Notification
             'action_url'       => route('approval.review',
                                     $this->research),
             'type'             => 'submitted',
-        ];
+        ]);
     }
 }

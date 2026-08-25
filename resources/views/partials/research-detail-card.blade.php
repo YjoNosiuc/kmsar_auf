@@ -1,12 +1,8 @@
 @php
-    $classificationLabels = [
-        'self_funded' => __('Self-funded'),
-        'internally_funded' => __('Internally funded'),
-        'externally_funded' => __('Externally funded'),
-        'thesis' => __('Thesis / dissertation'),
-        'collaboration' => __('Collaboration'),
-        'other' => __('Other'),
-    ];
+    use App\Support\ResearchStatus;
+
+    $classificationLabels = config('kmsar.research_classifications', []);
+    $agendaThemeLabels = config('kmsar.agenda_themes', []);
     $expectedLabels = [
         'publication' => __('Publication'),
         'patent' => __('Patent'),
@@ -15,11 +11,15 @@
     ];
     $registrationLabel = match ($research->registration_type) {
         'new' => __('New Research'),
-        'update' => __('Update Existing'),
+        'existing' => __('Existing Research'),
+        'update' => __('Existing Research'),
         default => ucwords(str_replace('_', ' ', (string) $research->registration_type)),
     };
     $classificationLabel = $classificationLabels[$research->research_classification] ?? ucwords(str_replace('_', ' ', (string) $research->research_classification));
-    $statusLabel = ucwords(str_replace('_', ' ', (string) $research->status));
+    if ($research->research_classification === 'other' && filled($research->research_classification_other)) {
+        $classificationLabel .= ' — '.$research->research_classification_other;
+    }
+    $statusLabel = ResearchStatus::label($research->status);
     $expectedKeys = $research->expectedOutputKeys();
     $expectedDisplay = collect($expectedKeys)->map(fn ($o) => $expectedLabels[$o] ?? ucwords(str_replace('_', ' ', (string) $o)))->implode(', ');
     if ($expectedDisplay === '') {
@@ -28,12 +28,21 @@
     if (in_array('other', $expectedKeys, true) && $research->expected_output_other) {
         $expectedDisplay .= ' — '.$research->expected_output_other;
     }
-    $progressBadge = match ($research->status) {
-        'published_scopus', 'published_non_indexed', 'presented_external', 'presented_internal', 'completed_unpublished' => 'approved',
-        'proposal', 'ongoing' => 'pending',
-        'patent_submitted', 'patent_granted' => 'info',
+    $agendaKeys = is_array($research->agenda_themes) ? $research->agenda_themes : [];
+    $agendaDisplay = collect($agendaKeys)
+        ->map(fn ($key) => $agendaThemeLabels[$key] ?? ucwords(str_replace('_', ' ', (string) $key)))
+        ->filter()
+        ->implode('; ');
+    $statusBadge = match ($research->status) {
+        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+        ResearchStatus::PROPOSAL, ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+        ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW, ResearchStatus::RESEARCH_COMPLETED => 'info',
+        ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'returned',
         default => 'draft',
     };
+    $outcomeDisplay = $research->relationLoaded('outcomeClassifications')
+        ? $research->outcomeClassifications->pluck('name')->implode(', ')
+        : $research->outcomeClassifications()->pluck('name')->implode(', ');
     $externalPrimary = $research->researchAuthors->where('is_primary', true)->whereNull('user_id')->first();
 @endphp
 
@@ -90,6 +99,10 @@
                 <div class="kmsar-label">{{ __('Research classification') }}</div>
                 <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ $classificationLabel }}</div>
             </div>
+            <div style="grid-column:1/-1;">
+                <div class="kmsar-label">{{ __('Alignment with AUF Research Agenda Theme') }}</div>
+                <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ filled($agendaDisplay) ? $agendaDisplay : '—' }}</div>
+            </div>
             <div>
                 <div class="kmsar-label">{{ __('Funding agency') }}</div>
                 <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ $research->funding_agency ?: '—' }}</div>
@@ -107,10 +120,14 @@
                 <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ $research->estimated_completion_date?->format('M d, Y') ?? '—' }}</div>
             </div>
             <div>
-                <div class="kmsar-label">{{ __('Progress status') }}</div>
+                <div class="kmsar-label">{{ __('Workflow status') }}</div>
                 <div style="margin-top:0.35rem;">
-                    <span class="kmsar-badge kmsar-badge--{{ $progressBadge }} kmsar-badge--square">{{ $statusLabel }}</span>
+                    <span class="kmsar-badge kmsar-badge--{{ $statusBadge }} kmsar-badge--square">{{ $statusLabel }}</span>
                 </div>
+            </div>
+            <div>
+                <div class="kmsar-label">{{ __('Outcome classifications') }}</div>
+                <div style="font-size:14px;color:var(--color-text-primary);margin-top:0.25rem;">{{ filled($outcomeDisplay) ? $outcomeDisplay : '—' }}</div>
             </div>
             <div>
                 <div class="kmsar-label">{{ __('Scopus/WoS Indexed') }}</div>

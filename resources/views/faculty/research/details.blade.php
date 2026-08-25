@@ -43,6 +43,8 @@
 
     <x-card :title="__('Research information')" accent="primary">
         @php
+            $registrationLocked = \App\Support\ResearchStatus::isRegistrationLocked((string) $research->status);
+            $currentRegistrationType = old('registration_type', $research->registration_type);
             $currentOutputs = old('expected_output')
                 ? (array) old('expected_output')
                 : ($research->expectedOutputKeys());
@@ -71,6 +73,12 @@
             $selectedOtherColleges = old('other_college_id')
                 ? array_values(array_map('intval', (array) old('other_college_id')))
                 : $research->otherCollegeIds();
+            $currentClassification = old('research_classification', $research->research_classification);
+            $currentAgendaThemes = old('agenda_themes')
+                ? array_values((array) old('agenda_themes'))
+                : array_values(is_array($research->agenda_themes) ? $research->agenda_themes : []);
+            $classificationOptions = config('kmsar.research_classifications', []);
+            $agendaThemeOptions = config('kmsar.agenda_themes', []);
         @endphp
 
         <form
@@ -94,7 +102,34 @@
             @csrf
             @method('PUT')
 
-            <input type="hidden" name="registration_type" value="{{ old('registration_type', $research->registration_type) }}" />
+            @if ($registrationLocked)
+                <input type="hidden" name="registration_type" value="{{ $research->registration_type }}">
+                <div class="rounded-lg border border-[var(--color-warning-border)] bg-[var(--color-warning-bg)] px-4 py-3 text-sm text-[var(--color-text-secondary)] mb-4">
+                    {{ __('Registration details are locked while this record is under review or already registered.') }}
+                </div>
+            @else
+                <div class="kmsar-form-group">
+                    <span class="kmsar-form-label">{{ __('Registration type') }} <span class="kmsar-form-required">*</span></span>
+                    <div style="display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;">
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#0F172A;">
+                            <input type="radio" name="registration_type" value="new" @checked($currentRegistrationType === 'new') style="margin-top:3px;accent-color:#1E3A8A;">
+                            <span>
+                                <strong>{{ __('New research') }}</strong>
+                            </span>
+                        </label>
+                        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#0F172A;">
+                            <input type="radio" name="registration_type" value="existing" @checked($currentRegistrationType === 'existing') style="margin-top:3px;accent-color:#1E3A8A;">
+                            <span>
+                                <strong>{{ __('Existing research') }}</strong>
+                                <span style="display:block;font-size:12px;color:#64748B;margin-top:2px;">{{ __('Completed research') }}</span>
+                            </span>
+                        </label>
+                    </div>
+                    @error('registration_type')
+                        <p class="kmsar-form-error">{{ $message }}</p>
+                    @enderror
+                </div>
+            @endif
 
             <div class="rounded-lg border border-[var(--color-border)] bg-[var(--color-draft-bg)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
                 <strong class="text-[var(--color-text-primary)]">{{ __('Reference') }}:</strong>
@@ -170,23 +205,44 @@
                     </div>
                 </div>
 
-                <x-form.select
-                    name="research_classification"
-                    :label="__('Research classification')"
-                    :placeholder="__('Select classification')"
-                    :options="[
-                        'self_funded' => __('Self-funded'),
-                        'internally_funded' => __('Internally funded'),
-                        'externally_funded' => __('Externally funded'),
-                        'thesis' => __('Thesis / dissertation'),
-                        'thesis_dissertation' => __('Thesis/Dissertation of Student/Advisee'),
-                        'collaboration' => __('Collaboration'),
-                        'other' => __('Other'),
-                    ]"
-                    :value="old('research_classification', $research->research_classification)"
-                    :error="$errors->first('research_classification')"
-                    required
-                />
+                <div style="grid-column:1/-1;">
+                    <div class="kmsar-form-group">
+                        <span class="kmsar-form-label">{{ __('Research classification') }} <span class="kmsar-form-required">*</span></span>
+                        <div style="display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;"
+                            x-data="{ classification: @js($currentClassification), showOther: @js($currentClassification === 'other') }">
+                            @foreach ($classificationOptions as $code => $label)
+                                <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#0F172A;">
+                                    <input
+                                        type="radio"
+                                        name="research_classification"
+                                        value="{{ $code }}"
+                                        @checked($currentClassification === $code)
+                                        x-model="classification"
+                                        @change="showOther = ($event.target.value === 'other')"
+                                        style="margin-top:3px;accent-color:#1E3A8A;"
+                                    >
+                                    <span>{{ __($label) }}</span>
+                                </label>
+                            @endforeach
+                            <div x-show="showOther" x-cloak style="margin-left:26px;">
+                                <input
+                                    type="text"
+                                    name="research_classification_other"
+                                    value="{{ old('research_classification_other', $research->research_classification_other) }}"
+                                    placeholder="{{ __('Please specify...') }}"
+                                    class="kmsar-input"
+                                    style="width:100%;"
+                                >
+                            </div>
+                        </div>
+                        @error('research_classification')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                        @error('research_classification_other')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
 
                 <x-form.input
                     name="funding_agency"
@@ -270,24 +326,27 @@
                 />
 
                 <div style="grid-column:1/-1;">
-                    <x-form.select
-                        name="status"
-                        :label="__('Research progress status')"
-                        :options="[
-                            'proposal' => __('Proposal / abstract'),
-                            'ongoing' => __('Ongoing'),
-                            'completed_unpublished' => __('Completed (unpublished)'),
-                            'presented_internal' => __('Presented (internal)'),
-                            'presented_external' => __('Presented (external)'),
-                            'published_non_indexed' => __('Published (non-indexed)'),
-                            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
-                            'patent_submitted' => __('Patent submitted'),
-                            'patent_granted' => __('Patent granted'),
-                        ]"
-                        :value="old('status', $research->status)"
-                        :error="$errors->first('status')"
-                        required
-                    />
+                    <div class="kmsar-form-group">
+                        <span class="kmsar-form-label">{{ __('Alignment with AUF Research Agenda Theme') }}</span>
+                        <div style="display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;">
+                            @foreach ($agendaThemeOptions as $code => $label)
+                                <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#0F172A;">
+                                    <input
+                                        type="checkbox"
+                                        name="agenda_themes[]"
+                                        value="{{ $code }}"
+                                        {{ in_array($code, $currentAgendaThemes, true) ? 'checked' : '' }}
+                                        style="width:16px;height:16px;accent-color:#1E3A8A;cursor:pointer;margin-top:2px;"
+                                    >
+                                    {{ __($label) }}
+                                </label>
+                            @endforeach
+                        </div>
+                        <p class="kmsar-form-hint">{{ __('Select all that apply.') }}</p>
+                        @error('agenda_themes')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
 
                 <div style="grid-column:1/-1;">

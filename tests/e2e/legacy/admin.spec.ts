@@ -10,7 +10,7 @@ test.describe('Admin management', () => {
     await page.goto(`${BASE_URL}/admin/dashboard`);
     await expect(page.getByRole('heading', { name: /Admin Dashboard/i })).toBeVisible();
     await expect(page.getByText('Research by approval stage')).toBeVisible();
-    await expect(page.getByLabel('Research approval stage breakdown').getByText('Draft')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Research progress' })).toBeVisible();
     await expect(page.getByText('Dean review').first()).toBeVisible();
     await expect(page.getByText('OVPRI review').first()).toBeVisible();
     await expect(page.getByText('Approved').first()).toBeVisible();

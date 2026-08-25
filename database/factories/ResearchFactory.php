@@ -5,8 +5,8 @@ namespace Database\Factories;
 use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
+use App\Support\ResearchStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 /**
  * @extends Factory<Research>
@@ -50,12 +50,16 @@ class ResearchFactory extends Factory
 
         return [
             'reference_number' => null,
-            'registration_type' => fake()->randomElement(['new', 'update']),
+            'registration_type' => fake()->randomElement(['new', 'existing']),
             'title' => strtoupper(fake()->unique()->sentence(6)),
             'primary_author_id' => User::factory(),
             'mother_college_id' => College::factory(),
             'other_college_id' => null,
-            'research_classification' => strtoupper(Str::limit(fake()->lexify(str_repeat('?', 40)), 60, '')),
+            'research_classification' => fake()->randomElement(array_keys(config('kmsar.research_classifications', []))),
+            'agenda_themes' => array_values(fake()->randomElements(
+                array_keys(config('kmsar.agenda_themes', [])),
+                fake()->numberBetween(1, 3)
+            )),
             'funding_agency' => fake()->boolean(40) ? strtoupper(fake()->company()) : null,
             'sdg_tags' => array_values(fake()->randomElements(range(1, 17), fake()->numberBetween(1, 5))),
             'expected_output' => array_values(fake()->randomElements(
@@ -65,10 +69,9 @@ class ResearchFactory extends Factory
             'expected_output_other' => null,
             'start_date' => $start->format('Y-m-d'),
             'estimated_completion_date' => $estimated->format('Y-m-d'),
-            'status' => 'proposal',
-            'approval_stage' => 'draft',
-            'submitted_at' => null,
+            'status' => ResearchStatus::PROPOSAL,
             'revision_count' => 0,
+            'final_review_count' => 0,
             'is_scopus_indexed' => false,
         ];
     }
@@ -76,7 +79,7 @@ class ResearchFactory extends Factory
     public function draft(): static
     {
         return $this->state(fn (array $attributes) => [
-            'approval_stage' => 'draft',
+            'status' => ResearchStatus::PROPOSAL,
             'submitted_at' => null,
         ]);
     }
@@ -84,7 +87,7 @@ class ResearchFactory extends Factory
     public function deanReview(): static
     {
         return $this->state(fn (array $attributes) => [
-            'approval_stage' => 'dean_review',
+            'status' => ResearchStatus::INITIAL_DEAN_REVIEW,
             'submitted_at' => now(),
         ]);
     }
@@ -92,7 +95,7 @@ class ResearchFactory extends Factory
     public function ovpriReview(): static
     {
         return $this->state(fn (array $attributes) => [
-            'approval_stage' => 'ovpri_review',
+            'status' => ResearchStatus::INITIAL_OVPRI_REVIEW,
             'submitted_at' => now(),
         ]);
     }
@@ -100,15 +103,19 @@ class ResearchFactory extends Factory
     public function approved(): static
     {
         return $this->state(fn (array $attributes) => [
-            'approval_stage' => 'approved',
-            'submitted_at' => now(),
+            'status' => ResearchStatus::RESEARCH_ACCEPTED,
+            'submitted_at' => now()->subMonths(2),
+            'research_registered_at' => now()->subMonth(),
+            'first_completed_at' => now()->subWeeks(2),
+            'research_accepted_at' => now()->subWeek(),
+            'final_review_count' => 1,
         ]);
     }
 
     public function rejected(): static
     {
         return $this->state(fn (array $attributes) => [
-            'approval_stage' => 'rejected',
+            'status' => ResearchStatus::INITIAL_REJECTED,
             'submitted_at' => now(),
         ]);
     }

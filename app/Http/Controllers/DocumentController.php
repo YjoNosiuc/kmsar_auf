@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\ResearchStatus;
 use App\Models\Document;
 use App\Models\Research;
 use App\Models\User;
@@ -24,7 +25,7 @@ class DocumentController extends Controller
 
     public function store(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('update', $research);
+        $this->authorize('uploadDocuments', $research);
 
         if ($request->filled('external_link')) {
             $request->validate(['external_link' => ['required', 'url', 'max:2048']]);
@@ -69,7 +70,7 @@ class DocumentController extends Controller
         $research = $document->research;
         $this->authorize('update', $research);
 
-        abort_if($research->approval_stage !== 'draft', 403, __('Cannot delete documents after submission.'));
+        abort_if($research->status !== ResearchStatus::PROPOSAL, 403, __('Cannot delete documents after submission.'));
         abort_if((int) $document->uploaded_by !== (int) auth()->id(), 403);
 
         if ($document->disk_path && $this->researchAppDisk()->exists($document->disk_path)) {

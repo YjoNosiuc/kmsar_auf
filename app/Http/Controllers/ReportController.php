@@ -6,6 +6,7 @@ use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
 use App\Services\ReportGeneratorService;
+use App\Support\ResearchStatus;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -18,32 +19,28 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class ReportController extends Controller
 {
     private const STATUS_VALUES = [
-        'published_scopus',
-        'published_non_indexed',
-        'presented_external',
-        'presented_internal',
-        'patent_granted',
-        'patent_submitted',
-        'completed_unpublished',
+        'completed_not_presented_submitted',
+        'presented_conference_auf',
+        'presented_conference_outside_auf',
+        'published_non_scopus_wos',
+        'submitted_scopus_isi',
+        'accepted_scopus_isi',
+        'submitted_patent_ipophl',
+        'published_scopus_isi',
+        'granted_patent_ipophl',
         'ongoing',
         'proposal',
     ];
 
     private const CLASSIFICATION_VALUES = [
+        'student_thesis_dissertation',
+        'faculty_staff_thesis_dissertation',
         'self_funded',
+        'college_unit_department_initiated',
         'internally_funded',
         'externally_funded',
-        'thesis',
-        'thesis_dissertation',
-        'collaboration',
+        'creative_work',
         'other',
-    ];
-
-    private const APPROVAL_STAGE_VALUES = [
-        'dean_review',
-        'ovpri_review',
-        'approved',
-        'rejected',
     ];
 
     public function __construct(
@@ -91,10 +88,7 @@ class ReportController extends Controller
                 'reportStats' => [
                     'matching' => $totalCount,
                     'scopus' => $this->countWithExtraWhere($filters, false, null, function (Builder $q) {
-                        $q->where(function (Builder $inner) {
-                            $inner->where('is_scopus_indexed', true)
-                                ->orWhere('status', 'published_scopus');
-                        });
+                        $q->withOutcomeCodes(config('kmsar.scopus_outcome_code', 'published_scopus_isi'));
                     }),
                     'colleges_or_faculty' => $this->distinctCollegeCount($filters),
                 ],
@@ -139,8 +133,8 @@ class ReportController extends Controller
                 'collegeId' => $collegeId,
                 'reportStats' => [
                     'matching' => $totalCount,
-                    'published' => $this->countWithExtraWhere($filters, true, $collegeId, fn (Builder $q) => $q->whereIn('status', ['published_scopus', 'published_non_indexed'])),
-                    'presented' => $this->countWithExtraWhere($filters, true, $collegeId, fn (Builder $q) => $q->whereIn('status', ['presented_internal', 'presented_external'])),
+                    'published' => $this->countWithExtraWhere($filters, true, $collegeId, fn (Builder $q) => $q->withOutcomeCodes(config('kmsar.published_outcome_codes', []))),
+                    'presented' => $this->countWithExtraWhere($filters, true, $collegeId, fn (Builder $q) => $q->withOutcomeCodes(config('kmsar.presented_outcome_codes', []))),
                 ],
             ]);
         }
@@ -156,12 +150,12 @@ class ReportController extends Controller
             'report_type' => ['required', Rule::in(['ovpri', 'college'])],
             'format' => ['required', Rule::in(['pdf', 'excel'])],
             'college_id' => ['nullable', 'integer', 'exists:colleges,id'],
-            'registration_type' => ['nullable', Rule::in(['new', 'update'])],
+            'registration_type' => ['nullable', Rule::in(config('kmsar.registration_types', []))],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'research_classification' => ['nullable', Rule::in(self::CLASSIFICATION_VALUES)],
             'status' => ['nullable', Rule::in(self::STATUS_VALUES)],
-            'approval_stage' => ['nullable', Rule::in(self::APPROVAL_STAGE_VALUES)],
+            'workflow_status' => ['nullable', Rule::in(ResearchStatus::all())],
             'faculty' => ['nullable', 'integer', 'exists:users,id'],
             'sdg' => ['nullable', 'integer', 'between:1,17'],
             'funding_agency' => ['nullable', 'string', 'max:100'],
@@ -283,7 +277,7 @@ class ReportController extends Controller
         if (! empty($filters['registration_type'])) {
             $label = match ((string) $filters['registration_type']) {
                 'new' => __('New Registration'),
-                'update' => __('Update Existing Record'),
+                'existing' => __('Existing Research Record'),
                 default => (string) $filters['registration_type'],
             };
             $lines[] = __('Registration type: :t', ['t' => $label]);
@@ -294,7 +288,7 @@ class ReportController extends Controller
                 ? __('Start date from: :d', [
                     'd' => Carbon::parse($filters['date_from'])->format('F d, Y'),
                 ])
-                : __('OVPRI approved from: :d', [
+                : __('Research accepted from: :d', [
                     'd' => Carbon::parse($filters['date_from'])->format('F d, Y'),
                 ]);
         }
@@ -304,7 +298,7 @@ class ReportController extends Controller
                 ? __('Start date to: :d', [
                     'd' => Carbon::parse($filters['date_to'])->format('F d, Y'),
                 ])
-                : __('OVPRI approved to: :d', [
+                : __('Research accepted to: :d', [
                     'd' => Carbon::parse($filters['date_to'])->format('F d, Y'),
                 ]);
         }
@@ -321,9 +315,9 @@ class ReportController extends Controller
             ]);
         }
 
-        if (! empty($filters['approval_stage'])) {
-            $lines[] = __('Approval status: :s', [
-                's' => $this->approvalStageLabel((string) $filters['approval_stage']),
+        if (! empty($filters['workflow_status'])) {
+            $lines[] = __('Workflow status: :s', [
+                's' => ResearchStatus::label((string) $filters['workflow_status']),
             ]);
         }
 
@@ -343,9 +337,9 @@ class ReportController extends Controller
         }
 
         if (($filters['include_rejected'] ?? '0') !== '1') {
-            $lines[] = __('Rejected records: excluded');
+            $lines[] = __('Returned records: excluded (research accepted only)');
         } else {
-            $lines[] = __('Rejected records: included');
+            $lines[] = __('Returned records: included');
         }
 
         return $lines;
@@ -361,7 +355,7 @@ class ReportController extends Controller
             'date_to',
             'research_classification',
             'status',
-            'approval_stage',
+            'workflow_status',
             'sdg',
             'funding_agency',
             'include_rejected',
@@ -392,7 +386,12 @@ class ReportController extends Controller
             $filters['include_rejected'] = '0';
         }
 
-        if (($filters['approval_stage'] ?? null) === 'draft') {
+        if (($filters['workflow_status'] ?? null) === ResearchStatus::PROPOSAL) {
+            unset($filters['workflow_status']);
+        }
+
+        if (isset($filters['approval_stage']) && ! isset($filters['workflow_status'])) {
+            $filters['workflow_status'] = $filters['approval_stage'];
             unset($filters['approval_stage']);
         }
 
@@ -410,6 +409,7 @@ class ReportController extends Controller
             'motherCollege',
             'researchAuthors',
             'latestOvpriApproval',
+            'outcomeClassifications',
         ]);
 
         if ($collegeScoped && $scopedCollegeId !== null) {
@@ -429,21 +429,50 @@ class ReportController extends Controller
         $status = $filters['status'] ?? null;
         $includeRejected = ($filters['include_rejected'] ?? '0') === '1';
         $inProgressFilter = Research::isInProgressStatus($status);
+        $rejectedStatuses = [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED];
 
         if ($inProgressFilter) {
-            $query->where('status', $status)
-                ->where('approval_stage', '!=', 'draft');
+            if ($status === ResearchStatus::PROPOSAL) {
+                // Faculty drafts are excluded from institutional reports.
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where('status', $status);
 
-            if (! $includeRejected) {
-                $query->where('approval_stage', '!=', 'rejected');
+                if (! $includeRejected) {
+                    $query->whereNotIn('status', $rejectedStatuses);
+                }
+
+                $query->whereResearchRegisteredBetween(
+                    $filters['date_from'] ?? null,
+                    $filters['date_to'] ?? null
+                );
             }
-
-            $query->whereStartDateBetween($filters['date_from'] ?? null, $filters['date_to'] ?? null);
+        } elseif ($includeRejected) {
+            $query->where(function (Builder $outer) use ($filters) {
+                $outer->where(function (Builder $accepted) use ($filters) {
+                    $accepted->reportingAccepted()
+                        ->whereResearchAcceptedBetween(
+                            $filters['date_from'] ?? null,
+                            $filters['date_to'] ?? null
+                        );
+                })->orWhere(function (Builder $rejected) use ($filters) {
+                    $rejected->whereIn('status', $rejectedStatuses)
+                        ->whereHas('outcomeClassifications')
+                        ->whereFirstCompletedBetween(
+                            $filters['date_from'] ?? null,
+                            $filters['date_to'] ?? null
+                        );
+                });
+            });
         } else {
-            $query->whereOvpriApprovedBetween(
-                $filters['date_from'] ?? null,
-                $filters['date_to'] ?? null
-            );
+            $query->reportingAccepted();
+
+            if (filled($filters['date_from'] ?? null) || filled($filters['date_to'] ?? null)) {
+                $query->whereResearchAcceptedBetween(
+                    $filters['date_from'] ?? null,
+                    $filters['date_to'] ?? null
+                );
+            }
         }
 
         if (! empty($filters['research_classification'])) {
@@ -453,16 +482,15 @@ class ReportController extends Controller
         if ($inProgressFilter) {
             // Status and pipeline rules applied above.
         } elseif (! empty($status)) {
-            $query->where('status', $status)
-                ->where('approval_stage', '!=', 'draft');
-        } else {
-            $query->reportEligible($includeRejected);
+            if (in_array($status, config('kmsar.completed_statuses', []), true)) {
+                $query->whereHas('outcomeClassifications', fn (Builder $q) => $q->where('code', $status));
+            } else {
+                $query->where('status', $status);
+            }
         }
 
-        if (! empty($filters['approval_stage'])) {
-            $query->where('approval_stage', $filters['approval_stage']);
-        } elseif (! $includeRejected && ! $inProgressFilter) {
-            $query->where('approval_stage', '!=', 'rejected');
+        if (! empty($filters['workflow_status'])) {
+            $query->where('status', $filters['workflow_status']);
         }
 
         if (! empty($filters['sdg'])) {
@@ -496,18 +524,6 @@ class ReportController extends Controller
             ->whereNotNull('mother_college_id')
             ->distinct('mother_college_id')
             ->count('mother_college_id');
-    }
-
-    protected function approvalStageLabel(string $stage): string
-    {
-        return match ($stage) {
-            'draft' => __('Draft'),
-            'dean_review' => __('Dean review'),
-            'ovpri_review' => __('OVPRI review'),
-            'approved' => __('Approved'),
-            'rejected' => __('Rejected'),
-            default => ucwords(str_replace('_', ' ', $stage)),
-        };
     }
 
     public function download(Request $request, string $token): BinaryFileResponse

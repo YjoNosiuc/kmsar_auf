@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use App\Models\College;
 use App\Models\Document;
+use App\Models\OutcomeClassification;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
+use App\Support\ResearchStatus;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -55,6 +57,11 @@ function makeCdaic(): User
     return $user;
 }
 
+function seedOutcomeClassifications(): void
+{
+    (new \Database\Seeders\OutcomeClassificationSeeder)->run();
+}
+
 function makeDraftResearch(User $faculty, College $college): Research
 {
     Storage::fake('local');
@@ -62,8 +69,8 @@ function makeDraftResearch(User $faculty, College $college): Research
     $research = Research::factory()->create([
         'primary_author_id' => $faculty->id,
         'mother_college_id' => $college->id,
-        'approval_stage' => 'draft',
-        'status' => 'proposal',
+        'registration_type' => 'new',
+        'status' => ResearchStatus::PROPOSAL,
         'sdg_tags' => [1, 4],
         'expected_output' => ['publication'],
     ]);

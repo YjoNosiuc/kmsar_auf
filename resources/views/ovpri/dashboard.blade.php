@@ -27,7 +27,7 @@
         <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;">
             <div>
                 <label for="date_from" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
-                    {{ __('Date From') }}
+                    {{ __('Research accepted from') }}
                 </label>
                 <input type="date"
                        id="date_from"
@@ -38,7 +38,7 @@
             </div>
             <div>
                 <label for="date_to" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
-                    {{ __('Date To') }}
+                    {{ __('Research accepted to') }}
                 </label>
                 <input type="date"
                        id="date_to"
@@ -104,41 +104,18 @@
     </div>
 
     {{-- Section 3 — Research by college + SDG distribution --}}
-    <div style="display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px;">
+    <div class="kmsar-dashboard-chart-grid kmsar-dashboard-chart-grid--3-2">
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
                     <h2 class="kmsar-chart-title">{{ __('Research by College/Office') }}</h2>
-                    <p class="kmsar-chart-subtitle">{{ __('Total registered research by mother college') }}</p>
+                    <p class="kmsar-chart-subtitle">{{ __('Research accepted by mother college') }}</p>
                 </div>
             </div>
             <div class="kmsar-chart-body">
-                <div style="position:relative;height:280px;width:100%;">
+                <div class="kmsar-chart-canvas-wrap">
                     <canvas id="kmsarOvpriByCollege" aria-label="{{ __('Research by College/Office') }}"></canvas>
                 </div>
-                @php $collegeBreakdownRows = $collegeBreakdown ?? $researchByCollege; @endphp
-                @if (count($collegeBreakdownRows))
-                    <div class="kmsar-table-wrap mt-4" id="collegeBreakdownTable">
-                        <table class="kmsar-table">
-                            <thead>
-                                <tr>
-                                    <th>{{ __('College/Office') }}</th>
-                                    <th>{{ __('Research') }}</th>
-                                    <th>{{ __('%') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($collegeBreakdownRows as $item)
-                                    <tr data-college-code="{{ $item['code'] ?? $item['label'] }}">
-                                        <td class="kmsar-table-cell-title">{{ $item['code'] ?? $item['label'] }}</td>
-                                        <td>{{ number_format($item['count']) }}</td>
-                                        <td>{{ $item['percentage'] ?? 0 }}%</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endif
             </div>
         </div>
         <div class="kmsar-chart-card">
@@ -148,13 +125,47 @@
                     <p class="kmsar-chart-subtitle">{{ __('Most aligned Sustainable Development Goals') }}</p>
                 </div>
             </div>
-            <div class="kmsar-chart-body" style="padding:20px;">
-                <div style="position:relative;height:280px;width:100%;">
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--compact">
                     <canvas id="sdgChart" aria-label="{{ __('SDG Distribution') }}"></canvas>
                 </div>
             </div>
         </div>
     </div>
+
+    @php $collegeBreakdownRows = $collegeBreakdown ?? $researchByCollege; @endphp
+    @if (count($collegeBreakdownRows))
+        <div class="kmsar-chart-card" style="margin-bottom:16px;">
+            <div class="kmsar-chart-header">
+                <div>
+                    <h2 class="kmsar-chart-title">{{ __('College/Office breakdown') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Research accepted counts and share') }}</p>
+                </div>
+            </div>
+            <div class="kmsar-chart-body">
+                <div class="kmsar-table-wrap" id="collegeBreakdownTable">
+                    <table class="kmsar-table">
+                        <thead>
+                            <tr>
+                                <th>{{ __('College/Office') }}</th>
+                                <th>{{ __('Research') }}</th>
+                                <th>{{ __('%') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($collegeBreakdownRows as $item)
+                                <tr data-college-code="{{ $item['code'] ?? $item['label'] }}">
+                                    <td class="kmsar-table-cell-title">{{ $item['code'] ?? $item['label'] }}</td>
+                                    <td>{{ number_format($item['count']) }}</td>
+                                    <td>{{ $item['percentage'] ?? 0 }}%</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if (! empty($selectedCollege))
         <div class="kmsar-chart-card" style="margin-bottom:16px;">
@@ -197,8 +208,8 @@
     <div class="kmsar-chart-card" style="margin-bottom:16px;">
         <div class="kmsar-chart-header">
             <div>
-                <h2 class="kmsar-chart-title">{{ __('Submission trend — last 3 years') }}</h2>
-                <p class="kmsar-chart-subtitle">{{ __('Monthly research registrations excluding drafts') }}</p>
+                <h2 class="kmsar-chart-title">{{ __('Acceptance trend — last 3 years') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Monthly research accepted by OVPRI') }}</p>
             </div>
         </div>
         <div class="kmsar-chart-body">
@@ -216,14 +227,14 @@
             </div>
         </div>
         <div class="kmsar-chart-body">
-            <div style="position:relative;height:280px;width:100%;">
+            <div class="kmsar-chart-canvas-wrap">
                 <canvas id="engagedByCollegeChart" aria-label="{{ __('Faculty/Staff Engaged by College/Office') }}"></canvas>
             </div>
         </div>
     </div>
 
     {{-- Section 4 — Scopus/WoS, Presented, Classification --}}
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px;">
+    <div class="kmsar-dashboard-chart-grid kmsar-dashboard-chart-grid--3">
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
@@ -232,7 +243,7 @@
                 </div>
             </div>
             <div class="kmsar-chart-body">
-                <div style="position:relative;height:200px;width:100%;">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--short">
                     <canvas id="kmsarOvpriScopus" aria-label="{{ __('Scopus/WoS Indexed by College/Office') }}"></canvas>
                 </div>
             </div>
@@ -245,7 +256,7 @@
                 </div>
             </div>
             <div class="kmsar-chart-body">
-                <div style="position:relative;height:200px;width:100%;">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--short">
                     <canvas id="kmsarOvpriPresented" aria-label="{{ __('Presented research per college') }}"></canvas>
                 </div>
             </div>
@@ -257,8 +268,8 @@
                     <p class="kmsar-chart-subtitle">{{ __('Funding and type breakdown') }}</p>
                 </div>
             </div>
-            <div class="kmsar-chart-body" style="padding:12px;">
-                <div style="position:relative;height:200px;width:100%;">
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--short">
                     <canvas id="kmsarOvpriClassification" aria-label="{{ __('Research classification') }}"></canvas>
                 </div>
                 @if ($classificationBreakdown->count())
@@ -276,6 +287,34 @@
         </div>
     </div>
 
+    {{-- Agenda theme alignment (research accepted only) --}}
+    <div class="kmsar-chart-card" style="margin-bottom:16px;">
+        <div class="kmsar-chart-header">
+            <div>
+                <h2 class="kmsar-chart-title">{{ __('AUF Research Agenda theme alignment') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Accepted research aligned to institutional agenda themes') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--compact" style="max-width:520px;margin:0 auto;">
+                <canvas id="kmsarOvpriAgendaThemes" aria-label="{{ __('Agenda theme alignment') }}"></canvas>
+            </div>
+            @if (($agendaThemeBreakdown ?? collect())->sum('count') > 0)
+                <div class="kmsar-chart-legend" style="margin-top:12px;font-size:0.75rem;line-height:1.35;">
+                    @foreach ($agendaThemeBreakdown as $idx => $row)
+                        @if ($row['count'] > 0)
+                            <div class="kmsar-legend-item">
+                                <span class="kmsar-legend-dot" style="background:{{ ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#D97706', '#7C3AED'][$idx] ?? '#94A3B8' }};"></span>
+                                <span>{{ $row['label'] }}</span>
+                                <span class="kmsar-legend-value">{{ number_format($row['count']) }}</span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
+        </div>
+    </div>
+
     {{-- Workflow / approval status --}}
     <div class="kmsar-chart-card" style="margin-bottom:16px;">
         <div class="kmsar-chart-header">
@@ -285,7 +324,7 @@
             </div>
         </div>
         <div class="kmsar-chart-body">
-            <div style="position:relative;height:220px;width:100%;">
+            <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--short">
                 <canvas id="kmsarOvpriWorkflow" aria-label="{{ __('Research by Approval Stage') }}"></canvas>
             </div>
         </div>
@@ -300,9 +339,15 @@
                 return;
             }
 
-            const allCollegeRows = @json($researchByCollege->values());
-            const allScopusRows = @json($scopusByCollege->values());
-            const allPresentedRows = @json($presentedByCollege->values());
+            const allCollegeRows = @json($researchByCollege->values()).filter(function (row) {
+                return (row.count || 0) > 0;
+            });
+            const allScopusRows = @json($scopusByCollege->values()).filter(function (row) {
+                return (row.count || 0) > 0;
+            });
+            const allPresentedRows = @json($presentedByCollege->values()).filter(function (row) {
+                return (row.count || 0) > 0;
+            });
             const classificationLabels = @json($classificationBreakdown->pluck('label'));
             const classificationCounts = @json($classificationBreakdown->pluck('count'));
             const sdgLabels = @json($sdgDistribution->pluck('label')->values());
@@ -312,6 +357,9 @@
             const workflowCounts = @json($workflowStatus->pluck('count'));
             const submissionTrend = @json($submissionTrend ?? []);
             const engagedByCollege = @json(($engagedByCollege ?? collect())->values());
+            const agendaThemeLabels = @json(collect($agendaThemeBreakdown ?? [])->pluck('label'));
+            const agendaThemeCounts = @json(collect($agendaThemeBreakdown ?? [])->pluck('count'));
+            const agendaThemeColors = ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#D97706', '#7C3AED'];
 
             const primary = '#1E3A8A';
             const gold = '#D4AF37';
@@ -376,11 +424,12 @@
             const barOptionsShort = {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: { padding: 4 },
                 plugins: {
                     legend: { display: false },
                 },
                 scales: {
-                    y: { beginAtZero: true, ticks: { precision: 0 } },
+                    y: { beginAtZero: true, grace: '5%', ticks: { precision: 0, stepSize: 1 } },
                     x: { ticks: { maxRotation: 45, minRotation: 0 } },
                 },
             };
@@ -403,6 +452,7 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: { padding: 4 },
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
                             legend: { display: false },
@@ -420,7 +470,7 @@
                         },
                         scales: {
                             x: { stacked: false, ticks: { maxRotation: 45, minRotation: 0 } },
-                            y: { beginAtZero: true, ticks: { precision: 0 } },
+                            y: { beginAtZero: true, grace: '5%', ticks: { precision: 0, stepSize: 1 } },
                         },
                     },
                 });
@@ -496,7 +546,7 @@
                 scopusChart = new Chart(scopusEl, {
                     type: 'bar',
                     data: {
-                        labels: allCollegeRows.map((row) => row.label),
+                        labels: allScopusRows.map((row) => row.label),
                         datasets: [{
                             label: @json(__('Scopus/WoS Indexed')),
                             data: allScopusRows.map((row) => row.count),
@@ -515,7 +565,7 @@
                 presentedChart = new Chart(presentedEl, {
                     type: 'bar',
                     data: {
-                        labels: allCollegeRows.map((row) => row.label),
+                        labels: allPresentedRows.map((row) => row.label),
                         datasets: [{
                             label: @json(__('Presented')),
                             data: allPresentedRows.map((row) => row.count),
@@ -551,7 +601,31 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        cutout: '65%',
+                        layout: { padding: 8 },
+                        cutout: '62%',
+                        plugins: {
+                            legend: { display: false },
+                        },
+                    },
+                });
+            }
+
+            const agendaEl = document.getElementById('kmsarOvpriAgendaThemes');
+            if (agendaEl && agendaThemeCounts.some(function (n) { return n > 0; })) {
+                new Chart(agendaEl, {
+                    type: 'pie',
+                    data: {
+                        labels: agendaThemeLabels,
+                        datasets: [{
+                            data: agendaThemeCounts,
+                            backgroundColor: agendaThemeLabels.map(function (_, i) { return agendaThemeColors[i] ?? '#94A3B8'; }),
+                            borderWidth: 0,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        layout: { padding: 8 },
                         plugins: {
                             legend: { display: false },
                         },
@@ -566,7 +640,7 @@
                     data: {
                         labels: submissionTrend.map(function (row) { return row.label; }),
                         datasets: [{
-                            label: 'Research Submitted',
+                            label: 'Research Accepted',
                             data: submissionTrend.map(function (row) { return row.count; }),
                             borderColor: '#1E3A8A',
                             backgroundColor: 'rgba(30,58,138,0.1)',

@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ApprovalActionRequest;
 use App\Mail\ResearchApprovedDeanMail;
 use App\Mail\ResearchApprovedFacultyMail;
 use App\Mail\ResearchEndorsedFacultyMail;
 use App\Mail\ResearchEndorsedOvpriMail;
-use App\Mail\ResearchRejectedDeanMail;
-use App\Mail\ResearchRejectedFacultyMail;
 use App\Mail\ResearchReturnedByOvpriDeanMail;
 use App\Mail\ResearchReturnedByOvpriFacultyMail;
 use App\Mail\ResearchReturnedFacultyMail;
@@ -16,9 +15,9 @@ use App\Models\Research;
 use App\Models\User;
 use App\Notifications\ResearchApproved;
 use App\Notifications\ResearchApprovedDean;
-use App\Notifications\ResearchRejected;
-use App\Notifications\ResearchRejectedDean;
 use App\Services\ApprovalService;
+use App\Support\ResearchDeanRouting;
+use App\Support\ResearchStatus;
 use App\Support\SafeMail;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
@@ -38,22 +37,35 @@ class ApprovalController extends Controller
     {
         $user = $request->user();
         $isSuperAdmin = $user->hasRole('super_admin');
-        $collegeId = $user->college_id;
+        $cycleTab = $request->query('cycle', 'initial');
+        if (! in_array($cycleTab, ['initial', 'final'], true)) {
+            $cycleTab = 'initial';
+        }
 
+        $ovpriStatuses = $cycleTab === 'final'
+            ? [ResearchStatus::FINAL_OVPRI_REVIEW, ResearchStatus::RESEARCH_ACCEPTED]
+            : [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::ONGOING];
+
+        $rejectedStatus = $cycleTab === 'final'
+            ? ResearchStatus::FINAL_REJECTED
+            : ResearchStatus::INITIAL_REJECTED;
+
+        // Dean queue is scoped by mother_college_id (routing college), not the author's home college.
         $pending = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
-            ->when(! $isSuperAdmin, fn ($q) => $q->where('mother_college_id', $collegeId))
-            ->where('approval_stage', 'dean_review')
+            ->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications'])
+            ->when(! $isSuperAdmin, fn ($q) => $q->forDeanCollege($request->user()))
+            ->whereIn('status', [ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW])
             ->orderBy('submitted_at', 'asc')
             ->get();
 
         $endorsed = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
-            ->when(! $isSuperAdmin, fn ($q) => $q->where('mother_college_id', $collegeId))
-            ->whereIn('approval_stage', ['ovpri_review', 'approved'])
-            ->whereHas('approvals', function ($q) use ($request, $isSuperAdmin) {
+            ->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications'])
+            ->when(! $isSuperAdmin, fn ($q) => $q->forDeanCollege($request->user()))
+            ->whereIn('status', $ovpriStatuses)
+            ->whereHas('approvals', function ($q) use ($request, $isSuperAdmin, $cycleTab) {
                 $q->where('stage', 'dean')
-                    ->where('action', 'endorsed');
+                    ->where('action', 'endorsed')
+                    ->where('review_cycle', $cycleTab);
                 if (! $isSuperAdmin) {
                     $q->where('approver_id', $request->user()->id);
                 }
@@ -62,23 +74,20 @@ class ApprovalController extends Controller
             ->get();
 
         $returned = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
-            ->when(! $isSuperAdmin, fn ($q) => $q->where('mother_college_id', $collegeId))
-            ->where(function ($q) use ($request, $isSuperAdmin) {
-                // Dean returns/rejects OR OVPRI returns awaiting faculty revision (info only).
-                $q->whereHas('approvals', function ($inner) use ($request, $isSuperAdmin) {
-                    $inner->where('stage', 'dean')
-                        ->whereIn('action', ['returned', 'rejected']);
-                    if (! $isSuperAdmin) {
-                        $inner->where('approver_id', $request->user()->id);
-                    }
-                })->orWhere('approval_stage', 'returned_to_faculty');
+            ->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications'])
+            ->when(! $isSuperAdmin, fn ($q) => $q->forDeanCollege($request->user()))
+            ->where('status', $rejectedStatus)
+            ->whereHas('approvals', function ($q) use ($request, $isSuperAdmin, $cycleTab) {
+                $q->where('review_cycle', $cycleTab)
+                    ->where('action', 'returned');
+                if (! $isSuperAdmin) {
+                    $q->where('approver_id', $request->user()->id);
+                }
             })
-            ->whereNotIn('approval_stage', ['dean_review', 'ovpri_review', 'approved'])
             ->orderByDesc('updated_at')
             ->get();
 
-        return view('approval.queue', compact('pending', 'endorsed', 'returned'));
+        return view('approval.queue', compact('pending', 'endorsed', 'returned', 'cycleTab'));
     }
 
     public function review(Request $request, Research $research): View
@@ -86,7 +95,7 @@ class ApprovalController extends Controller
         $this->authorize('view', $research);
         $this->authorizeCollegeScope($request, $research);
 
-        $isActiveDeanQueue = $research->approval_stage === 'dean_review';
+        $isActiveDeanQueue = ResearchStatus::isDeanQueueStatus((string) $research->status);
         $hasDeanHistory = $research->approvals()
             ->where('approver_id', $request->user()->id)
             ->where('stage', 'dean')
@@ -103,6 +112,7 @@ class ApprovalController extends Controller
             'researchAuthors.college',
             'researchAuthors.program',
             'documents',
+            'outcomeClassifications',
             'approvals' => fn ($q) => $q->orderBy('created_at'),
             'approvals.approver',
         ]);
@@ -112,15 +122,13 @@ class ApprovalController extends Controller
         ]);
     }
 
-    public function endorse(Request $request, Research $research): RedirectResponse
+    public function endorse(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
         $this->authorize('view', $research);
-        abort_unless($research->approval_stage === 'dean_review', 403);
+        abort_unless(ResearchStatus::isDeanQueueStatus((string) $research->status), 403);
         $this->authorizeCollegeScope($request, $research);
 
-        $validated = $request->validate([
-            'remarks' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $this->approvalService->endorse($research, $request->user(), $validated['remarks'] ?? null);
 
@@ -149,23 +157,20 @@ class ApprovalController extends Controller
 
         $this->forgetResearchDashboardCaches($research);
 
+        $cycle = ResearchStatus::reviewCycle($research->status) ?? 'initial';
+
         return redirect()
-            ->route('approval.queue')
+            ->route('approval.queue', ['cycle' => $cycle === ResearchStatus::REVIEW_CYCLE_FINAL ? 'final' : 'initial'])
             ->with('success', __('Research has been endorsed and forwarded to OVPRI.'));
     }
 
-    /**
-     * Dean / unit head return-to-faculty (architecture: ApprovalController::return — PHP reserves "return").
-     */
-    public function returnSubmission(Request $request, Research $research): RedirectResponse
+    public function returnSubmission(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
         $this->authorize('view', $research);
-        abort_unless($research->approval_stage === 'dean_review', 403);
+        abort_unless(ResearchStatus::isDeanQueueStatus((string) $research->status), 403);
         $this->authorizeCollegeScope($request, $research);
 
-        $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:4', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $this->approvalService->return($research, $request->user(), $validated['remarks'], 'dean');
 
@@ -192,68 +197,11 @@ class ApprovalController extends Controller
 
         $this->forgetResearchDashboardCaches($research);
 
+        $cycle = ResearchStatus::reviewCycle($research->status) ?? ResearchStatus::REVIEW_CYCLE_INITIAL;
+
         return redirect()
-            ->route('approval.queue')
+            ->route('approval.queue', ['cycle' => $cycle === ResearchStatus::REVIEW_CYCLE_FINAL ? 'final' : 'initial'])
             ->with('success', __('Research has been returned to the author for revision.'));
-    }
-
-    public function reject(Request $request, Research $research): RedirectResponse
-    {
-        $this->authorize('view', $research);
-        abort_unless($research->approval_stage === 'dean_review', 403);
-        $this->authorizeCollegeScope($request, $research);
-
-        $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:1', 'max:5000'],
-        ]);
-
-        $this->approvalService->reject($research, $request->user(), $validated['remarks']);
-
-        $research->refresh();
-
-        $dean = User::whereHas('roles', function ($q) {
-            $q->where('name', 'college_dean');
-        })
-            ->where('college_id', $research->mother_college_id)
-            ->first();
-
-        if ($dean) {
-            $dean->notify(new ResearchRejectedDean($research));
-        }
-
-        $research->primaryAuthor?->notify(
-            new ResearchRejected($research, $validated['remarks'], 'dean')
-        );
-
-        $delay = 0;
-
-        if ($research->primaryAuthor?->email) {
-            SafeMail::send(
-                $research->primaryAuthor->email,
-                new ResearchRejectedFacultyMail($research, $validated['remarks']),
-                $delay
-            );
-            $delay += 2;
-        }
-
-        $research->loadMissing('researchAuthors');
-        $research->researchAuthors
-            ->where('is_primary', false)
-            ->filter(fn ($author) => filled($author->email))
-            ->each(function ($author) use ($research, $validated, &$delay) {
-                SafeMail::send(
-                    $author->email,
-                    new ResearchRejectedFacultyMail($research, $validated['remarks']),
-                    $delay
-                );
-                $delay += 2;
-            });
-
-        $this->forgetResearchDashboardCaches($research);
-
-        return redirect()
-            ->route('approval.queue')
-            ->with('success', __('Research submission has been rejected.'));
     }
 
     public function ovpriQueue(Request $request): View
@@ -262,6 +210,10 @@ class ApprovalController extends Controller
         $activeTab = in_array($request->query('tab'), ['pending', 'approved', 'returned'], true)
             ? $request->query('tab')
             : 'pending';
+        $cycleTab = $request->query('cycle', 'initial');
+        if (! in_array($cycleTab, ['initial', 'final'], true)) {
+            $cycleTab = 'initial';
+        }
 
         $colleges = College::query()
             ->where('is_active', true)
@@ -269,7 +221,7 @@ class ApprovalController extends Controller
             ->get();
 
         $baseQuery = function () use ($selectedCollege) {
-            $query = Research::query()->with(['motherCollege', 'primaryAuthor']);
+            $query = Research::query()->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications']);
 
             if ($selectedCollege !== null) {
                 $query->where('mother_college_id', $selectedCollege);
@@ -278,25 +230,32 @@ class ApprovalController extends Controller
             return $query;
         };
 
+        $approvedStatuses = $cycleTab === 'final'
+            ? [ResearchStatus::RESEARCH_ACCEPTED]
+            : [ResearchStatus::ONGOING];
+
+        // Pending: load both cycles — the queue view splits Initial/Final client-side.
         $pending = $baseQuery()
-            ->where('approval_stage', 'ovpri_review')
+            ->whereIn('status', [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW])
             ->orderByDesc('submitted_at')
             ->get();
 
         $approved = $baseQuery()
-            ->where('approval_stage', 'approved')
-            ->whereHas('approvals', function ($q) {
+            ->whereIn('status', $approvedStatuses)
+            ->whereHas('approvals', function ($q) use ($cycleTab) {
                 $q->where('stage', 'ovpri')
-                    ->where('action', 'approved');
+                    ->where('action', 'approved')
+                    ->where('review_cycle', $cycleTab);
             })
             ->orderByDesc('updated_at')
             ->get();
 
         $returned = $baseQuery()
-            ->whereNotIn('approval_stage', ['ovpri_review', 'approved'])
-            ->whereHas('approvals', function ($q) {
+            ->where('status', $cycleTab === 'final' ? ResearchStatus::FINAL_REJECTED : ResearchStatus::INITIAL_REJECTED)
+            ->whereHas('approvals', function ($q) use ($cycleTab) {
                 $q->where('stage', 'ovpri')
-                    ->whereIn('action', ['returned', 'rejected']);
+                    ->where('review_cycle', $cycleTab)
+                    ->where('action', 'returned');
             })
             ->orderByDesc('updated_at')
             ->get();
@@ -307,17 +266,16 @@ class ApprovalController extends Controller
             'returned',
             'colleges',
             'selectedCollege',
-            'activeTab'
+            'activeTab',
+            'cycleTab'
         ));
     }
 
-    public function approve(Request $request, Research $research): RedirectResponse
+    public function approve(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
         $this->authorizeOvpriStageAction($request, $research);
 
-        $validated = $request->validate([
-            'remarks' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $this->approvalService->approve($research, $request->user(), $validated['remarks'] ?? null);
 
@@ -357,18 +315,18 @@ class ApprovalController extends Controller
 
         $this->forgetResearchDashboardCaches($research);
 
+        $cycle = $research->status === ResearchStatus::RESEARCH_ACCEPTED ? 'final' : 'initial';
+
         return redirect()
-            ->route('ovpri.queue')
+            ->route('ovpri.queue', ['cycle' => $cycle, 'tab' => 'approved'])
             ->with('success', __('Research has been approved successfully.'));
     }
 
-    public function ovpriReturn(Request $request, Research $research): RedirectResponse
+    public function ovpriReturn(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
         $this->authorizeOvpriStageAction($request, $research);
 
-        $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:4', 'max:5000'],
-        ]);
+        $validated = $request->validated();
 
         $this->approvalService->return($research, $request->user(), $validated['remarks'], 'ovpri');
 
@@ -414,72 +372,11 @@ class ApprovalController extends Controller
 
         $this->forgetResearchDashboardCaches($research);
 
+        $cycle = ResearchStatus::reviewCycle($research->status) ?? ResearchStatus::REVIEW_CYCLE_INITIAL;
+
         return redirect()
-            ->route('ovpri.queue')
+            ->route('ovpri.queue', ['cycle' => $cycle === ResearchStatus::REVIEW_CYCLE_FINAL ? 'final' : 'initial', 'tab' => 'returned'])
             ->with('success', __('Research has been returned to the faculty for revision.'));
-    }
-
-    public function ovpriReject(Request $request, Research $research): RedirectResponse
-    {
-        $this->authorizeOvpriStageAction($request, $research);
-
-        $validated = $request->validate([
-            'remarks' => ['required', 'string', 'min:1', 'max:5000'],
-        ]);
-
-        $this->approvalService->reject($research, $request->user(), $validated['remarks']);
-
-        $research->refresh();
-
-        $dean = User::whereHas('roles', function ($q) {
-            $q->where('name', 'college_dean');
-        })
-            ->where('college_id', $research->mother_college_id)
-            ->first();
-
-        $delay = 0;
-
-        if ($dean) {
-            $dean->notify(new ResearchRejectedDean($research));
-            SafeMail::send(
-                $dean->email,
-                new ResearchRejectedDeanMail($research, $dean, $validated['remarks']),
-                $delay
-            );
-            $delay += 2;
-        }
-
-        $research->primaryAuthor?->notify(
-            new ResearchRejected($research, $validated['remarks'], 'ovpri')
-        );
-
-        if ($research->primaryAuthor?->email) {
-            SafeMail::send(
-                $research->primaryAuthor->email,
-                new ResearchRejectedFacultyMail($research, $validated['remarks']),
-                $delay
-            );
-            $delay += 2;
-        }
-
-        $research->loadMissing('researchAuthors');
-        $research->researchAuthors
-            ->where('is_primary', false)
-            ->filter(fn ($author) => filled($author->email))
-            ->each(function ($author) use ($research, $validated, &$delay) {
-                SafeMail::send(
-                    $author->email,
-                    new ResearchRejectedFacultyMail($research, $validated['remarks']),
-                    $delay
-                );
-                $delay += 2;
-            });
-
-        $this->forgetResearchDashboardCaches($research);
-
-        return redirect()
-            ->route('ovpri.queue')
-            ->with('success', __('Research submission has been rejected.'));
     }
 
     private function forgetResearchDashboardCaches(Research $research): void
@@ -501,7 +398,7 @@ class ApprovalController extends Controller
         Cache::forget('sdg_counts_all');
         Cache::forget('sdg_counts_all_all');
 
-        foreach ($this->deanUserIdsForCollege((int) $research->mother_college_id) as $id) {
+        foreach (ResearchDeanRouting::deanUserIdsFor($research) as $id) {
             foreach ([now(), now()->subDay()] as $day) {
                 $dayKey = $day->format('Y-m-d');
                 Cache::forget('dean_stats_v2_'.$id.'_all_all_'.$dayKey);
@@ -511,10 +408,6 @@ class ApprovalController extends Controller
         }
     }
 
-    /**
-     * Dean / unit head act only on their own college. Super admins are university-wide
-     * and carry no college_id, so they are not college-scoped.
-     */
     private function authorizeCollegeScope(Request $request, Research $research): void
     {
         $user = $request->user();
@@ -524,15 +417,12 @@ class ApprovalController extends Controller
         }
 
         abort_unless(
-            (int) $research->mother_college_id === (int) $user->college_id,
+            ResearchDeanRouting::deanMayActOnResearch($user, $research),
             403,
             __('You may only act on research for your college.')
         );
     }
 
-    /**
-     * OVPRI and CDAIC admins may approve, return, or reject any research in ovpri_review.
-     */
     private function authorizeOvpriStageAction(Request $request, Research $research): void
     {
         $user = $request->user();
@@ -543,18 +433,6 @@ class ApprovalController extends Controller
             __('You are not authorized to perform this action.')
         );
 
-        abort_unless($research->approval_stage === 'ovpri_review', 403);
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function deanUserIdsForCollege(int $collegeId): array
-    {
-        return User::query()
-            ->where('college_id', $collegeId)
-            ->whereHas('roles', fn ($q) => $q->whereIn('name', ['college_dean', 'unit_head']))
-            ->pluck('id')
-            ->all();
+        abort_unless(ResearchStatus::isOvpriQueueStatus((string) $research->status), 403);
     }
 }

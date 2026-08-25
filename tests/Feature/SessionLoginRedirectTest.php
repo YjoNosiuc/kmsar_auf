@@ -51,4 +51,31 @@ describe('Login redirect and session keep-alive', function () {
             ->assertJsonPath('ok', true)
             ->assertJsonStructure(['ok', 'csrf']);
     });
+
+    it('serves a fresh csrf token on the login page and csrf endpoint', function () {
+        $loginPage = $this->get(route('login'))->assertOk();
+
+        preg_match('/name="_token" value="([^"]+)"/', $loginPage->getContent(), $matches);
+        expect($matches[1] ?? '')->not->toBe('');
+
+        $csrfResponse = $this->getJson(route('login.csrf'))
+            ->assertOk()
+            ->assertJsonStructure(['csrf']);
+
+        expect($csrfResponse->json('csrf'))->not->toBe('');
+    });
+
+    it('accepts login when csrf token matches the current session', function () {
+        $faculty = makeFaculty(makeCollege());
+
+        $loginPage = $this->get(route('login'))->assertOk();
+        preg_match('/name="_token" value="([^"]+)"/', $loginPage->getContent(), $matches);
+        $token = $matches[1] ?? '';
+
+        $this->post('/login', [
+            '_token' => $token,
+            'login' => $faculty->email,
+            'password' => 'password',
+        ])->assertRedirect(route('research.index'));
+    });
 });

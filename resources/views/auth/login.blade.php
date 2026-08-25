@@ -163,17 +163,17 @@
                 @csrf
 
                 <div class="kmsar-form-group">
-                    <label class="kmsar-form-label" for="login">Employee number or email</label>
+                    <label class="kmsar-form-label" for="login">{{ __('Email address') }}</label>
                     <input
                         id="login"
-                        type="text"
+                        type="email"
                         name="login"
                         value="{{ old('login') }}"
                         class="kmsar-input"
                         autocomplete="username"
                         required
                         autofocus
-                        placeholder="e.g. AUF-2024-0001 or email@yopmail.com"
+                        placeholder="email@yopmail.com"
                     >
                 </div>
 
@@ -222,12 +222,57 @@
 
 @push('scripts')
 <script>
-    // If the login page is restored from bfcache, reload so the CSRF token matches the session.
-    window.addEventListener('pageshow', function (event) {
-        if (event.persisted) {
-            window.location.reload();
+    (function () {
+        const form = document.querySelector('form[method="POST"]');
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        const csrfUrl = @json(route('login.csrf'));
+
+        function syncCsrf(token) {
+            if (! token) {
+                return;
+            }
+            if (meta) {
+                meta.setAttribute('content', token);
+            }
+            const input = form?.querySelector('input[name="_token"]');
+            if (input) {
+                input.value = token;
+            }
         }
-    });
+
+        async function refreshCsrf() {
+            try {
+                const response = await fetch(csrfUrl, {
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' },
+                });
+                if (! response.ok) {
+                    return;
+                }
+                const data = await response.json();
+                syncCsrf(data.csrf);
+            } catch (error) {
+                // Ignore network errors; form still uses the server-rendered token.
+            }
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') {
+                refreshCsrf();
+            }
+        });
+
+        form?.addEventListener('submit', function () {
+            syncCsrf(meta?.getAttribute('content'));
+        });
+
+        // If the login page is restored from bfcache, reload so the CSRF token matches the session.
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
+    })();
 </script>
 @endpush
 @endsection

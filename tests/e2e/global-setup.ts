@@ -1,9 +1,9 @@
 import { FullConfig } from '@playwright/test';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { credentials, refreshAuthStates } from './helpers/auth';
-import { runTinker } from './helpers/db';
+import { e2eCliEnv, runTinker } from './helpers/db';
 import { releaseSuiteLock } from './helpers/db-lock';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -16,15 +16,17 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   }
 
   console.log('Running global database reset...');
-  execSync('php artisan migrate:fresh --seed --force', {
+  execFileSync('php', ['artisan', 'migrate:fresh', '--seed', '--force'], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit',
     timeout: 120_000,
+    env: e2eCliEnv(),
   });
-  execSync('php artisan cache:clear', {
+  execFileSync('php', ['artisan', 'cache:clear'], {
     cwd: PROJECT_ROOT,
     stdio: 'inherit',
     timeout: 60_000,
+    env: e2eCliEnv(),
   });
   console.log('Database ready');
 

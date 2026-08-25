@@ -3,12 +3,9 @@
 namespace App\Notifications;
 
 use App\Models\Research;
-use Illuminate\Bus\Queueable;
-use Illuminate\Notifications\Notification;
 
-class ResearchRejected extends Notification
+class ResearchRejected extends QueuedResearchNotification
 {
-    use Queueable;
     use SendsResearchNotificationMail;
 
     public function __construct(
@@ -24,10 +21,7 @@ class ResearchRejected extends Notification
             ? 'OVPRI'
             : 'your college dean';
 
-        return [
-            'research_id' => $this->research->id,
-            'reference_number' => $this->research->reference_number,
-            'title' => $this->research->title,
+        return $this->baseResearchPayload($this->research, [
             'message' => 'Your research '
                 .$this->research->reference_number
                 .' has been rejected by '
@@ -38,6 +32,6 @@ class ResearchRejected extends Notification
             'rejected_by' => $this->rejectedBy,
             'action_url' => route('research.show', $this->research),
             'type' => 'rejected',
-        ];
+        ]);
     }
 }

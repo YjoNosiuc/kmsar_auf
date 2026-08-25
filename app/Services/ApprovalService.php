@@ -3,15 +3,23 @@
 namespace App\Services;
 
 use App\Jobs\SendNotificationJob;
+use App\Mail\ResearchSubmittedDeanMail;
+use App\Mail\ResearchSubmittedFacultyMail;
 use App\Models\Approval;
 use App\Models\AuditLog;
 use App\Models\College;
+use App\Models\OutcomeClassification;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
 use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
 use App\Notifications\ResearchReturned;
+use App\Notifications\ResearchSubmissionConfirmed;
+use App\Notifications\ResearchSubmitted;
+use App\Support\ResearchDeanRouting;
+use App\Support\ResearchStatus;
+use App\Support\SafeMail;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -33,18 +41,18 @@ class ApprovalService
     }
 
     /**
-     * @param  array{search?: string|null, approval_stage?: string|null, status?: string|null}  $filters
+     * @param  array{search?: string|null, status?: string|null, review_cycle?: string|null}  $filters
      */
     public function paginateResearchForUser(User $user, int $perPage = 15, array $filters = []): LengthAwarePaginator
     {
         $query = Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
+            ->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications'])
             ->latest();
 
         if ($user->hasRole('registrar')) {
-            $query->where('approval_stage', 'approved');
+            $query->where('status', ResearchStatus::RESEARCH_ACCEPTED);
         } elseif ($user->can('research.view_all')) {
-            // university-wide (OVPRI/CDAIC/super_admin when permitted)
+            // university-wide
         } elseif ($user->can('research.view_college')) {
             $query->where('mother_college_id', $user->college_id);
         } elseif ($user->can('research.view_own')) {
@@ -65,14 +73,16 @@ class ApprovalService
             });
         }
 
-        $stage = trim((string) ($filters['approval_stage'] ?? ''));
-        if ($stage !== '') {
-            $query->where('approval_stage', $stage);
-        }
-
         $status = trim((string) ($filters['status'] ?? ''));
         if ($status !== '') {
             $query->where('status', $status);
+        }
+
+        $cycle = trim((string) ($filters['review_cycle'] ?? ''));
+        if ($cycle === ResearchStatus::REVIEW_CYCLE_INITIAL) {
+            $query->whereIn('status', ResearchStatus::initialReviewStatuses());
+        } elseif ($cycle === ResearchStatus::REVIEW_CYCLE_FINAL) {
+            $query->whereIn('status', ResearchStatus::finalReviewStatuses());
         }
 
         return $query->paginate($perPage)->withQueryString();
@@ -81,22 +91,20 @@ class ApprovalService
     public function paginateAllResearch(
         int $perPage = 20,
         ?string $college = null,
-        ?string $stage = null,
         ?string $status = null,
+        ?string $reviewCycle = null,
     ): LengthAwarePaginator {
         return Research::query()
-            ->with(['motherCollege', 'primaryAuthor'])
-            ->whereNotIn('approval_stage', ['draft'])
+            ->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications'])
             ->when($college, fn ($q) => $q->where('mother_college_id', $college))
-            ->when($stage, fn ($q) => $q->where('approval_stage', $stage))
+            ->when($reviewCycle === ResearchStatus::REVIEW_CYCLE_INITIAL, fn ($q) => $q->whereIn('status', ResearchStatus::initialReviewStatuses()))
+            ->when($reviewCycle === ResearchStatus::REVIEW_CYCLE_FINAL, fn ($q) => $q->whereIn('status', ResearchStatus::finalReviewStatuses()))
             ->when($status, fn ($q) => $q->where('status', $status))
+            ->when(! $status && ! $reviewCycle, fn ($q) => $q->where('status', ResearchStatus::RESEARCH_ACCEPTED))
             ->latest()
             ->paginate($perPage);
     }
 
-    /**
-     * Case-insensitive title uniqueness across all research (excludes soft-deleted rows).
-     */
     public function duplicateTitleExists(string $title, ?int $excludeResearchId = null): bool
     {
         $normalizedTitle = strtolower(trim($title));
@@ -117,6 +125,12 @@ class ApprovalService
 
     public function createDraftAfterRegistrationType(User $user, string $registrationType): Research
     {
+        if (! in_array($registrationType, config('kmsar.registration_types', []), true)) {
+            throw ValidationException::withMessages([
+                'registration_type' => [__('Invalid registration type.')],
+            ]);
+        }
+
         $collegeId = $user->college_id;
 
         if ($collegeId === null) {
@@ -145,9 +159,9 @@ class ApprovalService
                 'expected_output_other' => null,
                 'start_date' => now()->toDateString(),
                 'estimated_completion_date' => now()->addYear()->toDateString(),
-                'status' => 'proposal',
-                'approval_stage' => 'draft',
+                'status' => ResearchStatus::PROPOSAL,
                 'revision_count' => 0,
+                'final_review_count' => 0,
                 'is_scopus_indexed' => false,
             ]);
         });
@@ -230,15 +244,17 @@ class ApprovalService
                     (int) $data['mother_college_id'],
                 ),
                 'research_classification' => $data['research_classification'],
+                'research_classification_other' => $data['research_classification_other'] ?? null,
                 'funding_agency' => $data['funding_agency'] ?? null,
                 'sdg_tags' => $data['sdg_tags'] ?? [],
+                'agenda_themes' => $data['agenda_themes'] ?? [],
                 'expected_output' => $data['expected_output'],
                 'expected_output_other' => $data['expected_output_other'] ?? null,
                 'start_date' => $data['start_date'],
                 'estimated_completion_date' => $data['estimated_completion_date'],
-                'status' => $data['status'] ?? 'proposal',
-                'approval_stage' => 'draft',
+                'status' => ResearchStatus::PROPOSAL,
                 'revision_count' => 0,
+                'final_review_count' => 0,
                 'is_scopus_indexed' => false,
             ]);
         });
@@ -249,6 +265,12 @@ class ApprovalService
      */
     public function updateResearch(Research $research, array $data): void
     {
+        if (! ResearchStatus::isFullyEditable((string) $research->status)) {
+            throw ValidationException::withMessages([
+                'status' => [__('Registration details cannot be edited at this stage.')],
+            ]);
+        }
+
         if ($this->duplicateTitleExists((string) $data['title'], $research->id)) {
             throw ValidationException::withMessages([
                 'title' => [self::DUPLICATE_TITLE_MESSAGE],
@@ -256,7 +278,6 @@ class ApprovalService
         }
 
         $research->update([
-            'registration_type' => $data['registration_type'],
             'title' => $data['title'],
             'mother_college_id' => $data['mother_college_id'],
             'other_college_id' => $this->normalizeOtherCollegeIds(
@@ -264,19 +285,37 @@ class ApprovalService
                 (int) $data['mother_college_id'],
             ),
             'research_classification' => $data['research_classification'],
+            'research_classification_other' => $data['research_classification_other'] ?? null,
             'funding_agency' => $data['funding_agency'] ?? null,
             'sdg_tags' => $data['sdg_tags'] ?? [],
+            'agenda_themes' => $data['agenda_themes'] ?? [],
             'expected_output' => $data['expected_output'],
             'expected_output_other' => $data['expected_output_other'] ?? null,
             'start_date' => $data['start_date'],
             'estimated_completion_date' => $data['estimated_completion_date'],
-            'status' => $data['status'] ?? $research->status,
         ]);
     }
 
     /**
-     * [draft] ──submit()──► [dean_review] (KMSAR §8).
+     * @param  list<string>  $codes
      */
+    public function syncOutcomeClassifications(Research $research, array $codes): void
+    {
+        $ids = OutcomeClassification::query()
+            ->whereIn('code', $codes)
+            ->where('is_active', true)
+            ->pluck('id')
+            ->all();
+
+        if (count($ids) !== count(array_unique($codes))) {
+            throw ValidationException::withMessages([
+                'outcome_classifications' => [__('One or more outcome classifications are invalid.')],
+            ]);
+        }
+
+        $research->outcomeClassifications()->sync($ids);
+    }
+
     public function submit(Research $research, User $actor): void
     {
         $researchId = (int) $research->getKey();
@@ -284,9 +323,9 @@ class ApprovalService
         DB::transaction(function () use ($researchId, $actor) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
 
-            if ($locked->approval_stage !== 'draft') {
+            if ($locked->status !== ResearchStatus::PROPOSAL) {
                 throw ValidationException::withMessages([
-                    'approval_stage' => [__('Research must be in draft to submit for review.')],
+                    'status' => [__('Research must be in proposal stage to submit.')],
                 ]);
             }
 
@@ -296,59 +335,143 @@ class ApprovalService
                 ]);
             }
 
-            $oldStage = $locked->approval_stage;
-            $locked->update(['approval_stage' => 'dean_review']);
+            $oldStatus = $locked->status;
+
+            if ($locked->registration_type === 'existing') {
+                $now = now();
+                $locked->update([
+                    'status' => ResearchStatus::ONGOING,
+                    'submitted_at' => $now,
+                    'research_registered_at' => $now,
+                ]);
+
+                $this->writeAuditLog($actor, $locked, 'research.submitted', [
+                    'status' => $oldStatus,
+                ], [
+                    'status' => ResearchStatus::ONGOING,
+                    'registration_type' => 'existing',
+                    'review_cycle' => null,
+                ]);
+
+                return;
+            }
+
+            $locked->update([
+                'status' => ResearchStatus::INITIAL_DEAN_REVIEW,
+                'submitted_at' => now(),
+            ]);
 
             $this->writeAuditLog($actor, $locked, 'research.submitted', [
-                'approval_stage' => $oldStage,
+                'status' => $oldStatus,
             ], [
-                'approval_stage' => 'dean_review',
+                'status' => ResearchStatus::INITIAL_DEAN_REVIEW,
+                'registration_type' => 'new',
+                'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
             ]);
         });
 
-        SendNotificationJob::dispatch($researchId, 'submitted');
+        $fresh = Research::query()
+            ->with(['primaryAuthor', 'researchAuthors'])
+            ->findOrFail($researchId);
+
+        if ($fresh->registration_type === 'existing') {
+            return;
+        }
+
+        foreach (ResearchDeanRouting::deanUsersFor($fresh) as $dean) {
+            $dean->notify(new ResearchSubmitted($fresh));
+        }
+
+        $fresh->primaryAuthor?->notify(new ResearchSubmissionConfirmed($fresh));
+
+        $primaryDean = ResearchDeanRouting::primaryDeanFor($fresh);
+        if ($primaryDean?->email) {
+            SafeMail::send(
+                $primaryDean->email,
+                new ResearchSubmittedDeanMail($fresh, $primaryDean),
+                0
+            );
+        }
+
+        if ($fresh->primaryAuthor?->email) {
+            SafeMail::send(
+                $fresh->primaryAuthor->email,
+                new ResearchSubmittedFacultyMail($fresh),
+                0
+            );
+        }
+
+        $delay = 2;
+        $fresh->researchAuthors
+            ->where('is_primary', false)
+            ->filter(fn ($author) => filled($author->email))
+            ->each(function ($author) use ($fresh, &$delay) {
+                SafeMail::send(
+                    $author->email,
+                    new ResearchSubmittedFacultyMail($fresh),
+                    $delay
+                );
+                $delay += 2;
+            });
     }
 
-    /**
-     * [dean_review] ──endorse()──► [ovpri_review] (KMSAR §8).
-     */
     public function endorse(Research $research, User $dean, ?string $remarks = null): void
     {
         $researchId = (int) $research->getKey();
 
         DB::transaction(function () use ($researchId, $dean, $remarks) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
+            $cycle = ResearchStatus::reviewCycle($locked->status);
 
-            if ($locked->approval_stage !== 'dean_review') {
-                throw ValidationException::withMessages([
-                    'approval_stage' => [__('Research must be awaiting dean review to endorse.')],
+            if ($locked->status === ResearchStatus::INITIAL_DEAN_REVIEW) {
+                $this->assertDeanMayActOnResearch($dean, $locked);
+                $this->assertDeanPermission($dean);
+
+                $this->createApproval($locked, $dean, 'dean', ResearchStatus::REVIEW_CYCLE_INITIAL, 'endorsed', $remarks);
+
+                $oldStatus = $locked->status;
+                $locked->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW]);
+
+                $this->writeAuditLog($dean, $locked, 'approval.initial.endorsed', [
+                    'status' => $oldStatus,
+                ], [
+                    'status' => ResearchStatus::INITIAL_OVPRI_REVIEW,
+                    'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
                 ]);
+
+                return;
             }
 
-            $this->assertDeanMayActOnResearch($dean, $locked);
+            if ($locked->status === ResearchStatus::FINAL_DEAN_REVIEW) {
+                $this->assertDeanMayActOnResearch($dean, $locked);
+                $this->assertDeanPermission($dean);
 
-            if (! $dean->can('approval.endorse')) {
-                throw ValidationException::withMessages([
-                    'user' => [__('You are not allowed to endorse research.')],
+                $this->createApproval(
+                    $locked,
+                    $dean,
+                    'dean',
+                    ResearchStatus::REVIEW_CYCLE_FINAL,
+                    'endorsed',
+                    $remarks,
+                    (int) $locked->final_review_count,
+                );
+
+                $oldStatus = $locked->status;
+                $locked->update(['status' => ResearchStatus::FINAL_OVPRI_REVIEW]);
+
+                $this->writeAuditLog($dean, $locked, 'approval.final.endorsed', [
+                    'status' => $oldStatus,
+                ], [
+                    'status' => ResearchStatus::FINAL_OVPRI_REVIEW,
+                    'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+                    'final_review_count' => $locked->final_review_count,
                 ]);
+
+                return;
             }
 
-            Approval::query()->create([
-                'research_id' => $locked->id,
-                'approver_id' => $dean->id,
-                'stage' => 'dean',
-                'action' => 'endorsed',
-                'remarks' => $this->normalizeOptionalRemarks($remarks),
-                'acted_at' => now(),
-            ]);
-
-            $oldStage = $locked->approval_stage;
-            $locked->update(['approval_stage' => 'ovpri_review']);
-
-            $this->writeAuditLog($dean, $locked, 'approval.endorsed', [
-                'approval_stage' => $oldStage,
-            ], [
-                'approval_stage' => 'ovpri_review',
+            throw ValidationException::withMessages([
+                'status' => [__('Research must be awaiting dean review to endorse.')],
             ]);
         });
 
@@ -361,9 +484,6 @@ class ApprovalService
             ->each(fn (User $admin) => $admin->notify(new ResearchEndorsedToOvpri($fresh)));
     }
 
-    /**
-     * [ovpri_review] ──approve()──► [approved] (KMSAR §8).
-     */
     public function approve(Research $research, User $ovpri, ?string $remarks = null): void
     {
         $researchId = (int) $research->getKey();
@@ -371,46 +491,256 @@ class ApprovalService
         DB::transaction(function () use ($researchId, $ovpri, $remarks) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
 
-            if ($locked->approval_stage !== 'ovpri_review') {
-                throw ValidationException::withMessages([
-                    'approval_stage' => [__('Research must be awaiting OVPRI review to approve.')],
-                ]);
-            }
-
             if (! $ovpri->can('approval.approve')) {
                 throw ValidationException::withMessages([
                     'user' => [__('You are not allowed to approve research at this stage.')],
                 ]);
             }
 
-            Approval::query()->create([
-                'research_id' => $locked->id,
-                'approver_id' => $ovpri->id,
-                'stage' => 'ovpri',
-                'action' => 'approved',
-                'remarks' => $this->normalizeOptionalRemarks($remarks),
-                'acted_at' => now(),
-            ]);
+            if ($locked->status === ResearchStatus::INITIAL_OVPRI_REVIEW) {
+                $this->createApproval($locked, $ovpri, 'ovpri', ResearchStatus::REVIEW_CYCLE_INITIAL, 'approved', $remarks);
 
-            $oldStage = $locked->approval_stage;
-            $locked->update(['approval_stage' => 'approved']);
+                $now = now();
+                $oldStatus = $locked->status;
+                $locked->update([
+                    'status' => ResearchStatus::ONGOING,
+                    'research_registered_at' => $now,
+                ]);
 
-            $this->writeAuditLog($ovpri, $locked, 'approval.approved', [
-                'approval_stage' => $oldStage,
-            ], [
-                'approval_stage' => 'approved',
+                $this->writeAuditLog($ovpri, $locked, 'approval.initial.approved', [
+                    'status' => $oldStatus,
+                ], [
+                    'status' => ResearchStatus::ONGOING,
+                    'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
+                    'research_registered_at' => $now->toIso8601String(),
+                ]);
+
+                return;
+            }
+
+            if ($locked->status === ResearchStatus::FINAL_OVPRI_REVIEW) {
+                $this->createApproval(
+                    $locked,
+                    $ovpri,
+                    'ovpri',
+                    ResearchStatus::REVIEW_CYCLE_FINAL,
+                    'approved',
+                    $remarks,
+                    (int) $locked->final_review_count,
+                );
+
+                $now = now();
+                $oldStatus = $locked->status;
+                $locked->update([
+                    'status' => ResearchStatus::RESEARCH_ACCEPTED,
+                    'research_accepted_at' => $now,
+                ]);
+
+                $this->writeAuditLog($ovpri, $locked, 'approval.final.approved', [
+                    'status' => $oldStatus,
+                ], [
+                    'status' => ResearchStatus::RESEARCH_ACCEPTED,
+                    'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+                    'final_review_count' => $locked->final_review_count,
+                    'research_accepted_at' => $now->toIso8601String(),
+                ]);
+
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'status' => [__('Research must be awaiting OVPRI review to approve.')],
             ]);
         });
 
         SendNotificationJob::dispatch($researchId, 'approved');
     }
 
-    /**
-     * [dean_review] ──return(dean)──► [draft]
-     * [ovpri_review] ──return(ovpri)──► [returned_to_faculty]
-     */
     public function return(Research $research, User $actor, string $remarks, string $stage = 'dean'): void
     {
+        $this->sendBack($research, $actor, $remarks, $stage, 'returned');
+    }
+
+    public function resubmitInitial(Research $research, User $actor): void
+    {
+        $researchId = (int) $research->getKey();
+
+        DB::transaction(function () use ($researchId, $actor) {
+            $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
+
+            if ($locked->status !== ResearchStatus::INITIAL_REJECTED) {
+                throw ValidationException::withMessages([
+                    'status' => [__('Only initial-review returned research can be resubmitted from registration.')],
+                ]);
+            }
+
+            $oldStatus = $locked->status;
+            $locked->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW]);
+
+            $this->writeAuditLog($actor, $locked, 'research.initial.resubmitted', [
+                'status' => $oldStatus,
+            ], [
+                'status' => ResearchStatus::INITIAL_DEAN_REVIEW,
+                'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
+            ]);
+        });
+
+        SendNotificationJob::dispatch($researchId, 'resubmitted');
+    }
+
+    public function resubmitFinal(Research $research, User $actor, array $classificationCodes, ?string $remarks = null): void
+    {
+        $researchId = (int) $research->getKey();
+
+        DB::transaction(function () use ($researchId, $actor, $classificationCodes, $remarks) {
+            $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
+
+            if ($locked->status !== ResearchStatus::FINAL_REJECTED) {
+                throw ValidationException::withMessages([
+                    'status' => [__('Only final-review returned research can be resubmitted for outcome review.')],
+                ]);
+            }
+
+            $this->advanceCompletionToFinalReview(
+                $locked,
+                $actor,
+                $classificationCodes,
+                ResearchStatus::FINAL_REJECTED,
+                $remarks,
+                incrementFinalReviewCount: false,
+                completionAuditAction: 'research.final.resubmitted',
+            );
+        });
+
+        SendNotificationJob::dispatch($researchId, 'resubmitted');
+    }
+
+    /**
+     * @param  list<string>  $classificationCodes
+     */
+    public function submitCompletion(Research $research, User $actor, array $classificationCodes, ?string $remarks = null): void
+    {
+        $researchId = (int) $research->getKey();
+
+        DB::transaction(function () use ($researchId, $actor, $classificationCodes, $remarks) {
+            $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
+
+            if (! ResearchStatus::canSubmitCompletion($locked->status)) {
+                throw ValidationException::withMessages([
+                    'status' => [__('Completion can only be submitted from ongoing or accepted research.')],
+                ]);
+            }
+
+            $this->advanceCompletionToFinalReview(
+                $locked,
+                $actor,
+                $classificationCodes,
+                (string) $locked->status,
+                $remarks,
+                incrementFinalReviewCount: true,
+                completionAuditAction: 'research.completion_submitted',
+            );
+        });
+
+        SendNotificationJob::dispatch($researchId, 'completion_submitted');
+    }
+
+    /**
+     * Sync outcomes, persist research_completed (audit-visible), then advance to final_dean_review.
+     *
+     * @param  list<string>  $classificationCodes
+     */
+    private function advanceCompletionToFinalReview(
+        Research $locked,
+        User $actor,
+        array $classificationCodes,
+        string $sourceStatus,
+        ?string $remarks,
+        bool $incrementFinalReviewCount,
+        string $completionAuditAction,
+    ): void {
+        ResearchStatus::assertTransition($sourceStatus, ResearchStatus::RESEARCH_COMPLETED);
+
+        $this->syncOutcomeClassifications($locked, $classificationCodes);
+
+        $countBefore = (int) $locked->final_review_count;
+        $iteration = $incrementFinalReviewCount ? $countBefore + 1 : $countBefore;
+
+        $researchCompletedPayload = ['status' => ResearchStatus::RESEARCH_COMPLETED];
+        if ($locked->first_completed_at === null) {
+            $researchCompletedPayload['first_completed_at'] = now();
+        }
+
+        $locked->update($researchCompletedPayload);
+
+        $this->writeAuditLog($actor, $locked, 'research.completion.research_completed', [
+            'status' => $sourceStatus,
+            'final_review_count' => $countBefore,
+        ], [
+            'status' => ResearchStatus::RESEARCH_COMPLETED,
+            'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+            'final_review_count' => $countBefore,
+        ]);
+
+        ResearchStatus::assertTransition(ResearchStatus::RESEARCH_COMPLETED, ResearchStatus::FINAL_DEAN_REVIEW);
+
+        $finalAttributes = ['status' => ResearchStatus::FINAL_DEAN_REVIEW];
+        if ($incrementFinalReviewCount) {
+            $finalAttributes['final_review_count'] = $iteration;
+        }
+
+        $locked->update($finalAttributes);
+
+        Approval::query()->create([
+            'research_id' => $locked->id,
+            'approver_id' => $actor->id,
+            'stage' => 'faculty',
+            'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+            'final_review_iteration' => $iteration > 0 ? $iteration : null,
+            'action' => 'completion_submitted',
+            'remarks' => $this->normalizeOptionalRemarks($remarks),
+            'acted_at' => now(),
+        ]);
+
+        $this->writeAuditLog($actor, $locked, $completionAuditAction, [
+            'status' => ResearchStatus::RESEARCH_COMPLETED,
+            'final_review_count' => $countBefore,
+        ], [
+            'status' => ResearchStatus::FINAL_DEAN_REVIEW,
+            'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+            'final_review_count' => $locked->final_review_count,
+        ]);
+    }
+
+    /**
+     * @deprecated Use resubmitInitial() or resubmitFinal().
+     */
+    public function resubmit(Research $research, User $actor): void
+    {
+        if ($research->status === ResearchStatus::INITIAL_REJECTED) {
+            $this->resubmitInitial($research, $actor);
+
+            return;
+        }
+
+        if ($research->status === ResearchStatus::FINAL_REJECTED) {
+            throw ValidationException::withMessages([
+                'status' => [__('Use the outcome update form to revise classifications and resubmit for final review.')],
+            ]);
+        }
+
+        throw ValidationException::withMessages([
+            'status' => [__('This research cannot be resubmitted in its current stage.')],
+        ]);
+    }
+
+    private function sendBack(
+        Research $research,
+        User $actor,
+        string $remarks,
+        string $stage,
+        string $action,
+    ): void {
         $this->assertRemarksNonEmpty($remarks);
 
         if (! in_array($stage, ['dean', 'ovpri'], true)) {
@@ -419,214 +749,190 @@ class ApprovalService
             ]);
         }
 
-        $newStage = $stage === 'ovpri' ? 'returned_to_faculty' : 'draft';
+        if (! in_array($action, ['returned', 'rejected'], true)) {
+            throw ValidationException::withMessages([
+                'action' => [__('Invalid review action.')],
+            ]);
+        }
+
         $researchId = (int) $research->getKey();
 
-        DB::transaction(function () use ($researchId, $actor, $remarks, $stage, $newStage) {
+        DB::transaction(function () use ($researchId, $actor, $remarks, $stage, $action) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
+            $cycle = ResearchStatus::reviewCycle($locked->status);
 
             if ($stage === 'dean') {
-                if ($locked->approval_stage !== 'dean_review') {
-                    throw ValidationException::withMessages([
-                        'approval_stage' => [__('Research cannot be returned in its current approval stage.')],
+                if ($locked->status === ResearchStatus::INITIAL_DEAN_REVIEW) {
+                    $this->assertDeanMayActOnResearch($actor, $locked);
+                    $this->assertDeanReviewActionPermission($actor, $action);
+
+                    $this->createApproval($locked, $actor, 'dean', ResearchStatus::REVIEW_CYCLE_INITIAL, $action, $remarks);
+
+                    $oldStatus = $locked->status;
+                    $locked->update([
+                        'status' => ResearchStatus::INITIAL_REJECTED,
+                        'revision_count' => $locked->revision_count + 1,
                     ]);
+
+                    $this->writeAuditLog($actor, $locked, 'approval.initial.'.$action, [
+                        'status' => $oldStatus,
+                        'revision_count' => $locked->revision_count - 1,
+                    ], [
+                        'status' => ResearchStatus::INITIAL_REJECTED,
+                        'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
+                        'revision_count' => $locked->revision_count,
+                    ]);
+
+                    return;
                 }
 
-                $this->assertDeanMayActOnResearch($actor, $locked);
-                if (! $actor->can('approval.return')) {
+                if ($locked->status === ResearchStatus::FINAL_DEAN_REVIEW) {
+                    $this->assertDeanMayActOnResearch($actor, $locked);
+                    $this->assertDeanReviewActionPermission($actor, $action);
+
+                    $this->createApproval(
+                        $locked,
+                        $actor,
+                        'dean',
+                        ResearchStatus::REVIEW_CYCLE_FINAL,
+                        $action,
+                        $remarks,
+                        (int) $locked->final_review_count,
+                    );
+
+                    $oldStatus = $locked->status;
+                    $locked->update(['status' => ResearchStatus::FINAL_REJECTED]);
+
+                    $this->writeAuditLog($actor, $locked, 'approval.final.'.$action, [
+                        'status' => $oldStatus,
+                    ], [
+                        'status' => ResearchStatus::FINAL_REJECTED,
+                        'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+                        'final_review_count' => $locked->final_review_count,
+                    ]);
+
+                    return;
+                }
+            }
+
+            if ($stage === 'ovpri') {
+                if (! $actor->can('approval.return') && $action === 'returned') {
                     throw ValidationException::withMessages([
                         'user' => [__('You are not allowed to return research at this stage.')],
                     ]);
                 }
 
-                Approval::query()->create([
-                    'research_id' => $locked->id,
-                    'approver_id' => $actor->id,
-                    'stage' => 'dean',
-                    'action' => 'returned',
-                    'remarks' => $remarks,
-                    'acted_at' => now(),
-                ]);
+                if ($locked->status === ResearchStatus::INITIAL_OVPRI_REVIEW) {
+                    $this->createApproval($locked, $actor, 'ovpri', ResearchStatus::REVIEW_CYCLE_INITIAL, $action, $remarks);
 
-                $oldStage = $locked->approval_stage;
-                $locked->update([
-                    'approval_stage' => $newStage,
-                    'revision_count' => $locked->revision_count + 1,
-                ]);
+                    $oldStatus = $locked->status;
+                    $locked->update([
+                        'status' => ResearchStatus::INITIAL_REJECTED,
+                        'revision_count' => $locked->revision_count + 1,
+                    ]);
 
-                $this->writeAuditLog($actor, $locked, 'approval.returned', [
-                    'approval_stage' => $oldStage,
-                    'revision_count' => $locked->revision_count - 1,
-                ], [
-                    'approval_stage' => $newStage,
-                    'revision_count' => $locked->revision_count,
-                ]);
+                    $this->writeAuditLog($actor, $locked, 'approval.initial.'.$action, [
+                        'status' => $oldStatus,
+                        'revision_count' => $locked->revision_count - 1,
+                    ], [
+                        'status' => ResearchStatus::INITIAL_REJECTED,
+                        'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
+                        'revision_count' => $locked->revision_count,
+                    ]);
 
-                return;
+                    return;
+                }
+
+                if ($locked->status === ResearchStatus::FINAL_OVPRI_REVIEW) {
+                    $this->createApproval(
+                        $locked,
+                        $actor,
+                        'ovpri',
+                        ResearchStatus::REVIEW_CYCLE_FINAL,
+                        $action,
+                        $remarks,
+                        (int) $locked->final_review_count,
+                    );
+
+                    $oldStatus = $locked->status;
+                    $locked->update(['status' => ResearchStatus::FINAL_REJECTED]);
+
+                    $this->writeAuditLog($actor, $locked, 'approval.final.'.$action, [
+                        'status' => $oldStatus,
+                    ], [
+                        'status' => ResearchStatus::FINAL_REJECTED,
+                        'review_cycle' => ResearchStatus::REVIEW_CYCLE_FINAL,
+                        'final_review_count' => $locked->final_review_count,
+                    ]);
+
+                    return;
+                }
             }
 
-            // OVPRI return → faculty revision (not dean_review).
-            if ($locked->approval_stage !== 'ovpri_review') {
-                throw ValidationException::withMessages([
-                    'approval_stage' => [__('Research cannot be returned in its current approval stage.')],
-                ]);
-            }
-
-            if (! $actor->can('approval.return')) {
-                throw ValidationException::withMessages([
-                    'user' => [__('You are not allowed to return research at this stage.')],
-                ]);
-            }
-
-            Approval::query()->create([
-                'research_id' => $locked->id,
-                'approver_id' => $actor->id,
-                'stage' => 'ovpri',
-                'action' => 'returned',
-                'remarks' => $remarks,
-                'acted_at' => now(),
-            ]);
-
-            $oldStage = $locked->approval_stage;
-            $locked->update([
-                'approval_stage' => $newStage,
-                'revision_count' => $locked->revision_count + 1,
-            ]);
-
-            $this->writeAuditLog($actor, $locked, 'approval.returned', [
-                'approval_stage' => $oldStage,
-                'revision_count' => $locked->revision_count - 1,
-            ], [
-                'approval_stage' => $newStage,
-                'revision_count' => $locked->revision_count,
+            throw ValidationException::withMessages([
+                'status' => [__('Research cannot be returned or rejected in its current stage.')],
             ]);
         });
 
         $fresh = Research::query()->with('primaryAuthor')->findOrFail($researchId);
 
-        // Dean return (draft) and OVPRI return (returned_to_faculty) both notify faculty.
-        if (in_array($fresh->approval_stage, ['draft', 'returned_to_faculty'], true)) {
+        if (in_array($fresh->status, [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED], true)) {
             $fresh->primaryAuthor?->notify(new ResearchReturned($fresh));
+        }
+
+        if ($action === 'rejected') {
+            SendNotificationJob::dispatch($researchId, 'rejected');
         }
     }
 
-    /**
-     * [dean_review] ──reject()──► [rejected] · [ovpri_review] ──reject()──► [rejected] (KMSAR §8).
-     */
-    public function reject(Research $research, User $actor, string $remarks): void
-    {
-        $this->assertRemarksNonEmpty($remarks);
-
-        $researchId = (int) $research->getKey();
-
-        DB::transaction(function () use ($researchId, $actor, $remarks) {
-            $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
-
-            if ($locked->approval_stage === 'dean_review') {
-                $this->assertDeanMayActOnResearch($actor, $locked);
-                if (! $actor->can('approval.reject')) {
-                    throw ValidationException::withMessages([
-                        'user' => [__('You are not allowed to reject research at this stage.')],
-                    ]);
-                }
-
-                Approval::query()->create([
-                    'research_id' => $locked->id,
-                    'approver_id' => $actor->id,
-                    'stage' => 'dean',
-                    'action' => 'rejected',
-                    'remarks' => $remarks,
-                    'acted_at' => now(),
-                ]);
-
-                $oldStage = $locked->approval_stage;
-                $locked->update(['approval_stage' => 'rejected']);
-
-                $this->writeAuditLog($actor, $locked, 'approval.rejected', [
-                    'approval_stage' => $oldStage,
-                ], [
-                    'approval_stage' => 'rejected',
-                ]);
-
-                return;
-            }
-
-            if ($locked->approval_stage === 'ovpri_review') {
-                if (! $actor->can('approval.reject')) {
-                    throw ValidationException::withMessages([
-                        'user' => [__('You are not allowed to reject research at this stage.')],
-                    ]);
-                }
-
-                Approval::query()->create([
-                    'research_id' => $locked->id,
-                    'approver_id' => $actor->id,
-                    'stage' => 'ovpri',
-                    'action' => 'rejected',
-                    'remarks' => $remarks,
-                    'acted_at' => now(),
-                ]);
-
-                $oldStage = $locked->approval_stage;
-                $locked->update(['approval_stage' => 'rejected']);
-
-                $this->writeAuditLog($actor, $locked, 'approval.rejected', [
-                    'approval_stage' => $oldStage,
-                ], [
-                    'approval_stage' => 'rejected',
-                ]);
-
-                return;
-            }
-
-            throw ValidationException::withMessages([
-                'approval_stage' => [__('Research cannot be rejected in its current approval stage.')],
-            ]);
-        });
-
-        SendNotificationJob::dispatch($researchId, 'rejected');
+    private function createApproval(
+        Research $research,
+        User $approver,
+        string $stage,
+        string $reviewCycle,
+        string $action,
+        ?string $remarks = null,
+        ?int $finalReviewIteration = null,
+    ): void {
+        Approval::query()->create([
+            'research_id' => $research->id,
+            'approver_id' => $approver->id,
+            'stage' => $stage,
+            'review_cycle' => $reviewCycle,
+            'final_review_iteration' => $finalReviewIteration,
+            'action' => $action,
+            'remarks' => $this->normalizeOptionalRemarks($remarks),
+            'acted_at' => now(),
+        ]);
     }
 
-    /**
-     * [rejected|returned_to_faculty] ──resubmit()──► [draft]
-     */
-    public function resubmit(Research $research, User $actor): void
+    private function assertDeanReviewActionPermission(User $dean, string $action): void
     {
-        $researchId = (int) $research->getKey();
-
-        DB::transaction(function () use ($researchId, $actor) {
-            $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
-
-            if (! in_array($locked->approval_stage, ['rejected', 'returned_to_faculty'], true)) {
-                throw ValidationException::withMessages([
-                    'approval_stage' => [__('Only rejected or OVPRI-returned research can be moved back to draft for resubmission.')],
-                ]);
-            }
-
-            $oldStage = $locked->approval_stage;
-            $locked->update(['approval_stage' => 'draft']);
-
-            $this->writeAuditLog($actor, $locked, 'research.resubmitted', [
-                'approval_stage' => $oldStage,
-            ], [
-                'approval_stage' => 'draft',
+        if ($action === 'returned' && ! $dean->can('approval.return')) {
+            throw ValidationException::withMessages([
+                'user' => [__('You are not allowed to return research at this stage.')],
             ]);
-        });
+        }
+    }
 
-        SendNotificationJob::dispatch($researchId, 'resubmitted');
+    private function assertDeanPermission(User $dean): void
+    {
+        if (! $dean->can('approval.endorse')) {
+            throw ValidationException::withMessages([
+                'user' => [__('You are not allowed to endorse research.')],
+            ]);
+        }
     }
 
     private function assertDeanMayActOnResearch(User $dean, Research $research): void
     {
-        if ($dean->hasRole('super_admin')) {
+        if (ResearchDeanRouting::deanMayActOnResearch($dean, $research)) {
             return;
         }
 
-        if ((int) $dean->college_id !== (int) $research->mother_college_id) {
-            throw ValidationException::withMessages([
-                'user' => [__('You may only act on research for your college.')],
-            ]);
-        }
+        throw ValidationException::withMessages([
+            'user' => [__('You may only act on research for your college.')],
+        ]);
     }
 
     private function assertRemarksNonEmpty(string $remarks): void

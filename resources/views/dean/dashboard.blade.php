@@ -32,7 +32,7 @@
             <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
                 <div>
                     <label for="date_from" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
-                        {{ __('Date From') }}
+                        {{ __('Research accepted from') }}
                     </label>
                     <input type="date"
                            id="date_from"
@@ -43,7 +43,7 @@
                 </div>
                 <div>
                     <label for="date_to" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
-                        {{ __('Date To') }}
+                        {{ __('Research accepted to') }}
                     </label>
                     <input type="date"
                            id="date_to"
@@ -83,9 +83,9 @@
             <div class="kmsar-stat-card-label">{{ __('Pending Endorsement') }}</div>
             <div class="kmsar-stat-card-value kmsar-stat-card-value--pending">{{ number_format($pendingEndorsement) }}</div>
         </div>
-        <div class="kmsar-stat-card kmsar-card--accent-success">
-            <div class="kmsar-stat-card-label">{{ __('Published') }}</div>
-            <div class="kmsar-stat-card-value kmsar-stat-card-value--approved">{{ number_format($publishedCount) }}</div>
+        <div class="kmsar-stat-card">
+            <div class="kmsar-stat-card-label">{{ __('Presented') }}</div>
+            <div class="kmsar-stat-card-value" style="color:#2563EB;">{{ number_format($presentedCount) }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-gold">
             <div class="kmsar-stat-card-label">{{ __('Scopus/WoS Indexed') }}</div>
@@ -95,23 +95,23 @@
 
     @if ($college || ! empty($scopeAllColleges))
         {{-- Section 3 — Submitted line chart + faculty table --}}
-        <div style="display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:16px;">
+        <div class="kmsar-dashboard-chart-grid kmsar-dashboard-chart-grid--3-2" style="margin-bottom:16px;">
             <div class="kmsar-chart-card">
                 <div class="kmsar-chart-header">
                     <div>
                         <h2 class="kmsar-chart-title">
                             @if ($dateFrom || $dateTo)
-                                {{ __('Research submitted — selected dates') }}
+                                {{ __('Research accepted — selected dates') }}
                             @else
-                                {{ __('Research submitted — last 5 years') }}
+                                {{ __('Research accepted — last 5 years') }}
                             @endif
                         </h2>
-                        <p class="kmsar-chart-subtitle">{{ __('Count of research registered per year (your college)') }}</p>
+                        <p class="kmsar-chart-subtitle">{{ __('Count of research accepted per year (your college)') }}</p>
                     </div>
                 </div>
                 <div class="kmsar-chart-body">
-                    <div style="position:relative;height:260px;width:100%;">
-                        <canvas id="kmsarDeanSubmitted" aria-label="{{ __('Research submitted by year') }}"></canvas>
+                    <div class="kmsar-chart-canvas-wrap">
+                        <canvas id="kmsarDeanSubmitted" aria-label="{{ __('Research accepted by year') }}"></canvas>
                     </div>
                 </div>
             </div>
@@ -167,7 +167,7 @@
         </div>
 
         {{-- Section 4 — Published + Presented bar charts --}}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="kmsar-dashboard-chart-grid kmsar-dashboard-chart-grid--2" style="margin-bottom:16px;">
             <div class="kmsar-chart-card">
                 <div class="kmsar-chart-header">
                     <div>
@@ -182,7 +182,7 @@
                     </div>
                 </div>
                 <div class="kmsar-chart-body">
-                    <div style="position:relative;height:220px;width:100%;">
+                    <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--short">
                         <canvas id="kmsarDeanPublished" aria-label="{{ __('Published research by year') }}"></canvas>
                     </div>
                 </div>
@@ -201,29 +201,53 @@
                     </div>
                 </div>
                 <div class="kmsar-chart-body">
-                    <div style="position:relative;height:220px;width:100%;">
+                    <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--short">
                         <canvas id="kmsarDeanPresented" aria-label="{{ __('Presented research by year') }}"></canvas>
                     </div>
                 </div>
             </div>
         </div>
+
+        {{-- Agenda theme alignment (research accepted only) --}}
+        <div class="kmsar-chart-card" style="margin-bottom:16px;">
+            <div class="kmsar-chart-header">
+                <div>
+                    <h2 class="kmsar-chart-title">{{ __('AUF Research Agenda theme alignment') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Accepted research aligned to institutional agenda themes') }}</p>
+                </div>
+            </div>
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--compact" style="max-width:520px;margin:0 auto;">
+                    <canvas id="kmsarDeanAgendaThemes" aria-label="{{ __('Agenda theme alignment') }}"></canvas>
+                </div>
+                @if (($agendaThemeBreakdown ?? collect())->sum('count') > 0)
+                    <div class="kmsar-chart-legend" style="margin-top:12px;font-size:0.75rem;line-height:1.35;">
+                        @foreach ($agendaThemeBreakdown as $idx => $row)
+                            @if ($row['count'] > 0)
+                                <div class="kmsar-legend-item">
+                                    <span class="kmsar-legend-dot" style="background:{{ ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#D97706', '#7C3AED'][$idx] ?? '#94A3B8' }};"></span>
+                                    <span>{{ $row['label'] }}</span>
+                                    <span class="kmsar-legend-value">{{ number_format($row['count']) }}</span>
+                                </div>
+                            @endif
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        </div>
     @endif
 
     @php
-        $researchProgressBadgeStatus = static function (string $status): string {
+        use App\Support\ResearchStatus;
+
+        $statusBadgeVariant = static function (string $status): string {
             return match ($status) {
-                'proposal', 'ongoing', 'patent_submitted' => 'pending',
-                'published_scopus', 'published_non_indexed', 'patent_granted', 'completed_unpublished' => 'approved',
-                'presented_internal', 'presented_external' => 'info',
-                default => 'info',
-            };
-        };
-        $approvalStageBadgeStatus = static function (string $stage): string {
-            return match ($stage) {
-                'draft' => 'draft',
-                'dean_review', 'ovpri_review' => 'pending',
-                'approved' => 'approved',
-                'rejected' => 'rejected',
+                ResearchStatus::PROPOSAL => 'draft',
+                ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+                ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
+                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+                ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'rejected',
+                ResearchStatus::RESEARCH_COMPLETED => 'info',
                 default => 'info',
             };
         };
@@ -247,21 +271,19 @@
                             <th scope="col">{{ __('Reference') }}</th>
                             <th scope="col">{{ __('Title') }}</th>
                             <th scope="col">{{ __('Author') }}</th>
-                            <th scope="col">{{ __('Status') }}</th>
-                            <th scope="col">{{ __('Approval stage') }}</th>
+                            <th scope="col">{{ __('Workflow status') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($recentResearch as $item)
                             <tr>
                                 <td>
-                                    @if ($item->approval_stage === 'dean_review')
+                                    @if (in_array($item->status, [ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW], true))
                                         <a href="{{ route('approval.review', $item) }}" class="kmsar-link font-medium">{{ $item->reference_number }}</a>
-                                    @elseif ($item->approval_stage === 'draft')
+                                    @elseif ($item->status === ResearchStatus::PROPOSAL)
                                         <span class="font-medium" style="color: var(--color-text-muted);">{{ $item->reference_number }}</span>
                                         <div class="kmsar-body" style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px;">{{ __('Not yet submitted') }}</div>
                                     @else
-                                        {{-- ovpri_review, approved, rejected, etc. — read-only listing; do not link to approval.review --}}
                                         <span class="font-medium">{{ $item->reference_number }}</span>
                                     @endif
                                 </td>
@@ -270,19 +292,14 @@
                                 </td>
                                 <td>{{ $item->primaryAuthor?->name ?? '—' }}</td>
                                 <td>
-                                    <x-badge :status="$researchProgressBadgeStatus($item->status)">
-                                        {{ str_replace('_', ' ', $item->status) }}
-                                    </x-badge>
-                                </td>
-                                <td>
-                                    <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">
-                                        {{ str_replace('_', ' ', $item->approval_stage) }}
+                                    <x-badge :status="$statusBadgeVariant((string) $item->status)">
+                                        {{ ResearchStatus::label($item->status) }}
                                     </x-badge>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="text-center kmsar-body" style="padding: var(--space-6);">
+                                <td colspan="4" class="text-center kmsar-body" style="padding: var(--space-6);">
                                     {{ __('No research records for your college yet.') }}
                                 </td>
                             </tr>
@@ -335,7 +352,7 @@
                         data: {
                             labels: yearLabels,
                             datasets: [{
-                                label: @json(__('Research submitted')),
+                                label: @json(__('Research accepted')),
                                 data: submissionsData,
                                 borderColor: primary,
                                 backgroundColor: 'rgba(30, 58, 138, 0.08)',
@@ -415,6 +432,32 @@
                             scales: {
                                 x: { ticks: { maxRotation: 0 } },
                                 y: { beginAtZero: true, ticks: { precision: 0 } },
+                            },
+                        },
+                    });
+                }
+
+                const agendaLabels = @json(collect($agendaThemeBreakdown ?? [])->pluck('label'));
+                const agendaCounts = @json(collect($agendaThemeBreakdown ?? [])->pluck('count'));
+                const agendaColors = ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#D97706', '#7C3AED'];
+                const agendaEl = document.getElementById('kmsarDeanAgendaThemes');
+                if (agendaEl && agendaCounts.some(function (n) { return n > 0; })) {
+                    new Chart(agendaEl, {
+                        type: 'pie',
+                        data: {
+                            labels: agendaLabels,
+                            datasets: [{
+                                data: agendaCounts,
+                                backgroundColor: agendaLabels.map(function (_, i) { return agendaColors[i] ?? '#94A3B8'; }),
+                                borderWidth: 0,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            layout: { padding: 8 },
+                            plugins: {
+                                legend: { display: false },
                             },
                         },
                     });

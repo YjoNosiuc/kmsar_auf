@@ -270,8 +270,8 @@
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/>
                                             </svg>
                                         </span>
-                                        <input type="url" name="external_link"
-                                            placeholder="https://drive.google.com/file/d/... or https://doi.org/..."
+                                        <input type="text" name="external_link"
+                                            placeholder=""
                                             style="width:100%;padding:10px 12px 10px 34px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;transition:border-color 0.15s;"
                                             onfocus="this.style.borderColor='#1E3A8A';this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'"
                                             onblur="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">
@@ -348,7 +348,7 @@
                                                 </a>
                                                 </div>
                                             @endif
-                                            @if($research->approval_stage === 'draft' && (int) $document->uploaded_by === (int) auth()->id())
+                                            @if(\App\Support\ResearchStatus::isFullyEditable((string) $research->status) && (int) $document->uploaded_by === (int) auth()->id())
                                                 <form method="POST" action="{{ route('documents.destroy', $document) }}" style="display:inline;">
                                                     @csrf
                                                     @method('DELETE')
@@ -368,18 +368,25 @@
                         <p class="kmsar-body mb-0" style="color: var(--color-text-muted);">{{ __('No documents uploaded yet.') }}</p>
                     @endif
 
-                    {{-- Submit for Dean Review — shown at bottom of Documents tab --}}
+                    {{-- Submit for review — shown at bottom of Documents tab --}}
                     <div style="margin-top:24px; padding-top:20px; border-top:1px solid #E2E8F0;">
-                        @if ($research->approval_stage === 'draft')
+                        @if ($research->status === \App\Support\ResearchStatus::PROPOSAL)
                             @can('submit', $research)
-                                <form method="POST" action="{{ route('research.submit', $research) }}">
+                                <form method="POST" action="{{ route('research.submit', $research) }}" x-data="{ submitting: false }" @submit="submitting = true">
                                     @csrf
                                     <button type="submit"
                                         class="kmsar-btn kmsar-btn--primary"
                                         style="width:100%;padding:12px;"
-                                        :disabled="documentCount === 0"
-                                        :style="documentCount === 0 ? 'width:100%;padding:12px;opacity:0.5;cursor:not-allowed;' : 'width:100%;padding:12px;'">
-                                        {{ __('Submit for Dean Review') }}
+                                        :disabled="documentCount === 0 || submitting"
+                                        :style="(documentCount === 0 || submitting) ? 'width:100%;padding:12px;opacity:0.5;cursor:not-allowed;' : 'width:100%;padding:12px;'">
+                                        <span x-show="!submitting">
+                                        @if ($research->registration_type === 'existing')
+                                            {{ __('Register existing research') }}
+                                        @else
+                                            {{ __('Submit for initial dean review') }}
+                                        @endif
+                                        </span>
+                                        <span x-show="submitting" x-cloak>{{ __('Submitting…') }}</span>
                                     </button>
                                     <p x-show="documentCount === 0"
                                        x-cloak
@@ -388,12 +395,12 @@
                                     </p>
                                 </form>
                             @endcan
-                        @elseif (in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true))
+                        @elseif (in_array($research->status, [\App\Support\ResearchStatus::INITIAL_REJECTED, \App\Support\ResearchStatus::FINAL_REJECTED], true))
                             @can('revise', $research)
                                 <a href="{{ route('research.show', $research) }}"
                                    class="kmsar-btn kmsar-btn--primary"
                                    style="display:block;text-align:center;padding:12px;width:100%;box-sizing:border-box;">
-                                    {{ __('Save Changes & View Research') }}
+                                    {{ __('Save changes & view research') }}
                                 </a>
                             @endcan
                         @endif

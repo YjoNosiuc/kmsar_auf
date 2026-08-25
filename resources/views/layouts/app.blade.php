@@ -612,6 +612,19 @@
             setInterval(tick, 1000);
             tick();
         })();
+
+        window.kmsarSignOut = function () {
+            const form = document.getElementById('kmsar-logout-form');
+            if (!form) {
+                return;
+            }
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            const tokenInput = form.querySelector('input[name="_token"]');
+            if (meta && tokenInput) {
+                tokenInput.value = meta.getAttribute('content') || tokenInput.value;
+            }
+            form.submit();
+        };
     </script>
     @endauth
 </body>

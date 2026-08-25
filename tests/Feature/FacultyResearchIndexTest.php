@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Research;
+use App\Support\ResearchStatus;
 
 describe('Faculty My Research filters', function () {
 
@@ -14,8 +15,7 @@ describe('Faculty My Research filters', function () {
             'title' => $hiddenTitle,
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'approval_stage' => 'draft',
-            'status' => 'proposal',
+            'status' => ResearchStatus::PROPOSAL,
             'research_classification' => 'self_funded',
             'created_at' => now()->subDays(40),
         ]);
@@ -25,8 +25,7 @@ describe('Faculty My Research filters', function () {
                 'title' => "NEWER LIST ITEM {$i}",
                 'primary_author_id' => $faculty->id,
                 'mother_college_id' => $college->id,
-                'approval_stage' => 'approved',
-                'status' => 'ongoing',
+                'status' => ResearchStatus::ONGOING,
                 'research_classification' => 'self_funded',
                 'created_at' => now()->subDays($i),
             ]);
@@ -45,7 +44,7 @@ describe('Faculty My Research filters', function () {
             ->assertDontSee('NEWER LIST ITEM 1');
     });
 
-    it('filters by approval stage and progress status on the server', function () {
+    it('filters by workflow status on the server', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
 
@@ -53,30 +52,28 @@ describe('Faculty My Research filters', function () {
             'title' => 'DRAFT PROPOSAL RECORD',
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'approval_stage' => 'draft',
-            'status' => 'proposal',
+            'status' => ResearchStatus::PROPOSAL,
             'research_classification' => 'self_funded',
         ]);
 
         Research::factory()->create([
-            'title' => 'APPROVED ONGOING RECORD',
+            'title' => 'ONGOING RECORD',
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'approval_stage' => 'approved',
-            'status' => 'ongoing',
+            'status' => ResearchStatus::ONGOING,
             'research_classification' => 'self_funded',
         ]);
 
         $this->actingAs($faculty)
-            ->get(route('research.index', ['approval_stage' => 'draft']))
+            ->get(route('research.index', ['status' => ResearchStatus::PROPOSAL]))
             ->assertOk()
             ->assertSee('DRAFT PROPOSAL RECORD')
-            ->assertDontSee('APPROVED ONGOING RECORD');
+            ->assertDontSee('ONGOING RECORD');
 
         $this->actingAs($faculty)
-            ->get(route('research.index', ['status' => 'ongoing']))
+            ->get(route('research.index', ['status' => ResearchStatus::ONGOING]))
             ->assertOk()
-            ->assertSee('APPROVED ONGOING RECORD')
+            ->assertSee('ONGOING RECORD')
             ->assertDontSee('DRAFT PROPOSAL RECORD');
     });
 
@@ -89,8 +86,7 @@ describe('Faculty My Research filters', function () {
                 'title' => "SEARCHABLE BLOCKCHAIN STUDY {$i}",
                 'primary_author_id' => $faculty->id,
                 'mother_college_id' => $college->id,
-                'approval_stage' => 'approved',
-                'status' => 'ongoing',
+                'status' => ResearchStatus::ONGOING,
                 'research_classification' => 'self_funded',
                 'created_at' => now()->subDays($i),
             ]);

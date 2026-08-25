@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -15,31 +16,37 @@ class LoginController extends Controller
     /**
      * Show the login form (local bcrypt; LDAP integration planned).
      */
-    public function create(Request $request): View|RedirectResponse
+    public function create(Request $request): View|RedirectResponse|Response
     {
         if (Auth::check()) {
             return $this->redirectAfterLogin(Auth::user());
         }
 
-        return view('auth.login');
+        if ($request->hasSession()) {
+            $request->session()->regenerateToken();
+        }
+
+        return response()
+            ->view('auth.login')
+            ->header('Cache-Control', 'no-cache, private, max-age=0, must-revalidate')
+            ->header('Pragma', 'no-cache');
     }
 
     /**
-     * Authenticate via employee number or email + password.
+     * Authenticate via email + password.
      */
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'login' => ['required', 'string', 'max:255'],
+            'login' => ['required', 'email', 'max:255'],
             'password' => ['required', 'string'],
             'remember' => ['nullable', 'boolean'],
         ]);
 
-        $login = $validated['login'];
+        $login = strtolower(trim($validated['login']));
         $password = $validated['password'];
-        $field = str_contains($login, '@') ? 'email' : 'employee_number';
 
-        if (! Auth::attempt([$field => $login, 'password' => $password], $request->boolean('remember'))) {
+        if (! Auth::attempt(['email' => $login, 'password' => $password], $request->boolean('remember'))) {
             throw ValidationException::withMessages([
                 'login' => [__('These credentials do not match our records.')],
             ]);

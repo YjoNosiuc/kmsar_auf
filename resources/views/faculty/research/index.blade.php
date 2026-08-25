@@ -7,6 +7,43 @@
 @endsection
 
 @section('content')
+    @php
+        use App\Support\ResearchStatus;
+
+        $borderByStatus = static fn (string $status): string => match ($status) {
+            ResearchStatus::PROPOSAL => '#94A3B8',
+            ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => '#D4AF37',
+            ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => '#2563EB',
+            ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => '#059669',
+            ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => '#DC2626',
+            ResearchStatus::RESEARCH_COMPLETED => '#2563EB',
+            default => '#94A3B8',
+        };
+
+        $statusBadgeVariant = static function (string $status): string {
+            return match ($status) {
+                ResearchStatus::PROPOSAL => 'draft',
+                ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+                ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
+                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+                ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'rejected',
+                ResearchStatus::RESEARCH_COMPLETED => 'info',
+                default => 'info',
+            };
+        };
+
+        $statusOptions = collect(ResearchStatus::all())
+            ->mapWithKeys(fn (string $value) => [$value => ResearchStatus::label($value)])
+            ->all();
+
+        $expectedLabels = [
+            'publication' => __('Publication'),
+            'patent' => __('Patent'),
+            'policy_brief' => __('Policy brief'),
+            'other' => __('Other'),
+        ];
+    @endphp
+
     <x-page-header
         :title="__('My research')"
         :subtitle="__('Registered research records you own or co-author')"
@@ -15,7 +52,8 @@
         ]"
     >
         @unless(auth()->user()->hasRole('viewer'))
-            <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new') }}</x-button>
+            <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
+            <x-button variant="outline" href="{{ route('research.create', ['registration_type' => 'existing']) }}">{{ __('Register existing research') }}</x-button>
         @endunless
     </x-page-header>
 
@@ -24,69 +62,8 @@
     @endif
 
     @php
-        $expectedLabels = [
-            'publication' => __('Publication'),
-            'patent' => __('Patent'),
-            'policy_brief' => __('Policy brief'),
-            'other' => __('Other'),
-        ];
-        $borderByStage = static fn (string $stage): string => match ($stage) {
-            'draft' => '#94A3B8',
-            'dean_review' => '#D4AF37',
-            'ovpri_review' => '#2563EB',
-            'approved' => '#059669',
-            'rejected' => '#DC2626',
-            'returned_to_faculty' => '#D97706',
-            default => '#94A3B8',
-        };
-
-        $researchProgressBadgeStatus = static function (string $status): string {
-            return match ($status) {
-                'proposal', 'ongoing', 'patent_submitted' => 'pending',
-                'published_scopus', 'published_non_indexed', 'patent_granted', 'completed_unpublished' => 'approved',
-                'presented_internal', 'presented_external' => 'info',
-                default => 'info',
-            };
-        };
-
-        $approvalStageBadgeStatus = static function (string $stage): string {
-            return match ($stage) {
-                'draft' => 'draft',
-                'dean_review', 'ovpri_review' => 'pending',
-                'approved' => 'approved',
-                'rejected' => 'rejected',
-                'returned_to_faculty' => 'returned',
-                default => 'info',
-            };
-        };
-
-        $statusOptions = [
-            'proposal' => __('Proposal / abstract'),
-            'ongoing' => __('Ongoing'),
-            'completed_unpublished' => __('Completed (unpublished)'),
-            'presented_internal' => __('Presented (internal)'),
-            'presented_external' => __('Presented (external)'),
-            'published_non_indexed' => __('Published (non-indexed)'),
-            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
-            'patent_submitted' => __('Patent submitted'),
-            'patent_granted' => __('Patent granted'),
-        ];
-
-        $stageOptions = [
-            'draft' => __('Draft'),
-            'dean_review' => __('Dean Review'),
-            'ovpri_review' => __('OVPRI Review'),
-            'approved' => __('Approved'),
-            'rejected' => __('Rejected'),
-            'returned_to_faculty' => __('Returned by OVPRI'),
-        ];
-
-    @endphp
-
-    @php
-        $activeFilters = $filters ?? ['search' => '', 'approval_stage' => '', 'status' => ''];
+        $activeFilters = $filters ?? ['search' => '', 'status' => ''];
         $hasActiveFilters = filled($activeFilters['search'] ?? '')
-            || filled($activeFilters['approval_stage'] ?? '')
             || filled($activeFilters['status'] ?? '');
     @endphp
 
@@ -104,17 +81,8 @@
                     autocomplete="off"
                 >
             </div>
-            <div class="kmsar-form-group" style="margin:0;flex:0 1 200px;min-width:160px;">
-                <label class="kmsar-form-label" for="faculty-research-stage">{{ __('Approval stage') }}</label>
-                <select id="faculty-research-stage" name="approval_stage" class="kmsar-select" onchange="this.form.submit()">
-                    <option value="">{{ __('All stages') }}</option>
-                    @foreach ($stageOptions as $value => $label)
-                        <option value="{{ $value }}" @selected(($activeFilters['approval_stage'] ?? '') === $value)>{{ $label }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="kmsar-form-group" style="margin:0;flex:0 1 220px;min-width:180px;">
-                <label class="kmsar-form-label" for="faculty-research-status">{{ __('Progress status') }}</label>
+            <div class="kmsar-form-group" style="margin:0;flex:0 1 260px;min-width:200px;">
+                <label class="kmsar-form-label" for="faculty-research-status">{{ __('Workflow status') }}</label>
                 <select id="faculty-research-status" name="status" class="kmsar-select" onchange="this.form.submit()">
                     <option value="">{{ __('All statuses') }}</option>
                     @foreach ($statusOptions as $value => $label)
@@ -137,9 +105,8 @@
 
         @forelse ($research as $item)
             @php
-                $statusLabel = str_replace('_', ' ', $item->status);
-                $stageLabel = $stageOptions[$item->approval_stage] ?? ucwords(str_replace('_', ' ', $item->approval_stage));
-                $leftBorder = $borderByStage($item->approval_stage);
+                $statusLabel = ResearchStatus::label($item->status);
+                $leftBorder = $borderByStatus((string) $item->status);
             @endphp
             <div
                 class="kmsar-research-card"
@@ -151,8 +118,7 @@
                         @if ((int) $item->primary_author_id !== (int) auth()->id())
                             <x-badge status="info">{{ __('Co-author') }}</x-badge>
                         @endif
-                        <x-badge :status="$researchProgressBadgeStatus($item->status)">{{ ucwords($statusLabel) }}</x-badge>
-                        <x-badge :status="$approvalStageBadgeStatus($item->approval_stage)">{{ $stageLabel }}</x-badge>
+                        <x-badge :status="$statusBadgeVariant((string) $item->status)">{{ $statusLabel }}</x-badge>
                     </div>
                     <div style="font-size:15px;font-weight:600;color:#0F172A;line-height:1.4;margin-bottom:6px;">{{ $item->title }}</div>
                     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#475569;">
@@ -167,7 +133,7 @@
                         style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1E3A8A;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;"
                         aria-label="{{ __('View research') }}"
                     >{{ __('View') }} →</a>
-                    @if ($item->approval_stage === 'draft' && (int) $item->primary_author_id === (int) auth()->id())
+                    @if ($item->status === ResearchStatus::PROPOSAL && (int) $item->primary_author_id === (int) auth()->id())
                         <form method="POST"
                               action="{{ route('research.destroy', $item) }}"
                               onsubmit="return confirm('Are you sure you want to delete this research? This cannot be undone.')">
@@ -194,8 +160,9 @@
                     <p style="margin:16px 0 0;font-size:15px;font-weight:600;color:#0F172A;">{{ __('No research records yet') }}</p>
                     <p style="margin:8px 0 0;font-size:13px;color:#64748B;line-height:1.5;">{{ __('Start the registration wizard to create your first submission.') }}</p>
                     @unless(auth()->user()->hasRole('viewer'))
-                        <div style="margin-top:20px;">
+                        <div style="margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
                             <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
+                            <x-button variant="outline" href="{{ route('research.create', ['registration_type' => 'existing']) }}">{{ __('Register existing research') }}</x-button>
                         </div>
                     @endunless
                 </div>

@@ -10,8 +10,6 @@ use App\Notifications\ResearchApprovedDean;
 use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
 use App\Notifications\ResearchProgressUpdated;
-use App\Notifications\ResearchRejected;
-use App\Notifications\ResearchRejectedDean;
 use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchReturned;
 use App\Notifications\ResearchReturnedToDean;
@@ -19,6 +17,7 @@ use App\Notifications\ResearchSubmitted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
+use App\Support\ResearchStatus;
 use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
@@ -79,7 +78,7 @@ describe('ResearchEndorsed', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
@@ -92,7 +91,7 @@ describe('ResearchEndorsed', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
@@ -114,7 +113,7 @@ describe('ResearchEndorsedToOvpri', function () {
         $ovpriA = makeOvpri();
         $ovpriB = makeOvpri();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
@@ -130,7 +129,7 @@ describe('ResearchEndorsedToOvpri', function () {
         $cdaicA = makeCdaic();
         $cdaicB = makeCdaic();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
@@ -145,7 +144,7 @@ describe('ResearchEndorsedToOvpri', function () {
         $faculty = makeFaculty($college);
         makeOvpri();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
@@ -166,7 +165,7 @@ describe('ResearchReturned', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.return', $research), [
@@ -181,7 +180,7 @@ describe('ResearchReturned', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.return', $research), [
@@ -197,7 +196,7 @@ describe('ResearchReturned', function () {
         $faculty = makeFaculty($college);
         $ovpri = makeOvpri();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
         $dean = $college->headUser;
 
         $this->actingAs($dean)->post(route('approval.return', $research), [
@@ -220,7 +219,7 @@ describe('ResearchReturnedToDean', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
         $dean = $college->headUser;
 
@@ -237,7 +236,7 @@ describe('ResearchReturnedToDean', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)->post(route('ovpri.return', $research), [
@@ -260,7 +259,7 @@ describe('ResearchApproved', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Approved.']);
@@ -280,7 +279,7 @@ describe('ResearchApprovedDean', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
         $dean = $college->headUser;
 
@@ -294,105 +293,12 @@ describe('ResearchApprovedDean', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
 
         $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Approved.']);
 
         Notification::assertNotSentTo($ovpri, ResearchApprovedDean::class);
-    });
-});
-
-// ─────────────────────────────────────────────
-// ResearchRejectedDean
-// ─────────────────────────────────────────────
-
-describe('ResearchRejectedDean', function () {
-
-    it('is sent to the college dean when the dean rejects', function () {
-        Notification::fake();
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
-
-        $this->actingAs($dean)->post(route('approval.reject', $research), ['remarks' => 'Out of scope.']);
-
-        Notification::assertSentTo($dean, ResearchRejectedDean::class);
-    });
-
-    it('is sent to the college dean when OVPRI rejects', function () {
-        Notification::fake();
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
-        $ovpri = makeOvpri();
-        $dean = $college->headUser;
-
-        $this->actingAs($ovpri)->post(route('ovpri.reject', $research), ['remarks' => 'Not aligned.']);
-
-        Notification::assertSentTo($dean, ResearchRejectedDean::class);
-    });
-
-    it('is NOT sent to the primary author on dean rejection', function () {
-        Notification::fake();
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
-
-        $this->actingAs($dean)->post(route('approval.reject', $research), ['remarks' => 'Out of scope.']);
-
-        Notification::assertNotSentTo($faculty, ResearchRejectedDean::class);
-    });
-
-    it('is NOT sent to the primary author on OVPRI rejection', function () {
-        Notification::fake();
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
-        $ovpri = makeOvpri();
-
-        $this->actingAs($ovpri)->post(route('ovpri.reject', $research), ['remarks' => 'Not aligned.']);
-
-        Notification::assertNotSentTo($faculty, ResearchRejectedDean::class);
-    });
-});
-
-// ─────────────────────────────────────────────
-// ResearchRejected
-// ─────────────────────────────────────────────
-
-describe('ResearchRejected', function () {
-
-    it('is sent to the primary author when the dean rejects', function () {
-        Notification::fake();
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'dean_review', 'submitted_at' => now()]);
-        $dean = $college->headUser;
-
-        $this->actingAs($dean)->post(route('approval.reject', $research), ['remarks' => 'Out of scope.']);
-
-        Notification::assertSentTo($faculty, ResearchRejected::class);
-    });
-
-    it('is sent to the primary author when OVPRI rejects', function () {
-        Notification::fake();
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'ovpri_review', 'submitted_at' => now()]);
-        $ovpri = makeOvpri();
-
-        $this->actingAs($ovpri)->post(route('ovpri.reject', $research), ['remarks' => 'Not aligned.']);
-
-        Notification::assertSentTo($faculty, ResearchRejected::class);
     });
 });
 
@@ -408,11 +314,13 @@ describe('ResearchProgressUpdated', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'approved']);
+        $research->update(['status' => ResearchStatus::ONGOING, 'research_registered_at' => now()]);
         $dean = $college->headUser;
 
+        seedOutcomeClassifications();
+
         $this->actingAs($faculty)->put(route('research.update-progress', $research), [
-            'status' => 'ongoing',
+            'outcome_classifications' => ['completed_not_presented_submitted'],
             'remarks' => 'Midterm update.',
             'external_link' => 'https://example.com/progress-proof',
         ]);
@@ -427,10 +335,12 @@ describe('ResearchProgressUpdated', function () {
         $faculty = makeFaculty($college);
         $ovpri = makeOvpri();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['approval_stage' => 'approved']);
+        $research->update(['status' => ResearchStatus::ONGOING, 'research_registered_at' => now()]);
+
+        seedOutcomeClassifications();
 
         $this->actingAs($faculty)->put(route('research.update-progress', $research), [
-            'status' => 'ongoing',
+            'outcome_classifications' => ['completed_not_presented_submitted'],
             'remarks' => 'Midterm update.',
             'external_link' => 'https://example.com/progress-proof',
         ]);

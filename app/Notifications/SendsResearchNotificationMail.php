@@ -2,6 +2,8 @@
 
 namespace App\Notifications;
 
+use App\Models\Research;
+use App\Support\ResearchStatus;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
@@ -12,6 +14,22 @@ trait SendsResearchNotificationMail
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
+    }
+
+    /**
+     * @param  array<string, mixed>  $fields
+     * @return array<string, mixed>
+     */
+    protected function baseResearchPayload(Research $research, array $fields): array
+    {
+        return array_merge([
+            'research_id' => $research->id,
+            'reference_number' => $research->reference_number,
+            'title' => $research->title,
+            'workflow_status' => $research->status,
+            'review_cycle' => ResearchStatus::reviewCycle($research->status),
+            'final_review_count' => (int) $research->final_review_count,
+        ], $fields);
     }
 
     public function toMail(object $notifiable): MailMessage

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
+use App\Services\ResearchReportingService;
+use App\Support\ResearchStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -12,20 +14,11 @@ use Illuminate\View\View;
 
 class DeanController extends Controller
 {
-    private const COMPLETED_STATUSES = [
-        'completed_unpublished',
-        'presented_internal',
-        'presented_external',
-        'published_non_indexed',
-        'published_scopus',
-        'patent_granted',
-    ];
-
     private const IN_PROGRESS_STATUSES = ['proposal', 'ongoing'];
 
-    private const PUBLISHED_STATUSES = ['published_non_indexed', 'published_scopus'];
-
-    private const PRESENTED_STATUSES = ['presented_internal', 'presented_external'];
+    public function __construct(
+        private ResearchReportingService $reporting,
+    ) {}
 
     public function dashboard(Request $request): View
     {
@@ -47,55 +40,56 @@ class DeanController extends Controller
             ->limit(15)
             ->get();
 
-        $cacheKey = 'dean_stats_v2_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m-d');
+        $cacheKey = 'dean_stats_v4_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m-d');
 
         $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $dateFrom, $dateTo, $scopeAllColleges) {
             $base = $this->collegeResearchQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
-            $completed = (clone $base)->whereIn('status', self::COMPLETED_STATUSES);
+            $accepted = $this->acceptedReportingQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
+            $outcomeMetrics = clone $accepted;
 
-            $totalResearch = (clone $completed)->count();
+            $totalResearch = (clone $accepted)->count();
             $researchInProgress = (clone $base)->whereIn('status', self::IN_PROGRESS_STATUSES)->count();
 
             $pendingEndorsement = (clone $base)
-                ->where('approval_stage', 'dean_review')
+                ->whereIn('status', [ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW])
                 ->whereNotNull('submitted_at')
                 ->count();
 
-            $publishedCount = (clone $base)
-                ->whereIn('status', self::PUBLISHED_STATUSES)
+            $publishedCount = (clone $outcomeMetrics)
+                ->withOutcomeCodes(config('kmsar.published_outcome_codes', []))
                 ->count();
 
-            $scopusIndexedCount = (clone $base)
-                ->where('is_scopus_indexed', true)
+            $presentedCount = (clone $outcomeMetrics)
+                ->withOutcomeCodes(config('kmsar.presented_outcome_codes', []))
+                ->count();
+
+            $scopusIndexedCount = (clone $outcomeMetrics)
+                ->withOutcomeCodes(config('kmsar.scopus_outcome_code', 'published_scopus_isi'))
                 ->count();
 
             $yearList = $this->chartYearList($dateFrom, $dateTo);
+            $yearSql = $this->reporting->acceptedYearSql();
 
-            $isSqlite = (clone $base)->getConnection()->getDriverName() === 'sqlite';
-            $yearSelect = $isSqlite
-                ? 'CAST(strftime(\'%Y\', start_date) AS INTEGER) as year'
-                : 'YEAR(start_date) as year';
-            $yearGroup = $isSqlite
-                ? 'CAST(strftime(\'%Y\', start_date) AS INTEGER)'
-                : 'YEAR(start_date)';
-
-            $submissionsByYearCounts = (clone $completed)
-                ->selectRaw("{$yearSelect}, COUNT(*) as total")
-                ->groupByRaw($yearGroup)
+            $submissionsByYearCounts = (clone $accepted)
+                ->whereNotNull('research_accepted_at')
+                ->selectRaw("{$yearSql['select']}, COUNT(*) as total")
+                ->groupByRaw($yearSql['group'])
                 ->get()
                 ->mapWithKeys(fn ($row) => [(int) $row->year => (int) $row->total]);
 
-            $publishedByYearCounts = (clone $base)
-                ->whereIn('status', self::PUBLISHED_STATUSES)
-                ->selectRaw("{$yearSelect}, COUNT(*) as total")
-                ->groupByRaw($yearGroup)
+            $publishedByYearCounts = (clone $outcomeMetrics)
+                ->withOutcomeCodes(config('kmsar.published_outcome_codes', []))
+                ->whereNotNull('research_accepted_at')
+                ->selectRaw("{$yearSql['select']}, COUNT(*) as total")
+                ->groupByRaw($yearSql['group'])
                 ->get()
                 ->mapWithKeys(fn ($row) => [(int) $row->year => (int) $row->total]);
 
-            $presentedByYearCounts = (clone $base)
-                ->whereIn('status', self::PRESENTED_STATUSES)
-                ->selectRaw("{$yearSelect}, COUNT(*) as total")
-                ->groupByRaw($yearGroup)
+            $presentedByYearCounts = (clone $outcomeMetrics)
+                ->withOutcomeCodes(config('kmsar.presented_outcome_codes', []))
+                ->whereNotNull('research_accepted_at')
+                ->selectRaw("{$yearSql['select']}, COUNT(*) as total")
+                ->groupByRaw($yearSql['group'])
                 ->get()
                 ->mapWithKeys(fn ($row) => [(int) $row->year => (int) $row->total]);
 
@@ -124,31 +118,36 @@ class DeanController extends Controller
                 ? $this->facultyResearchBreakdown((int) $collegeId, $dateFrom, $dateTo)
                 : [];
 
+            $agendaThemeBreakdown = $this->reporting->buildAgendaThemeDistribution(clone $accepted);
+
             return [
                 'totalResearch' => $totalResearch,
                 'researchInProgress' => $researchInProgress,
                 'pendingEndorsement' => $pendingEndorsement,
                 'publishedCount' => $publishedCount,
+                'presentedCount' => $presentedCount,
                 'scopusIndexedCount' => $scopusIndexedCount,
                 'submissionsByYear' => $submissionsByYear,
                 'publishedByYear' => $publishedByYear,
                 'presentedByYear' => $presentedByYear,
                 'facultyStats' => $facultyStats,
+                'agendaThemeBreakdown' => $agendaThemeBreakdown,
             ];
         });
 
         return view('dean.dashboard', [
             'college' => $college,
-            'totalResearch' => $cached['totalResearch'],
-            'researchInProgress' => $cached['researchInProgress'],
-            'pendingEndorsement' => $cached['pendingEndorsement'],
-            'publishedCount' => $cached['publishedCount'],
-            'scopusIndexedCount' => $cached['scopusIndexedCount'],
+            'totalResearch' => $cached['totalResearch'] ?? 0,
+            'researchInProgress' => $cached['researchInProgress'] ?? 0,
+            'pendingEndorsement' => $cached['pendingEndorsement'] ?? 0,
+            'presentedCount' => $cached['presentedCount'] ?? 0,
+            'scopusIndexedCount' => $cached['scopusIndexedCount'] ?? 0,
             'recentResearch' => $recentResearch,
             'submissionsByYear' => $cached['submissionsByYear'],
             'publishedByYear' => $cached['publishedByYear'],
             'presentedByYear' => $cached['presentedByYear'],
             'facultyStats' => $cached['facultyStats'],
+            'agendaThemeBreakdown' => $cached['agendaThemeBreakdown'],
             'dateFrom' => $dateFrom,
             'dateTo' => $dateTo,
             'scopeAllColleges' => $scopeAllColleges,
@@ -158,7 +157,8 @@ class DeanController extends Controller
     private function collegeResearchQuery(?College $college, ?string $dateFrom = null, ?string $dateTo = null, bool $allColleges = false): Builder
     {
         $q = Research::query()
-            ->whereNotIn('approval_stage', ['draft', 'rejected']);
+            ->where('status', '!=', ResearchStatus::PROPOSAL)
+            ->whereNotIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED]);
 
         if ($allColleges) {
             // Super admin: university-wide, no college filter.
@@ -169,6 +169,29 @@ class DeanController extends Controller
         }
 
         return $this->applyStartDateRange($q, $dateFrom, $dateTo);
+    }
+
+    private function acceptedReportingQuery(?College $college, ?string $dateFrom, ?string $dateTo, bool $allColleges = false): Builder
+    {
+        return $this->reporting->acceptedQuery(
+            $college?->id,
+            $dateFrom,
+            $dateTo,
+            $allColleges || $college !== null,
+        );
+    }
+
+    private function applyStartDateRange(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
+    {
+        if ($dateFrom) {
+            $query->whereDate('start_date', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('start_date', '<=', $dateTo);
+        }
+
+        return $query;
     }
 
     /**
@@ -200,17 +223,15 @@ class DeanController extends Controller
         return $this->lastNYears(5);
     }
 
-    private function applyStartDateRange(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
+    /**
+     * @param  list<string>  $codes
+     */
+    private function researchHasAnyOutcomeCode(Research $research, array $codes): bool
     {
-        if ($dateFrom) {
-            $query->whereDate('start_date', '>=', $dateFrom);
-        }
-
-        if ($dateTo) {
-            $query->whereDate('start_date', '<=', $dateTo);
-        }
-
-        return $query;
+        return $research->outcomeClassifications
+            ->pluck('code')
+            ->intersect($codes)
+            ->isNotEmpty();
     }
 
     /**
@@ -229,20 +250,19 @@ class DeanController extends Controller
         }
 
         $facultyIds = $facultyUsers->pluck('id')->all();
+        $publishedCodes = config('kmsar.published_outcome_codes', []);
+        $presentedCodes = config('kmsar.presented_outcome_codes', []);
+        $scopusCode = config('kmsar.scopus_outcome_code', 'published_scopus');
 
-        $researchQuery = Research::query()
-            ->whereNotIn('approval_stage', ['draft', 'rejected'])
-            ->where('mother_college_id', $collegeId)
+        $researchQuery = $this->reporting->acceptedQuery($collegeId, $dateFrom, $dateTo, true)
             ->where(function (Builder $b) use ($facultyIds) {
                 $b->whereIn('primary_author_id', $facultyIds)
                     ->orWhereHas('researchAuthors', fn (Builder $a) => $a->whereIn('user_id', $facultyIds));
             });
 
-        $this->applyStartDateRange($researchQuery, $dateFrom, $dateTo);
-
         $allResearch = $researchQuery
-            ->with(['researchAuthors:id,research_id,user_id'])
-            ->get(['id', 'primary_author_id', 'status', 'is_scopus_indexed']);
+            ->with(['researchAuthors:id,research_id,user_id', 'outcomeClassifications:id,code'])
+            ->get(['id', 'primary_author_id', 'status', 'research_accepted_at']);
 
         $rows = [];
         foreach ($facultyUsers as $user) {
@@ -254,10 +274,10 @@ class DeanController extends Controller
                 return $r->researchAuthors->pluck('user_id')->contains($user->id);
             });
 
-            $total = $relevant->whereIn('status', self::COMPLETED_STATUSES)->count();
-            $published = $relevant->whereIn('status', self::PUBLISHED_STATUSES)->count();
-            $presented = $relevant->whereIn('status', self::PRESENTED_STATUSES)->count();
-            $scopus = $relevant->where('is_scopus_indexed', true)->count();
+            $total = $relevant->count();
+            $published = $relevant->filter(fn (Research $r) => $this->researchHasAnyOutcomeCode($r, $publishedCodes))->count();
+            $presented = $relevant->filter(fn (Research $r) => $this->researchHasAnyOutcomeCode($r, $presentedCodes))->count();
+            $scopus = $relevant->filter(fn (Research $r) => $this->researchHasAnyOutcomeCode($r, [$scopusCode]))->count();
 
             $rows[] = [
                 'name' => $user->name,

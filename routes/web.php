@@ -9,6 +9,7 @@ use App\Models\College;
 use App\Models\Program;
 use App\Models\Research;
 use App\Models\User;
+use App\Support\ResearchStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -27,6 +28,7 @@ use App\Http\Controllers\OvpriController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResearchController;
+use App\Services\ResearchReportingService;
 use App\Http\Controllers\UserSearchController;
 
 // To process queued emails run: php artisan queue:work --sleep=3 --tries=3
@@ -53,6 +55,13 @@ return redirect()->route('login');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
+    Route::get('/login/csrf-token', function (Request $request) {
+        if ($request->hasSession()) {
+            $request->session()->regenerateToken();
+        }
+
+        return response()->json(['csrf' => csrf_token()]);
+    })->name('login.csrf');
     Route::get('/register', [RegisterController::class, 'create'])
         ->name('register');
     Route::post('/register', [RegisterController::class, 'store'])
@@ -166,7 +175,6 @@ Route::middleware(['auth', 'nocache', 'role:college_dean|unit_head|super_admin']
         Route::get('/research/{research}/documents/{document}/preview', [ApprovalFileController::class, 'preview'])->name('approval.documents.preview');
         Route::post('/{research}/endorse', [ApprovalController::class, 'endorse'])->name('approval.endorse');
         Route::post('/{research}/return', [ApprovalController::class, 'returnSubmission'])->name('approval.return');
-        Route::post('/{research}/reject', [ApprovalController::class, 'reject'])->name('approval.reject');
         Route::get('/{research}', [ApprovalController::class, 'review'])->name('approval.review');
     });
 
@@ -185,7 +193,6 @@ Route::middleware(['auth', 'nocache', 'role:ovpri_admin|cdaic_admin|super_admin'
         Route::get('/review/{research}', [OvpriController::class, 'review'])->name('ovpri.review');
         Route::post('/approve/{research}', [ApprovalController::class, 'approve'])->name('ovpri.approve');
         Route::post('/return/{research}', [ApprovalController::class, 'ovpriReturn'])->name('ovpri.return');
-        Route::post('/reject/{research}', [ApprovalController::class, 'ovpriReject'])->name('ovpri.reject');
         Route::get('/research', [ResearchController::class, 'allResearch'])->name('ovpri.research');
     });
 
@@ -213,15 +220,18 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
         Route::get('dashboard', function (Request $request) {
             $dateFrom = $request->filled('date_from') ? $request->input('date_from') : null;
             $dateTo = $request->filled('date_to') ? $request->input('date_to') : null;
+            $reporting = app(ResearchReportingService::class);
 
             $totalUsers = User::count();
             $totalColleges = College::where('is_active', true)->count();
 
-            $applyDates = function ($query) use ($dateFrom, $dateTo) {
+            $applyStartDates = function ($query) use ($dateFrom, $dateTo) {
                 return $query
                     ->when($dateFrom, fn ($q) => $q->whereDate('start_date', '>=', $dateFrom))
                     ->when($dateTo, fn ($q) => $q->whereDate('start_date', '<=', $dateTo));
             };
+
+            $acceptedResearch = fn () => $reporting->acceptedQuery(null, $dateFrom, $dateTo, true);
 
             if (! Schema::hasTable('research')) {
                 $emptyMonthly = ['labels' => [], 'counts' => []];
@@ -255,42 +265,54 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'collegeBreakdown' => [],
                     'sdgCounts' => array_fill(1, 17, 0),
                     'researchByStatus' => $researchByStatus,
-                    'researchByStage' => [
-                        'labels' => ['Dean review', 'OVPRI review', 'Approved', 'Rejected'],
-                        'counts' => [0, 0, 0, 0],
-                    ],
+                    'researchProgressBreakdown' => collect(),
                     'researchByClassification' => $classificationEmpty,
                     'monthlySubmissions' => $emptyMonthly,
+                    'agendaThemeBreakdown' => collect(),
                     'dateFrom' => $dateFrom,
                     'dateTo' => $dateTo,
                 ]);
             }
 
-            $completedStatuses = config('kmsar.completed_statuses');
             $inProgressStatuses = config('kmsar.in_progress_statuses');
 
-            // Total Research matches Reports: completed statuses + OVPRI approval recorded.
-            $activeResearch = fn () => $applyDates(
-                Research::query()->whereNotIn('approval_stage', ['draft', 'rejected'])
+            $activeResearch = fn () => $applyStartDates(
+                Research::query()
+                    ->where('status', '!=', ResearchStatus::PROPOSAL)
+                    ->whereNotIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED])
             );
-            $completedResearch = fn () => Research::query()
-                ->reportEligible()
-                ->whereOvpriApprovedBetween($dateFrom, $dateTo);
 
-            $totalResearch = (int) $completedResearch()->count();
+            $totalResearch = (int) $acceptedResearch()->count();
             $researchInProgress = (int) $activeResearch()->whereIn('status', $inProgressStatuses)->count();
 
             $researchByStatus = [
-                'draft' => (int) $applyDates(Research::query()->where('approval_stage', 'draft'))->count(),
-                'dean_review' => (int) $applyDates(Research::query()->where('approval_stage', 'dean_review'))->count(),
-                'ovpri_review' => (int) $applyDates(Research::query()->where('approval_stage', 'ovpri_review'))->count(),
-                'approved' => (int) $applyDates(Research::query()->where('approval_stage', 'approved'))->count(),
-                'rejected' => (int) $applyDates(Research::query()->where('approval_stage', 'rejected'))->count(),
+                'dean_review' => (int) $applyStartDates(
+                    Research::query()->whereIn('status', [ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW])
+                )->count(),
+                'ovpri_review' => (int) $applyStartDates(
+                    Research::query()->whereIn('status', [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW])
+                )->count(),
+                'approved' => (int) $applyStartDates(
+                    Research::query()->whereIn('status', [
+                        ResearchStatus::RESEARCH_REGISTERED,
+                        ResearchStatus::ONGOING,
+                        ResearchStatus::RESEARCH_COMPLETED,
+                        ResearchStatus::RESEARCH_ACCEPTED,
+                    ])
+                )->count(),
+                'rejected' => (int) $applyStartDates(
+                    Research::query()->whereIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED])
+                )->count(),
             ];
 
-            $pendingApprovals = (int) $applyDates(
+            $pendingApprovals = (int) $applyStartDates(
                 Research::query()
-                    ->whereIn('approval_stage', ['dean_review', 'ovpri_review'])
+                    ->whereIn('status', [
+                        ResearchStatus::INITIAL_DEAN_REVIEW,
+                        ResearchStatus::INITIAL_OVPRI_REVIEW,
+                        ResearchStatus::FINAL_DEAN_REVIEW,
+                        ResearchStatus::FINAL_OVPRI_REVIEW,
+                    ])
                     ->whereNotNull('submitted_at')
             )->count();
 
@@ -309,8 +331,9 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                     'count' => (int) Research::query()
                         ->whereNotNull('mother_college_id')
                         ->where('mother_college_id', $college->id)
-                        ->reportEligible()
-                        ->whereOvpriApprovedBetween($dateFrom, $dateTo)
+                        ->reportingAccepted()
+                        ->when(filled($dateFrom), fn ($q) => $q->whereDate('research_accepted_at', '>=', $dateFrom))
+                        ->when(filled($dateTo), fn ($q) => $q->whereDate('research_accepted_at', '<=', $dateTo))
                         ->count(),
                 ])
                 ->filter(fn (array $row) => filled($row['label']))
@@ -326,7 +349,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             ])->values();
 
             $sdgCounts = array_fill(1, 17, 0);
-            $sdgTags = $completedResearch()
+            $sdgTags = $acceptedResearch()
                 ->whereNotNull('sdg_tags')
                 ->pluck('sdg_tags');
 
@@ -340,43 +363,24 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 }
             }
 
-            $statusKeys = ['dean_review', 'ovpri_review', 'approved', 'rejected'];
-            $statusLabels = ['Dean review', 'OVPRI review', 'Approved', 'Rejected'];
-            $statusCounts = $applyDates(Research::query())
-                ->select('approval_stage', DB::raw('count(*) as total'))
-                ->groupBy('approval_stage')
-                ->pluck('total', 'approval_stage');
+            $researchProgressBreakdown = $reporting->buildResearchProgressDistribution(clone $acceptedResearch());
 
-            $researchByStage = [
-                'labels' => $statusLabels,
-                'counts' => array_map(
-                    fn (string $key) => (int) ($statusCounts[$key] ?? 0),
-                    $statusKeys
-                ),
-            ];
-
-            $classificationKeys = ['internally_funded', 'self_funded', 'externally_funded', 'thesis', 'other'];
+            $classificationKeys = ['internally_funded', 'self_funded', 'externally_funded', 'student_thesis_dissertation', 'other'];
             $classificationColorsMap = [
                 'internally_funded' => '#1E3A8A',
                 'self_funded' => '#D4AF37',
                 'externally_funded' => '#059669',
-                'thesis' => '#2563EB',
+                'student_thesis_dissertation' => '#2563EB',
                 'other' => '#94A3B8',
             ];
-            $classificationLabelsMap = [
-                'internally_funded' => 'Internally funded',
-                'self_funded' => 'Self funded',
-                'externally_funded' => 'Externally funded',
-                'thesis' => 'Thesis',
-                'other' => 'Other',
-            ];
+            $classificationLabelsMap = config('kmsar.research_classifications', []);
 
-            $rawClass = $completedResearch()
+            $rawClass = $acceptedResearch()
                 ->select('research_classification', DB::raw('count(*) as total'))
                 ->groupBy('research_classification')
                 ->pluck('total', 'research_classification');
 
-            $primaryClassKeys = ['internally_funded', 'self_funded', 'externally_funded', 'thesis'];
+            $primaryClassKeys = ['internally_funded', 'self_funded', 'externally_funded', 'student_thesis_dissertation'];
             $mergedClassCounts = [];
             foreach ($primaryClassKeys as $key) {
                 $mergedClassCounts[$key] = (int) ($rawClass[$key] ?? 0);
@@ -390,37 +394,33 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
             $mergedClassCounts['other'] = $otherTotal;
 
             $researchByClassification = [
-                'labels' => array_map(fn (string $k) => $classificationLabelsMap[$k], $classificationKeys),
-                'counts' => array_map(fn (string $k) => $mergedClassCounts[$k], $classificationKeys),
+                'labels' => array_map(fn (string $k) => $classificationLabelsMap[$k] ?? $k, $classificationKeys),
+                'counts' => array_map(fn (string $k) => $mergedClassCounts[$k] ?? 0, $classificationKeys),
                 'colors' => array_map(fn (string $k) => $classificationColorsMap[$k], $classificationKeys),
             ];
 
-            $submissionsThisYear = (int) $applyDates($completedResearch())
-                ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', now()->year))
+            $agendaThemeBreakdown = $reporting->buildAgendaThemeDistribution($acceptedResearch());
+
+            $submissionsThisYear = (int) $acceptedResearch()
+                ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('research_accepted_at', now()->year))
                 ->count();
 
             $monthlySubmissions = Cache::remember(
-                'admin_monthly_stats_v2_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m'),
+                'admin_monthly_stats_v3_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m'),
                 3600,
-                function () use ($applyDates, $dateFrom, $dateTo, $completedStatuses) {
-                    $isSqlite = DB::connection()->getDriverName() === 'sqlite';
-                    $base = $applyDates(
-                        Research::query()
-                            ->whereNotIn('approval_stage', ['draft', 'rejected'])
-                            ->whereIn('status', $completedStatuses)
-                    );
-                    $dateColumn = ($dateFrom || $dateTo) ? 'start_date' : 'created_at';
-                    $byMonth = $isSqlite
-                        ? (clone $base)
-                            ->selectRaw("CAST(strftime('%m', {$dateColumn}) AS INTEGER) as month, count(*) as total")
-                            ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', date('Y')))
-                            ->groupByRaw("CAST(strftime('%m', {$dateColumn}) AS INTEGER)")
-                            ->pluck('total', 'month')
-                        : (clone $base)
-                            ->selectRaw("MONTH({$dateColumn}) as month, count(*) as total")
-                            ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('created_at', date('Y')))
-                            ->groupByRaw("MONTH({$dateColumn})")
-                            ->pluck('total', 'month');
+                function () use ($reporting, $dateFrom, $dateTo) {
+                    $monthSql = $reporting->acceptedMonthSql();
+                    $base = Research::query()
+                        ->reportingAccepted()
+                        ->whereNotNull('research_accepted_at')
+                        ->when(filled($dateFrom), fn ($q) => $q->whereDate('research_accepted_at', '>=', $dateFrom))
+                        ->when(filled($dateTo), fn ($q) => $q->whereDate('research_accepted_at', '<=', $dateTo));
+
+                    $byMonth = (clone $base)
+                        ->when(! $dateFrom && ! $dateTo, fn ($q) => $q->whereYear('research_accepted_at', date('Y')))
+                        ->selectRaw("{$monthSql['select']}, count(*) as total")
+                        ->groupByRaw($monthSql['group'])
+                        ->pluck('total', 'month');
 
                     $year = $dateFrom
                         ? (int) date('Y', strtotime((string) $dateFrom))
@@ -450,9 +450,10 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'collegeBreakdown' => $collegeBreakdown,
                 'sdgCounts' => $sdgCounts,
                 'researchByStatus' => $researchByStatus,
-                'researchByStage' => $researchByStage,
+                'researchProgressBreakdown' => $researchProgressBreakdown,
                 'researchByClassification' => $researchByClassification,
                 'monthlySubmissions' => $monthlySubmissions,
+                'agendaThemeBreakdown' => $agendaThemeBreakdown,
                 'dateFrom' => $dateFrom,
                 'dateTo' => $dateTo,
             ]);

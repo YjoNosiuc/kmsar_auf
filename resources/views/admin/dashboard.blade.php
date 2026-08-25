@@ -29,7 +29,7 @@
         <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
             <div>
                 <label for="date_from" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
-                    {{ __('Date From') }}
+                    {{ __('Research accepted from') }}
                 </label>
                 <input type="date"
                        id="date_from"
@@ -40,7 +40,7 @@
             </div>
             <div>
                 <label for="date_to" style="font-size:12px; font-weight:600; color:#64748B; display:block; margin-bottom:4px;">
-                    {{ __('Date To') }}
+                    {{ __('Research accepted to') }}
                 </label>
                 <input type="date"
                        id="date_to"
@@ -141,71 +141,52 @@
         </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:20px;">
+    <div class="kmsar-dashboard-chart-grid kmsar-dashboard-chart-grid--3-2">
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
                     <h2 class="kmsar-chart-title">{{ __('Research by College/Office') }}</h2>
-                    <p class="kmsar-chart-subtitle">{{ __('Count of registered research per College/Office') }}</p>
+                    <p class="kmsar-chart-subtitle">{{ __('Research accepted per mother college') }}</p>
                 </div>
             </div>
-            <div class="kmsar-chart-body" style="padding:20px;">
-                <div style="position:relative; height:280px; width:100%;">
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap">
                     <canvas id="collegeChart" aria-label="{{ __('Research by College/Office chart') }}"></canvas>
                 </div>
                 @if (! empty($collegeBreakdown) && count($collegeBreakdown))
                     <div class="kmsar-chart-legend kmsar-chart-legend--horizontal">
                         @foreach ($collegeBreakdown as $row)
-                            @continue(! filled($row['code'] ?? null) || ($row['code'] ?? '') === 'IS')
+                            @continue(! filled($row['code'] ?? null) || ($row['code'] ?? '') === 'IS' || ($row['count'] ?? 0) < 1)
                             <div class="kmsar-legend-item">
                                 <span class="kmsar-legend-dot kmsar-legend-dot--navy"></span>
                                 <span>{{ $row['code'] }}: {{ number_format($row['count']) }} ({{ $row['percentage'] }}%)</span>
                             </div>
                         @endforeach
                     </div>
-                    <div class="kmsar-table-wrap mt-4">
-                        <table class="kmsar-table">
-                            <thead>
-                                <tr>
-                                    <th>{{ __('College/Office') }}</th>
-                                    <th>{{ __('Research') }}</th>
-                                    <th>{{ __('%') }}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($collegeBreakdown as $row)
-                                    @continue(! filled($row['code'] ?? null) || ($row['code'] ?? '') === 'IS')
-                                    <tr>
-                                        <td class="kmsar-table-cell-title">{{ $row['code'] }}</td>
-                                        <td>{{ number_format($row['count']) }}</td>
-                                        <td>{{ $row['percentage'] }}%</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
                 @endif
             </div>
         </div>
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
-                    <h2 class="kmsar-chart-title">{{ __('Approval stage breakdown') }}</h2>
-                    <p class="kmsar-chart-subtitle">{{ __('Distribution by workflow stage') }}</p>
+                    <h2 class="kmsar-chart-title">{{ __('Research progress') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Accepted research only — one progress category per record (highest outcome)') }}</p>
                 </div>
             </div>
-            <div class="kmsar-chart-body" style="padding:20px;">
-                <div style="position:relative; height:280px; width:100%;">
-                    <canvas id="stageChart" aria-label="{{ __('Approval stage chart') }}"></canvas>
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--compact">
+                    <canvas id="progressChart" aria-label="{{ __('Research progress chart') }}"></canvas>
                 </div>
-                @if (! empty($researchByStage['labels']))
+                @if (($researchProgressBreakdown ?? collect())->sum('count') > 0)
                     <div class="kmsar-chart-legend">
-                        @foreach ($researchByStage['labels'] as $i => $label)
-                            <div class="kmsar-legend-item">
-                                <span class="kmsar-legend-dot" style="background:{{ $stageColors[$i] ?? '#94A3B8' }};"></span>
-                                <span>{{ $label }}</span>
-                                <span class="kmsar-legend-value">{{ number_format($researchByStage['counts'][$i] ?? 0) }}</span>
-                            </div>
+                        @foreach ($researchProgressBreakdown as $idx => $row)
+                            @if ($row['count'] > 0)
+                                <div class="kmsar-legend-item">
+                                    <span class="kmsar-legend-dot" style="background:{{ ['#1E3A8A', '#2563EB', '#059669', '#D97706', '#7C3AED', '#DC2626', '#0EA5E9', '#D4AF37', '#64748B', '#94A3B8'][$idx] ?? '#94A3B8' }};"></span>
+                                    <span>{{ $row['label'] }}</span>
+                                    <span class="kmsar-legend-value">{{ number_format($row['count']) }}</span>
+                                </div>
+                            @endif
                         @endforeach
                     </div>
                 @endif
@@ -213,36 +194,70 @@
         </div>
     </div>
 
+    @if (! empty($collegeBreakdown) && count($collegeBreakdown))
+        <div class="kmsar-chart-card" style="margin-bottom:20px;">
+            <div class="kmsar-chart-header">
+                <div>
+                    <h2 class="kmsar-chart-title">{{ __('College/Office breakdown') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Research accepted counts and share') }}</p>
+                </div>
+            </div>
+            <div class="kmsar-chart-body">
+                <div class="kmsar-table-wrap">
+                    <table class="kmsar-table">
+                        <thead>
+                            <tr>
+                                <th>{{ __('College/Office') }}</th>
+                                <th>{{ __('Research') }}</th>
+                                <th>{{ __('%') }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($collegeBreakdown as $row)
+                                @continue(! filled($row['code'] ?? null) || ($row['code'] ?? '') === 'IS')
+                                <tr>
+                                    <td class="kmsar-table-cell-title">{{ $row['code'] }}</td>
+                                    <td>{{ number_format($row['count']) }}</td>
+                                    <td>{{ $row['percentage'] }}%</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="kmsar-chart-card" style="margin-bottom:20px;">
         <div class="kmsar-chart-header">
             <div>
                 <h2 class="kmsar-chart-title">{{ __('SDG Distribution') }}</h2>
-                <p class="kmsar-chart-subtitle">{{ __('Research aligned to each Sustainable Development Goal (excluding drafts and rejected records)') }}</p>
+                <p class="kmsar-chart-subtitle">{{ __('Research accepted only, aligned to each Sustainable Development Goal') }}</p>
             </div>
         </div>
         <div class="kmsar-chart-body">
             <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--sdg">
-                <canvas id="adminSdgChart" aria-label="{{ __('SDG Distribution') }}" height="300"></canvas>
+                <canvas id="adminSdgChart" aria-label="{{ __('SDG Distribution') }}"></canvas>
             </div>
         </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:20px;">
+    <div class="kmsar-dashboard-chart-grid kmsar-dashboard-chart-grid--3-2">
         <div class="kmsar-chart-card">
             <div class="kmsar-chart-header">
                 <div>
-                    <h2 class="kmsar-chart-title">{{ __('Submission trend') }}</h2>
-                    <p class="kmsar-chart-subtitle">{{ __('New research registrations by month') }}</p>
+                    <h2 class="kmsar-chart-title">{{ __('Acceptance trend') }}</h2>
+                    <p class="kmsar-chart-subtitle">{{ __('Research accepted by month') }}</p>
                 </div>
             </div>
-            <div class="kmsar-chart-body" style="padding:20px;">
-                <div style="position:relative; height:280px; width:100%;">
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap">
                     <canvas id="monthlyChart" aria-label="{{ __('Monthly submission trend chart') }}"></canvas>
                 </div>
                 <div class="kmsar-chart-summary">
                     <div class="kmsar-chart-summary-item">
                         <span class="kmsar-chart-summary-value">{{ number_format($submissionsThisYear ?? 0) }}</span>
-                        <span class="kmsar-chart-summary-label">{{ __('Total submissions this year') }}</span>
+                        <span class="kmsar-chart-summary-label">{{ __('Total accepted this year') }}</span>
                     </div>
                 </div>
             </div>
@@ -254,8 +269,8 @@
                     <p class="kmsar-chart-subtitle">{{ __('Funding and type breakdown') }}</p>
                 </div>
             </div>
-            <div class="kmsar-chart-body" style="padding:20px;">
-                <div style="position:relative; height:280px; width:100%;">
+            <div class="kmsar-chart-body">
+                <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--compact">
                     <canvas id="classChart" aria-label="{{ __('Research classification chart') }}"></canvas>
                 </div>
                 @if (! empty($researchByClassification['labels']))
@@ -270,6 +285,33 @@
                     </div>
                 @endif
             </div>
+        </div>
+    </div>
+
+    <div class="kmsar-chart-card" style="margin-bottom:20px;">
+        <div class="kmsar-chart-header">
+            <div>
+                <h2 class="kmsar-chart-title">{{ __('AUF Research Agenda theme alignment') }}</h2>
+                <p class="kmsar-chart-subtitle">{{ __('Accepted research aligned to institutional agenda themes') }}</p>
+            </div>
+        </div>
+        <div class="kmsar-chart-body">
+            <div class="kmsar-chart-canvas-wrap kmsar-chart-canvas-wrap--compact" style="max-width:520px;margin:0 auto;">
+                <canvas id="adminAgendaThemeChart" aria-label="{{ __('Agenda theme alignment') }}"></canvas>
+            </div>
+            @if (($agendaThemeBreakdown ?? collect())->sum('count') > 0)
+                <div class="kmsar-chart-legend" style="margin-top:12px;font-size:0.75rem;line-height:1.35;">
+                    @foreach ($agendaThemeBreakdown as $idx => $row)
+                        @if ($row['count'] > 0)
+                            <div class="kmsar-legend-item">
+                                <span class="kmsar-legend-dot" style="background:{{ ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#D97706', '#7C3AED'][$idx] ?? '#94A3B8' }};"></span>
+                                <span>{{ $row['label'] }}</span>
+                                <span class="kmsar-legend-value">{{ number_format($row['count']) }}</span>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
         </div>
     </div>
 @endsection
@@ -287,16 +329,23 @@ document.addEventListener('DOMContentLoaded', function () {
             const code = (r.label || r.code || '').toString().trim();
             return code !== '' && code !== 'IS';
         });
-    const researchByStage = @json($researchByStage ?? ['labels' => [], 'counts' => []]);
+    const collegeChartRows = researchByCollege.filter(function (r) { return (r.count || 0) > 0; });
+    const researchProgressBreakdown = @json($researchProgressBreakdown ?? collect());
+    const progressChartLabels = researchProgressBreakdown.map(function (r) { return r.label; });
+    const progressChartCounts = researchProgressBreakdown.map(function (r) { return r.count; });
+    const progressChartColors = ['#1E3A8A', '#2563EB', '#059669', '#D97706', '#7C3AED', '#DC2626', '#0EA5E9', '#D4AF37', '#64748B', '#94A3B8'];
     const monthlySubmissions = @json($monthlySubmissions ?? ['labels' => [], 'counts' => []]);
     const researchByClassification = @json($researchByClassification ?? ['labels' => [], 'counts' => [], 'colors' => []]);
+    const agendaThemeLabels = @json(collect($agendaThemeBreakdown ?? [])->pluck('label'));
+    const agendaThemeCounts = @json(collect($agendaThemeBreakdown ?? [])->pluck('count'));
+    const agendaThemeColors = ['#1E3A8A', '#D4AF37', '#059669', '#2563EB', '#D97706', '#7C3AED'];
     const sdgData = @json(array_values($sdgCounts ?? array_fill(1, 17, 0)));
-    const collegePercentages = researchByCollege.map(function (r) {
+    const collegePercentages = collegeChartRows.map(function (r) {
         return r.percentage !== undefined ? r.percentage : 0;
     });
 
-    const collegeLabels = researchByCollege.map(function (r) { return r.label || r.code; });
-    const collegeCounts = researchByCollege.map(function (r) { return r.count; });
+    const collegeLabels = collegeChartRows.map(function (r) { return r.label || r.code; });
+    const collegeCounts = collegeChartRows.map(function (r) { return r.count; });
 
     if (typeof Chart === 'undefined') {
         return;
@@ -342,7 +391,17 @@ document.addEventListener('DOMContentLoaded', function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                scales: scaleCommon,
+                layout: { padding: 4 },
+                scales: {
+                    ...scaleCommon,
+                    y: {
+                        beginAtZero: true,
+                        grace: '5%',
+                        ticks: { precision: 0, stepSize: 1 },
+                        grid: { color: '#E2E8F0' },
+                        border: { display: false },
+                    },
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -415,23 +474,22 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    const stageColors = ['#D97706', '#2563EB', '#059669', '#DC2626'];
-    const stageCtx = document.getElementById('stageChart');
-    if (stageCtx && researchByStage.counts && researchByStage.counts.length) {
-        new Chart(stageCtx, {
-            type: 'doughnut',
+    const progressCtx = document.getElementById('progressChart');
+    if (progressCtx && progressChartCounts.length && progressChartCounts.some(function (n) { return n > 0; })) {
+        new Chart(progressCtx, {
+            type: 'pie',
             data: {
-                labels: researchByStage.labels,
+                labels: progressChartLabels,
                 datasets: [{
-                    data: researchByStage.counts,
-                    backgroundColor: stageColors,
+                    data: progressChartCounts,
+                    backgroundColor: progressChartLabels.map(function (_, i) { return progressChartColors[i] ?? '#94A3B8'; }),
                     borderWidth: 0,
                 }],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '65%',
+                layout: { padding: 8 },
             },
         });
     }
@@ -480,7 +538,31 @@ document.addEventListener('DOMContentLoaded', function () {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '65%',
+                layout: { padding: 8 },
+                cutout: '62%',
+            },
+        });
+    }
+
+    const agendaCtx = document.getElementById('adminAgendaThemeChart');
+    if (agendaCtx && agendaThemeCounts.some(function (n) { return n > 0; })) {
+        new Chart(agendaCtx, {
+            type: 'pie',
+            data: {
+                labels: agendaThemeLabels,
+                datasets: [{
+                    data: agendaThemeCounts,
+                    backgroundColor: agendaThemeLabels.map(function (_, i) { return agendaThemeColors[i] ?? '#94A3B8'; }),
+                    borderWidth: 0,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: { padding: 8 },
+                plugins: {
+                    legend: { display: false },
+                },
             },
         });
     }

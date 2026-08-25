@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Research;
 use App\Models\User;
+use App\Support\ResearchStatus;
 
 class ResearchPolicy
 {
@@ -21,17 +22,15 @@ class ResearchPolicy
     public function view(User $user, Research $research): bool
     {
         if ($user->hasRole('registrar')) {
-            return $user->can('research.view_all') && $research->approval_stage === 'approved';
+            return $user->can('research.view_all') && $research->status === ResearchStatus::RESEARCH_ACCEPTED;
         }
 
-        // Super admin retains full visibility for system management (including draft).
         if ($user->hasRole('super_admin')) {
             return true;
         }
 
-        // OVPRI / CDAIC cannot view draft research.
         if ($user->hasAnyRole(['ovpri_admin', 'cdaic_admin'])) {
-            if ($research->approval_stage === 'draft') {
+            if ($research->status === ResearchStatus::PROPOSAL) {
                 return false;
             }
 
@@ -42,9 +41,8 @@ class ResearchPolicy
             return true;
         }
 
-        // Dean / unit head cannot view draft; college-scoped otherwise.
         if ($user->hasAnyRole(['college_dean', 'unit_head']) || $user->can('research.view_college')) {
-            if ($research->approval_stage === 'draft') {
+            if ($research->status === ResearchStatus::PROPOSAL) {
                 return false;
             }
 
@@ -65,7 +63,20 @@ class ResearchPolicy
 
     public function update(User $user, Research $research): bool
     {
-        if (! in_array($research->approval_stage, ['draft', 'rejected', 'returned_to_faculty'], true)) {
+        if (! ResearchStatus::isFullyEditable((string) $research->status)) {
+            return false;
+        }
+
+        if ((int) $research->primary_author_id === (int) $user->id && $user->can('research.update')) {
+            return true;
+        }
+
+        return $this->coAuthorCanEdit($user, $research);
+    }
+
+    public function updateOutcomes(User $user, Research $research): bool
+    {
+        if (! ResearchStatus::isOutcomeEditable((string) $research->status)) {
             return false;
         }
 
@@ -77,11 +88,16 @@ class ResearchPolicy
     }
 
     /**
-     * Faculty may submit a progress update on fully approved research (restarts dean endorsement).
+     * @deprecated Alias for submitCompletion policy checks.
      */
     public function updateProgress(User $user, Research $research): bool
     {
-        if ($research->approval_stage !== 'approved') {
+        return $this->submitCompletion($user, $research);
+    }
+
+    public function submitCompletion(User $user, Research $research): bool
+    {
+        if (! ResearchStatus::canSubmitCompletion((string) $research->status)) {
             return false;
         }
 
@@ -92,13 +108,36 @@ class ResearchPolicy
         return $this->coAuthorCanEdit($user, $research);
     }
 
+    public function uploadDocuments(User $user, Research $research): bool
+    {
+        return $this->update($user, $research) || $this->updateOutcomes($user, $research);
+    }
+
     public function submit(User $user, Research $research): bool
     {
         if (! $user->can('research.submit')) {
             return false;
         }
 
-        if ($research->approval_stage !== 'draft') {
+        if ($research->status !== ResearchStatus::PROPOSAL) {
+            return false;
+        }
+
+        return $this->update($user, $research);
+    }
+
+    public function revise(User $user, Research $research): bool
+    {
+        return $this->resubmitInitial($user, $research) || $this->resubmitFinal($user, $research);
+    }
+
+    public function resubmitInitial(User $user, Research $research): bool
+    {
+        if (! $user->can('research.revise')) {
+            return false;
+        }
+
+        if ($research->status !== ResearchStatus::INITIAL_REJECTED) {
             return false;
         }
 
@@ -109,13 +148,13 @@ class ResearchPolicy
         return $this->coAuthorCanEdit($user, $research);
     }
 
-    public function revise(User $user, Research $research): bool
+    public function resubmitFinal(User $user, Research $research): bool
     {
         if (! $user->can('research.revise')) {
             return false;
         }
 
-        if (! in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true)) {
+        if ($research->status !== ResearchStatus::FINAL_REJECTED) {
             return false;
         }
 

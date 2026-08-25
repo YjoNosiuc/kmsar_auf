@@ -1,24 +1,50 @@
 @php
+    use App\Models\OutcomeClassification;
+    use App\Support\ResearchStatus;
+
     $listRoute = route('research.index');
-    $approvalStageLabel = match ((string) $research->approval_stage) {
-        'returned_to_faculty' => __('Returned by OVPRI'),
-        default => ucwords(str_replace('_', ' ', (string) $research->approval_stage)),
-    };
-    $statusLabel = ucwords(str_replace('_', ' ', (string) $research->status));
-    $progressBadge = match ($research->status) {
-        'published_scopus', 'published_non_indexed', 'presented_external', 'presented_internal', 'completed_unpublished' => 'approved',
-        'proposal', 'ongoing' => 'pending',
-        'patent_submitted', 'patent_granted' => 'info',
+    $statusLabel = ResearchStatus::label($research->status);
+    $statusBadgeVariant = match ($research->status) {
+        ResearchStatus::PROPOSAL => 'draft',
+        ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+        ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
+        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+        ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'returned',
+        ResearchStatus::RESEARCH_COMPLETED => 'info',
         default => 'draft',
     };
-    $stageBadgeVariant = match ($research->approval_stage) {
-        'dean_review' => 'pending',
-        'ovpri_review' => 'info',
-        'approved' => 'approved',
-        'rejected' => 'rejected',
-        'returned_to_faculty' => 'returned',
-        default => 'draft',
-    };
+    $outcomeClassifications = $outcomeClassifications ?? OutcomeClassification::query()
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get();
+    $selectedOutcomeCodes = old(
+        'outcome_classifications',
+        $research->outcomeClassifications->pluck('code')->all(),
+    );
+    $isFinalResubmit = $research->status === ResearchStatus::FINAL_REJECTED;
+    $progressModalOpen = $errors->hasAny([
+        'outcome_classifications',
+        'outcome_classifications.*',
+        'files',
+        'files.*',
+        'external_links',
+        'external_links.*',
+        'external_link',
+        'proof',
+        'remarks',
+    ]);
+    $oldExternalLinks = old('external_links');
+    if (! is_array($oldExternalLinks) || $oldExternalLinks === []) {
+        $oldExternalLinks = [''];
+    }
+    $maxUploadFiles = (int) config('kmsar.max_research_upload_files', 10);
+    $maxExternalLinks = (int) config('kmsar.max_research_external_links', 10);
+    $progressUploadTab = old('upload_type', 'file');
+    if ($errors->hasAny(['external_links', 'external_links.*', 'external_link'])) {
+        $progressUploadTab = 'link';
+    } elseif ($errors->hasAny(['files', 'files.*'])) {
+        $progressUploadTab = 'file';
+    }
 @endphp
 
 @extends('layouts.app')
@@ -30,7 +56,7 @@
 @endsection
 
 @section('content')
-    <div x-data="{ tab: 'info', showUpdateProgress: false }">
+    <div x-data="{ tab: 'info', showUpdateProgress: @json($progressModalOpen) }">
         <div class="kmsar-page-header">
             <div>
                 {{-- Breadcrumb --}}
@@ -87,24 +113,31 @@
             {{-- Action buttons — keep role-specific buttons --}}
             <div class="kmsar-page-header-actions">
                 <x-button variant="secondary" href="{{ $listRoute }}">{{ __('Back to list') }}</x-button>
-                @if ($research->approval_stage === 'approved')
-                    @can('updateProgress', $research)
-                        <x-button variant="primary" type="button" @click="showUpdateProgress = true" aria-label="{{ __('Update Progress') }}">{{ __('Update Progress') }}</x-button>
+                @if (ResearchStatus::canSubmitCompletion((string) $research->status))
+                    @can('submitCompletion', $research)
+                        <x-button variant="primary" type="button" @click="showUpdateProgress = true" aria-label="{{ __('Submit completion') }}">{{ __('Submit completion') }}</x-button>
                     @endcan
                 @endif
-                @if ($research->approval_stage === 'draft')
+                @if ($research->status === ResearchStatus::PROPOSAL)
                     @can('update', $research)
                         <x-button variant="primary" href="{{ route('research.wizard.details', $research) }}">{{ __('Edit Details') }}</x-button>
                         <x-button variant="outline" href="{{ route('research.wizard.documents', $research) }}">{{ __('Continue to documents') }}</x-button>
                     @endcan
                 @endif
 
-                @if (in_array($research->approval_stage, ['rejected', 'returned_to_faculty'], true))
-                    @can('revise', $research)
+                @if ($research->status === ResearchStatus::INITIAL_REJECTED)
+                    @can('resubmitInitial', $research)
+                        <x-button variant="primary" href="{{ route('research.wizard.details', $research) }}">{{ __('Edit & resubmit') }}</x-button>
                         <form method="post" action="{{ route('research.revise', $research) }}" class="inline">
                             @csrf
-                            <x-button type="submit" variant="secondary">{{ __('Revise') }}</x-button>
+                            <x-button type="submit" variant="secondary">{{ __('Resubmit for initial review') }}</x-button>
                         </form>
+                    @endcan
+                @endif
+
+                @if ($research->status === ResearchStatus::FINAL_REJECTED)
+                    @can('resubmitFinal', $research)
+                        <x-button variant="primary" type="button" @click="showUpdateProgress = true">{{ __('Update outcomes & resubmit') }}</x-button>
                     @endcan
                 @endif
             </div>
@@ -118,15 +151,15 @@
             <x-alert type="info" :message="session('info')" class="mb-6" />
         @endif
 
-        @if ($research->approval_stage === 'draft' && $research->revision_count > 0)
+        @if ($research->status === ResearchStatus::INITIAL_REJECTED && $research->revision_count > 0)
             <x-alert type="warning" class="mb-6">
-                {{ __('This submission was returned for revision. Please update your documents and resubmit.') }}
+                {{ __('Initial review returned this submission for revision. Update your registration details and documents, then resubmit.') }}
             </x-alert>
         @endif
 
-        @if ($research->approval_stage === 'returned_to_faculty')
+        @if ($research->status === ResearchStatus::FINAL_REJECTED)
             <x-alert type="warning" class="mb-6">
-                {{ __('OVPRI returned this submission for revision. Click Revise to edit and resubmit through your college dean.') }}
+                {{ __('Final review returned this submission. Update outcome classifications and supporting documents, then resubmit.') }}
             </x-alert>
         @endif
 
@@ -228,7 +261,7 @@
                                                             </a>
                                                             </div>
                                                         @endif
-                                                        @if($research->approval_stage === 'draft' && (int) $document->uploaded_by === (int) auth()->id())
+                                                        @if(ResearchStatus::isFullyEditable((string) $research->status) && (int) $document->uploaded_by === (int) auth()->id())
                                                             <form method="POST" action="{{ route('documents.destroy', $document) }}" style="display:inline;">
                                                                 @csrf
                                                                 @method('DELETE')
@@ -253,7 +286,7 @@
                                 </table>
                             </div>
 
-                            @if ($research->approval_stage === 'draft')
+                            @if ($research->status === ResearchStatus::PROPOSAL)
                                 @can('update', $research)
                                     <div class="mt-6 border-t border-[var(--color-border)] pt-6">
                                         <form
@@ -315,8 +348,8 @@
                                                     <p class="kmsar-form-hint">{{ __('Maximum 2 files per upload · PDF, Word, Excel, Image · Max 100MB each') }}</p>
                                                 </div>
                                                 <div x-show="uploadType==='link'" x-cloak>
-                                                    <input type="url" name="external_link"
-                                                        placeholder="https://drive.google.com/... or https://doi.org/..."
+                                                    <input type="text" name="external_link"
+                                                        placeholder=""
                                                         class="kmsar-input"
                                                         style="width:100%;">
                                                     <p class="kmsar-form-hint">{{ __('Paste a Google Drive, OneDrive, DOI, or any public link to your document.') }}</p>
@@ -400,12 +433,8 @@
                     <table style="width:100%;font-size:13px;border-collapse:collapse;">
                         <tbody>
                             <tr>
-                                <td style="color:#94A3B8;padding:6px 0;width:45%;vertical-align:middle;">{{ __('Status') }}</td>
-                                <td style="padding:6px 0;vertical-align:middle;"><span class="kmsar-badge kmsar-badge--{{ $progressBadge }} kmsar-badge--square">{{ $statusLabel }}</span></td>
-                            </tr>
-                            <tr>
-                                <td style="color:#94A3B8;padding:6px 0;vertical-align:middle;">{{ __('Stage') }}</td>
-                                <td style="padding:6px 0;vertical-align:middle;"><span class="kmsar-badge kmsar-badge--{{ $stageBadgeVariant }} kmsar-badge--square">{{ $approvalStageLabel }}</span></td>
+                                <td style="color:#94A3B8;padding:6px 0;width:45%;vertical-align:middle;">{{ __('Workflow status') }}</td>
+                                <td style="padding:6px 0;vertical-align:middle;"><span class="kmsar-badge kmsar-badge--{{ $statusBadgeVariant }} kmsar-badge--square">{{ $statusLabel }}</span></td>
                             </tr>
                             <tr>
                                 <td style="color:#94A3B8;padding:6px 0;vertical-align:middle;">{{ __('Submitted') }}</td>
@@ -423,7 +452,7 @@
                     </table>
                 </div>
 
-                @if ($research->approval_stage === 'draft')
+                @if ($research->status === ResearchStatus::PROPOSAL)
                     <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;border-top:3px solid #1E3A8A;">
                         <h2 class="kmsar-card-title" style="margin:0 0 8px 0;">{{ __('Ready to submit?') }}</h2>
                         <p class="kmsar-body" style="margin:0 0 16px;font-size:13px;color:#64748B;">{{ __('Update details and documents in the registration wizard, then submit for dean review from the Documents step.') }}</p>
@@ -452,7 +481,22 @@
             x-on:click.self="showUpdateProgress = false"
         >
             <div class="kmsar-modal kmsar-modal--sm" x-on:click.stop role="dialog" aria-modal="true" aria-labelledby="kmsar-update-progress-title">
-                <form method="POST" action="{{ route('research.update-progress', $research) }}" enctype="multipart/form-data" style="margin:0;">
+                <form
+                    method="POST"
+                    action="{{ route('research.update-progress', $research) }}"
+                    enctype="multipart/form-data"
+                    style="margin:0;"
+                    x-data="researchProgressProof()"
+                    data-initial-links="{{ e(json_encode($oldExternalLinks)) }}"
+                    data-max-files="{{ $maxUploadFiles }}"
+                    data-max-links="{{ $maxExternalLinks }}"
+                    data-upload-type="{{ $progressUploadTab === 'link' ? 'link' : 'file' }}"
+                    data-disallowed-hosts="{{ e(json_encode(config('kmsar.disallowed_external_link_hosts', []))) }}"
+                    data-msg-invalid="{{ e(__('Invalid link. Please enter a correct URL.')) }}"
+                    data-msg-blocked="{{ e(__('This link type is not accepted for supporting proof. Please use a Google Drive, OneDrive, Dropbox, or DOI link instead.')) }}"
+                    data-msg-required="{{ e(__('Please add at least one link (Google Drive, OneDrive, Dropbox, or DOI).')) }}"
+                    @submit="handleSubmit($event)"
+                >
                     @csrf
                     @method('PUT')
 
@@ -467,8 +511,14 @@
                                     </svg>
                                 </div>
                                 <div>
-                                    <h2 id="kmsar-update-progress-title" style="font-size:16px;font-weight:700;color:#0F172A;margin:0;line-height:1.2;">{{ __('Update Research Progress') }}</h2>
-                                    <p style="font-size:12px;color:#94A3B8;margin:0;margin-top:1px;">{{ __('Changes will notify your Dean and OVPRI') }}</p>
+                                    <h2 id="kmsar-update-progress-title" style="font-size:16px;font-weight:700;color:#0F172A;margin:0;line-height:1.2;">
+                                        {{ $isFinalResubmit ? __('Update outcomes & resubmit') : __('Submit research completion') }}
+                                    </h2>
+                                    <p style="font-size:12px;color:#94A3B8;margin:0;margin-top:1px;">
+                                        {{ $isFinalResubmit
+                                            ? __('Revise outcome classifications and supporting proof, then resubmit for final review')
+                                            : __('Select outcome classifications and upload supporting proof') }}
+                                    </p>
                                 </div>
                             </div>
                             <button type="button"
@@ -486,40 +536,65 @@
                         {{-- Scrollable body --}}
                         <div style="flex:1;overflow-y:auto;padding:20px 24px;display:flex;flex-direction:column;gap:20px;">
 
+                            @if ($errors->hasAny(['proof', 'files', 'files.*', 'external_links', 'external_links.*', 'external_link', 'outcome_classifications', 'outcome_classifications.*']))
+                                @php
+                                    $progressModalErrors = collect($errors->getMessages())
+                                        ->filter(function ($messages, $key) {
+                                            return in_array($key, ['proof', 'external_link', 'outcome_classifications', 'files', 'external_links'], true)
+                                                || preg_match('/^(external_links|files|outcome_classifications)\.\d+$/', (string) $key)
+                                                || str_ends_with((string) $key, '.*');
+                                        })
+                                        ->flatten()
+                                        ->filter(fn ($message) => is_string($message) && $message !== '')
+                                        ->unique()
+                                        ->values();
+                                @endphp
+                                <div class="kmsar-alert kmsar-alert--danger" role="alert" style="margin:0;">
+                                    <div style="display:flex;flex-direction:column;gap:6px;">
+                                        @foreach ($progressModalErrors as $message)
+                                            <p style="margin:0;font-size:13px;">{{ $message }}</p>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
+
                             {{-- Info banner --}}
                             <div style="display:flex;gap:10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:12px 14px;">
                                 <svg style="width:16px;height:16px;color:#1E3A8A;flex-shrink:0;margin-top:1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
-                                <p style="font-size:12px;color:#1E40AF;margin:0;line-height:1.5;">{{ __('Updating the progress status will notify your Dean and OVPRI. The record will be re-submitted for endorsement.') }}</p>
+                                <p style="font-size:12px;color:#1E40AF;margin:0;line-height:1.5;">
+                                    @if ($isFinalResubmit)
+                                        {{ __('Update your outcome package and resubmit. Registration details remain locked.') }}
+                                    @else
+                                        {{ __('Submitting completion will move this research into final review. Your Dean and OVPRI will be notified.') }}
+                                    @endif
+                                </p>
                             </div>
 
-                            {{-- New Progress Status --}}
+                            {{-- Outcome classifications --}}
                             <div>
                                 <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;letter-spacing:0.02em;">
-                                    {{ __('New Progress Status') }}
+                                    {{ __('Outcome classifications') }}
                                     <span style="color:#DC2626;">*</span>
                                 </label>
-                                <div style="position:relative;">
-                                    <select name="status" required
-                                        style="width:100%;padding:10px 36px 10px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;color:#0F172A;background:#fff;font-family:inherit;appearance:none;cursor:pointer;transition:border-color 0.15s;box-sizing:border-box;"
-                                        onfocus="this.style.borderColor='#1E3A8A';this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'"
-                                        onblur="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">
-                                        <option value="">{{ __('Select a status...') }}</option>
-                                        <option value="proposal" @selected($research->status === 'proposal')>{{ __('Proposal / Abstract Stage') }}</option>
-                                        <option value="ongoing" @selected($research->status === 'ongoing')>{{ __('Research in Progress') }}</option>
-                                        <option value="completed_unpublished" @selected($research->status === 'completed_unpublished')>{{ __('Completed (Unpublished)') }}</option>
-                                        <option value="presented_internal" @selected($research->status === 'presented_internal')>{{ __('Presented Internally') }}</option>
-                                        <option value="presented_external" @selected($research->status === 'presented_external')>{{ __('Presented Externally') }}</option>
-                                        <option value="published_non_indexed" @selected($research->status === 'published_non_indexed')>{{ __('Published (Non-indexed)') }}</option>
-                                        <option value="published_scopus" @selected($research->status === 'published_scopus')>{{ __('Published (Scopus/WoS Indexed)') }}</option>
-                                        <option value="patent_submitted" @selected($research->status === 'patent_submitted')>{{ __('Patent Submitted') }}</option>
-                                        <option value="patent_granted" @selected($research->status === 'patent_granted')>{{ __('Patent Granted') }}</option>
-                                    </select>
-                                    <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:#94A3B8;">
-                                        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                    </span>
+                                <div style="display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;">
+                                    @foreach ($outcomeClassifications as $classification)
+                                        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:#0F172A;">
+                                            <input
+                                                type="checkbox"
+                                                name="outcome_classifications[]"
+                                                value="{{ $classification->code }}"
+                                                {{ in_array($classification->code, $selectedOutcomeCodes, true) ? 'checked' : '' }}
+                                                style="width:16px;height:16px;accent-color:#1E3A8A;cursor:pointer;"
+                                            >
+                                            {{ $classification->name }}
+                                        </label>
+                                    @endforeach
                                 </div>
+                                @error('outcome_classifications')
+                                    <p class="kmsar-form-error" role="alert">{{ $message }}</p>
+                                @enderror
                             </div>
 
                             {{-- Remarks --}}
@@ -532,7 +607,10 @@
                                     placeholder="{{ __('Describe what has changed or been achieved...') }}"
                                     style="width:100%;padding:10px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;color:#0F172A;background:#fff;font-family:inherit;resize:vertical;box-sizing:border-box;transition:border-color 0.15s;line-height:1.5;"
                                     onfocus="this.style.borderColor='#1E3A8A';this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'"
-                                    onblur="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'"></textarea>
+                                    onblur="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">{{ old('remarks') }}</textarea>
+                                @error('remarks')
+                                    <p class="kmsar-form-error" role="alert">{{ $message }}</p>
+                                @enderror
                             </div>
 
                             {{-- Supporting document --}}
@@ -541,9 +619,10 @@
                                     {{ __('Supporting Document') }}
                                     <span style="color:#DC2626;">*</span>
                                 </label>
-                                <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">{{ __('Upload proof supporting your new status (e.g. publication proof, conference certificate, patent receipt), or paste a public link.') }}</p>
+                                <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">{{ __('Upload proof supporting your new status (e.g. publication proof, conference certificate, patent receipt), or paste public link(s).') }}</p>
 
-                                <div x-data="researchShowDocumentUpload()">
+                                <div>
+                                    <input type="hidden" name="upload_type" :value="uploadType">
 
                                     <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin:0 0 8px;">
                                         {{ __('Upload Method') }}
@@ -553,18 +632,18 @@
                                             type="button"
                                             class="kmsar-tab"
                                             :class="{ 'active': uploadType === 'file' }"
-                                            @click="uploadType = 'file'"
+                                            @click="setUploadType('file')"
                                         >{{ __('Upload File') }}</button>
                                         <button
                                             type="button"
                                             class="kmsar-tab"
                                             :class="{ 'active': uploadType === 'link' }"
-                                            @click="uploadType = 'link'"
+                                            @click="setUploadType('link')"
                                         >{{ __('Add Link') }}</button>
                                     </div>
 
                                     {{-- File upload panel --}}
-                                    <div x-show="uploadType==='file'">
+                                    <div x-show="uploadType === 'file'" style="display: none;">
                                         <div
                                             class="kmsar-dropzone"
                                             @click="$refs.fileInput.click()"
@@ -582,7 +661,7 @@
                                                 <span>{{ __('Click to upload') }}</span> {{ __('or drag and drop') }}
                                             </p>
                                             <p class="kmsar-dropzone-hint">
-                                                {{ __('PDF, Word, Excel, Image · Max 100MB · 2 files max') }}
+                                                {{ __('PDF, Word, Excel, Image · Max 100MB · up to :max files', ['max' => $maxUploadFiles]) }}
                                             </p>
                                             <input
                                                 type="file"
@@ -592,35 +671,93 @@
                                                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                                                 class="hidden"
                                                 style="display:none;"
+                                                :disabled="uploadType !== 'file'"
                                                 @change="handleFileSelect($event)"
                                             >
-                                            <p class="modal-file-name" style="font-size:12px;color:#475569;margin:10px 0 0;min-height:16px;"></p>
+                                            <p class="modal-file-name" style="font-size:12px;color:#475569;margin:10px 0 0;min-height:16px;" x-text="fileSummary"></p>
                                         </div>
+                                        <p class="kmsar-form-hint" style="margin-top:8px;font-size:11px;color:#94A3B8;">
+                                            {{ __('You may select multiple files in one upload (up to :max).', ['max' => $maxUploadFiles]) }}
+                                        </p>
                                     </div>
 
                                     {{-- Link panel --}}
-                                    <div x-show="uploadType==='link'" x-cloak>
+                                    <div x-show="uploadType === 'link'" style="display: none;">
                                         <div style="border:1px solid #E2E8F0;border-radius:10px;padding:16px;background:#F8FAFC;">
-                                            <div style="position:relative;">
-                                                <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#94A3B8;">
-                                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/>
-                                                    </svg>
-                                                </span>
-                                                <input type="url" name="external_link"
-                                                    placeholder="https://drive.google.com/file/d/... or https://doi.org/..."
-                                                    style="width:100%;padding:10px 12px 10px 34px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;transition:border-color 0.15s;"
-                                                    onfocus="this.style.borderColor='#1E3A8A';this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'"
-                                                    onblur="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">
+                                            <p
+                                                x-show="linkErrorSummary"
+                                                x-cloak
+                                                x-text="linkErrorSummary"
+                                                class="kmsar-form-error"
+                                                role="alert"
+                                                style="margin:0 0 10px;font-size:13px;"
+                                            ></p>
+                                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                                <template x-for="(link, index) in links" :key="index">
+                                                    <div>
+                                                        <div style="display:flex;gap:8px;align-items:flex-start;">
+                                                        <div style="position:relative;flex:1;">
+                                                            <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#94A3B8;">
+                                                                <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/>
+                                                                </svg>
+                                                            </span>
+                                                            <input
+                                                                type="text"
+                                                                name="external_links[]"
+                                                                x-model="links[index]"
+                                                                :disabled="uploadType !== 'link'"
+                                                                :aria-invalid="linkErrors[index] ? 'true' : 'false'"
+                                                                @input="clearLinkError(index)"
+                                                                placeholder=""
+                                                                :style="linkErrors[index]
+                                                                    ? 'width:100%;padding:10px 12px 10px 34px;border:1.5px solid #DC2626;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;'
+                                                                    : 'width:100%;padding:10px 12px 10px 34px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;transition:border-color 0.15s;'"
+                                                                onfocus="if (!this.getAttribute('aria-invalid') || this.getAttribute('aria-invalid') === 'false') { this.style.borderColor='#1E3A8A'; this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'; }"
+                                                                onblur="if (!this.getAttribute('aria-invalid') || this.getAttribute('aria-invalid') === 'false') { this.style.borderColor='#E2E8F0'; this.style.boxShadow='none'; }"
+                                                            >
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            x-show="links.length > 1"
+                                                            @click="removeLink(index)"
+                                                            style="width:36px;height:36px;border:1px solid #E2E8F0;background:#fff;border-radius:8px;color:#64748B;cursor:pointer;flex-shrink:0;"
+                                                            aria-label="{{ __('Remove link') }}"
+                                                        >
+                                                            <svg style="width:16px;height:16px;margin:0 auto;display:block;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                            </svg>
+                                                        </button>
+                                                        </div>
+                                                        <p
+                                                            x-show="linkErrors[index]"
+                                                            x-cloak
+                                                            x-text="linkErrors[index]"
+                                                            class="kmsar-form-error"
+                                                            role="alert"
+                                                            style="margin:4px 0 0;font-size:12px;"
+                                                        ></p>
+                                                    </div>
+                                                </template>
                                             </div>
-                                            <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
+                                            <button
+                                                type="button"
+                                                @click="addLink()"
+                                                x-show="links.length < maxLinks"
+                                                style="margin-top:12px;padding:8px 12px;border:1px dashed #CBD5E1;background:#fff;border-radius:8px;font-size:12px;font-weight:600;color:#1E3A8A;cursor:pointer;width:100%;"
+                                            >
+                                                {{ __('Add another link') }}
+                                            </button>
+                                            <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
                                                 <span style="padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">Google Drive</span>
                                                 <span style="padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">OneDrive</span>
                                                 <span style="padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">DOI Link</span>
                                             </div>
                                         </div>
+                                        <p class="kmsar-form-hint" style="margin-top:8px;font-size:11px;color:#94A3B8;">
+                                            {{ __('Paste Google Drive, OneDrive, Dropbox, or DOI links. Video and social media URLs are not accepted.') }}
+                                        </p>
                                     </div>
-
                                 </div>
                             </div>
 
@@ -638,7 +775,7 @@
                                 style="padding:9px 22px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:7px;transition:background 0.15s;"
                                 onmouseover="this.style.background='#1e40af'" onmouseout="this.style.background='#1E3A8A'">
                                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                {{ __('Submit Progress Update') }}
+                                {{ $isFinalResubmit ? __('Resubmit for final review') : __('Submit completion') }}
                             </button>
                         </div>
 
@@ -675,6 +812,7 @@
             </div>
         </div>
     </div>
+@endsection
 
 @push('scripts')
 <script>
@@ -707,11 +845,183 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 @endpush
-@endsection
 
 @push('scripts')
     <script>
         document.addEventListener('alpine:init', () => {
+            Alpine.data('researchProgressProof', () => ({
+                uploadType: 'file',
+                links: [''],
+                linkErrors: [''],
+                linkErrorSummary: '',
+                maxFiles: 10,
+                maxLinks: 10,
+                fileSummary: '',
+                disallowedHosts: [],
+                msgInvalid: 'Invalid link. Please enter a correct URL.',
+                msgBlocked: 'This link type is not accepted for supporting proof. Please use a Google Drive, OneDrive, Dropbox, or DOI link instead.',
+                msgRequired: 'Please add at least one link.',
+                init() {
+                    const root = this.$el;
+                    try {
+                        this.links = JSON.parse(root.dataset.initialLinks || '[""]');
+                    } catch (e) {
+                        this.links = [''];
+                    }
+                    if (! Array.isArray(this.links) || this.links.length === 0) {
+                        this.links = [''];
+                    }
+                    this.linkErrors = this.links.map(() => '');
+                    this.maxFiles = parseInt(root.dataset.maxFiles || '10', 10);
+                    this.maxLinks = parseInt(root.dataset.maxLinks || '10', 10);
+                    this.uploadType = root.dataset.uploadType === 'link' ? 'link' : 'file';
+                    try {
+                        this.disallowedHosts = JSON.parse(root.dataset.disallowedHosts || '[]');
+                    } catch (e) {
+                        this.disallowedHosts = [];
+                    }
+                    this.msgInvalid = root.dataset.msgInvalid || this.msgInvalid;
+                    this.msgBlocked = root.dataset.msgBlocked || this.msgBlocked;
+                    this.msgRequired = root.dataset.msgRequired || this.msgRequired;
+                },
+                setUploadType(type) {
+                    this.uploadType = type;
+                    this.linkErrorSummary = '';
+                    this.linkErrors = this.links.map(() => '');
+                    if (type === 'link' && this.$refs.fileInput) {
+                        this.$refs.fileInput.value = '';
+                        this.fileSummary = '';
+                    }
+                },
+                clearLinkError(index) {
+                    this.linkErrors[index] = '';
+                    if (! this.linkErrors.some((message) => message !== '')) {
+                        this.linkErrorSummary = '';
+                    }
+                },
+                normalizeLink(raw) {
+                    const trimmed = (raw || '').trim();
+                    if (trimmed === '') {
+                        return null;
+                    }
+                    if (! /^https?:\/\//i.test(trimmed)) {
+                        return 'https://' + trimmed;
+                    }
+                    return trimmed;
+                },
+                validateOneLink(raw) {
+                    const normalized = this.normalizeLink(raw);
+                    if (normalized === null) {
+                        return '';
+                    }
+                    let parsed;
+                    try {
+                        parsed = new URL(normalized);
+                    } catch (e) {
+                        return this.msgInvalid;
+                    }
+                    const host = (parsed.hostname || '').toLowerCase();
+                    if (host === '' || !host.includes('.')) {
+                        return this.msgInvalid;
+                    }
+                    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(host)) {
+                        return this.msgInvalid;
+                    }
+                    if (!['http:', 'https:'].includes(parsed.protocol)) {
+                        return this.msgInvalid;
+                    }
+                    for (const blocked of this.disallowedHosts) {
+                        const blockedHost = String(blocked || '').toLowerCase();
+                        if (blockedHost === '' ) {
+                            continue;
+                        }
+                        if (host === blockedHost || host.endsWith('.' + blockedHost)) {
+                            return this.msgBlocked;
+                        }
+                    }
+                    return '';
+                },
+                validateLinks() {
+                    this.linkErrors = this.links.map((link) => this.validateOneLink(link));
+                    const filledLinks = this.links.filter((link) => (link || '').trim() !== '');
+                    if (filledLinks.length === 0) {
+                        this.linkErrorSummary = this.msgRequired;
+                        return false;
+                    }
+                    const hasInvalid = this.linkErrors.some((message, index) => {
+                        return (this.links[index] || '').trim() !== '' && message !== '';
+                    });
+                    if (hasInvalid) {
+                        this.linkErrorSummary = this.msgInvalid;
+                        return false;
+                    }
+                    this.linkErrorSummary = '';
+                    return true;
+                },
+                handleSubmit(event) {
+                    if (this.uploadType !== 'link') {
+                        return;
+                    }
+                    if (! this.validateLinks()) {
+                        event.preventDefault();
+                        this.$nextTick(() => {
+                            const panel = this.$el.querySelector('[x-show="uploadType === \'link\'"]');
+                            panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        });
+                    }
+                },
+                addLink() {
+                    if (this.links.length < this.maxLinks) {
+                        this.links.push('');
+                        this.linkErrors.push('');
+                    }
+                },
+                removeLink(index) {
+                    if (this.links.length <= 1) {
+                        this.links = [''];
+                        this.linkErrors = [''];
+                        this.linkErrorSummary = '';
+                        return;
+                    }
+                    this.links.splice(index, 1);
+                    this.linkErrors.splice(index, 1);
+                },
+                handleDrop(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const input = this.$refs.fileInput;
+                    if (! input || ! e.dataTransfer || ! e.dataTransfer.files || ! e.dataTransfer.files.length) {
+                        return;
+                    }
+                    this.applyFiles(input, e.dataTransfer.files);
+                },
+                handleFileSelect(e) {
+                    const input = e.target;
+                    if (! input || ! input.files) {
+                        return;
+                    }
+                    this.applyFiles(input, input.files);
+                },
+                applyFiles(input, fileList) {
+                    if (fileList.length > this.maxFiles) {
+                        alert('You may upload up to ' + this.maxFiles + ' files at once.');
+                        input.value = '';
+                        this.fileSummary = '';
+                        return;
+                    }
+                    const dt = new DataTransfer();
+                    Array.from(fileList).forEach((f) => dt.items.add(f));
+                    input.files = dt.files;
+                    if (input.files.length === 0) {
+                        this.fileSummary = '';
+                    } else if (input.files.length === 1) {
+                        this.fileSummary = input.files[0].name;
+                    } else {
+                        this.fileSummary = input.files.length + ' files selected';
+                    }
+                },
+            }));
+
             Alpine.data('researchShowDocumentUpload', () => ({
                 uploadType: 'file',
                 handleDrop(e) {

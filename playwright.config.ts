@@ -32,6 +32,16 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'dual-cycle',
+      testMatch: [
+        '**/tc-dual-cycle.spec.ts',
+        '**/tc-dual-cycle-final-reject.spec.ts',
+        '**/tc-dual-cycle-permanent-loop.spec.ts',
+      ],
+      fullyParallel: false,
+      workers: 1,
+    },
+    {
       name: 'parallel',
       // Truly shareable on one DB: no migrate:fresh; light / read-mostly.
       // Security, API, and A11Y mutate research concurrently and cause 500/flakes —

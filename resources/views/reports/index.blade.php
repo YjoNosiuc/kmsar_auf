@@ -8,34 +8,15 @@
 
 @section('content')
     @php
+        use App\Support\ResearchStatus;
+
         $exportFilters = array_merge(['include_rejected' => '0'], $filters ?? []);
         $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
-        $statusKeys = [
-            'proposal',
-            'ongoing',
-            'completed_unpublished',
-            'presented_internal',
-            'presented_external',
-            'published_non_indexed',
-            'published_scopus',
-            'patent_submitted',
-            'patent_granted',
-        ];
-        $classificationKeys = [
-            'self_funded',
-            'internally_funded',
-            'externally_funded',
-            'thesis',
-            'thesis_dissertation',
-            'collaboration',
-            'other',
-        ];
-        $approvalStageKeys = [
-            'dean_review' => __('Dean Review'),
-            'ovpri_review' => __('OVPRI Review'),
-            'approved' => __('Approved'),
-            'rejected' => __('Rejected'),
-        ];
+        $statusKeys = array_merge(['proposal', 'ongoing'], config('kmsar.outcome_classification_codes', []));
+        $classificationKeys = array_keys(config('kmsar.research_classifications', []));
+        $workflowStatusOptions = collect(ResearchStatus::all())
+            ->mapWithKeys(fn (string $value) => [$value => ResearchStatus::label($value)])
+            ->all();
         $stats = $reportStats ?? (
             $reportScope === 'college'
                 ? ['matching' => $totalCount, 'published' => 0, 'presented' => 0]
@@ -122,11 +103,11 @@
                 </div>
 
                 <div>
-                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="approval_stage">{{ __('Approval status') }}</label>
-                    <select id="approval_stage" name="approval_stage" class="kmsar-select" style="width:100%;">
+                    <label style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;" for="workflow_status">{{ __('Workflow status') }}</label>
+                    <select id="workflow_status" name="workflow_status" class="kmsar-select" style="width:100%;">
                         <option value="">{{ __('All') }}</option>
-                        @foreach ($approvalStageKeys as $value => $label)
-                            <option value="{{ $value }}" @selected(($filters['approval_stage'] ?? '') === $value)>{{ $label }}</option>
+                        @foreach ($workflowStatusOptions as $value => $label)
+                            <option value="{{ $value }}" @selected(($filters['workflow_status'] ?? $filters['approval_stage'] ?? '') === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -169,7 +150,7 @@
                     <input type="hidden" name="include_rejected" value="0">
                     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#475569;cursor:pointer;margin-top:22px;">
                         <input type="checkbox" name="include_rejected" value="1" @checked(($filters['include_rejected'] ?? '0') === '1') style="width:16px;height:16px;accent-color:#1E3A8A;">
-                        {{ __('Include rejected records in preview and export') }}
+                        {{ __('Include returned records in preview and export') }}
                     </label>
                 </div>
 
@@ -266,7 +247,7 @@
                         @endif
                         <th scope="col">{{ __('Registered') }}</th>
                         <th scope="col">{{ __('OVPRI approved') }}</th>
-                        <th scope="col">{{ __('Approval Status') }}</th>
+                        <th scope="col">{{ __('Workflow status') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -284,18 +265,18 @@
                             @if ($reportScope === 'ovpri')
                                 <td>{{ str($row->title)->limit(60) }}</td>
                                 <td>{{ $reportGenerator->classificationLabel($row->research_classification) }}</td>
-                                <td class="kmsar-table-cell-sub">{{ $reportGenerator->statusLabel($row->status) }}</td>
+                                <td class="kmsar-table-cell-sub">{{ $reportGenerator->progressDisplay($row) }}</td>
                             @else
                                 <td>{{ str($row->title)->limit(60) }}</td>
-                                <td class="kmsar-table-cell-sub">{{ $reportGenerator->statusLabel($row->status) }}</td>
+                                <td class="kmsar-table-cell-sub">{{ $reportGenerator->progressDisplay($row) }}</td>
                             @endif
-                            <td class="kmsar-table-cell-sub">{{ $reportGenerator->reportDate($row->created_at) }}</td>
-                            <td class="kmsar-table-cell-sub">{{ $reportGenerator->reportDate($row->ovpriApprovedAt()) }}</td>
+                            <td class="kmsar-table-cell-sub">{{ $reportGenerator->reportDate($row->research_registered_at) }}</td>
+                            <td class="kmsar-table-cell-sub">{{ $reportGenerator->reportDate($row->research_accepted_at) }}</td>
                             <td>
-                                @if ($row->approval_stage === 'rejected')
-                                    <span class="kmsar-badge kmsar-badge--rejected">{{ __('Rejected') }}</span>
+                                @if (in_array($row->status, [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED], true))
+                                    <span class="kmsar-badge kmsar-badge--rejected">{{ ResearchStatus::label($row->status) }}</span>
                                 @else
-                                    <span class="kmsar-badge kmsar-badge--draft">{{ $approvalStageKeys[$row->approval_stage] ?? ucwords(str_replace('_', ' ', $row->approval_stage)) }}</span>
+                                    <span class="kmsar-badge kmsar-badge--draft">{{ ResearchStatus::label($row->status) }}</span>
                                 @endif
                             </td>
                         </tr>

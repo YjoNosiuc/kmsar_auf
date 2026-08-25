@@ -8,55 +8,41 @@
 
 @section('content')
     @php
-        $stageOptions = [
-            '' => __('All'),
-            'dean_review' => __('Dean Review'),
-            'ovpri_review' => __('OVPRI Review'),
-            'approved' => __('Approved'),
-            'rejected' => __('Rejected'),
-        ];
+        use App\Support\ResearchStatus;
 
-        $statusOptions = [
-            '' => __('All'),
-            'proposal' => __('Proposal / abstract'),
-            'ongoing' => __('Ongoing'),
-            'completed_unpublished' => __('Completed (unpublished)'),
-            'presented_internal' => __('Presented (internal)'),
-            'presented_external' => __('Presented (external)'),
-            'published_non_indexed' => __('Published (non-indexed)'),
-            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
-            'patent_submitted' => __('Patent submitted'),
-            'patent_granted' => __('Patent granted'),
-        ];
+        $statusOptions = collect(['' => __('All')])
+            ->merge(collect(ResearchStatus::all())->mapWithKeys(fn (string $value) => [$value => ResearchStatus::label($value)]))
+            ->all();
 
-        $approvalStageBadgeStatus = static function (string $stage): string {
-            return match ($stage) {
-                'draft' => 'draft',
-                'dean_review', 'ovpri_review' => 'pending',
-                'approved' => 'approved',
-                'rejected' => 'rejected',
+        $statusBadgeVariant = static function (string $status): string {
+            return match ($status) {
+                ResearchStatus::PROPOSAL => 'draft',
+                ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+                ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
+                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+                ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'rejected',
+                ResearchStatus::RESEARCH_COMPLETED => 'info',
                 default => 'info',
             };
         };
 
         $selectedCollege = request('college', '');
-        $selectedStage = request('stage', '');
         $selectedStatus = request('status', '');
 
-        $tableRows = collect($research->items())->map(function ($item) use ($approvalStageBadgeStatus) {
-            $stageLabel = ucwords(str_replace('_', ' ', $item->approval_stage));
+        $tableRows = collect($research->items())->map(function ($item) use ($statusBadgeVariant) {
+            $statusLabel = ResearchStatus::label($item->status);
 
             return [
                 'title' => str($item->title)->limit(80),
                 'primary_author' => $item->primaryAuthor?->name ?? '—',
                 'college' => $item->motherCollege?->code ?? '—',
                 'classification' => ucwords(str_replace('_', ' ', $item->research_classification)),
-                'approval_stage' => new \Illuminate\Support\HtmlString(
+                'status' => new \Illuminate\Support\HtmlString(
                     \Illuminate\Support\Facades\Blade::render(
                         '<x-badge :status="$status">{{ $label }}</x-badge>',
                         [
-                            'status' => $approvalStageBadgeStatus($item->approval_stage),
-                            'label' => $stageLabel,
+                            'status' => $statusBadgeVariant((string) $item->status),
+                            'label' => $statusLabel,
                         ]
                     )
                 ),
@@ -73,7 +59,7 @@
 
     <x-page-header
         :title="__('All research')"
-        :subtitle="__('Institutional research register (OVPRI). Draft submissions are excluded — they remain visible only to the faculty authors.')"
+        :subtitle="__('Institutional research register (OVPRI). Proposal-stage drafts remain visible only to faculty authors.')"
         :breadcrumb="[
             ['label' => __('All research')],
         ]"
@@ -109,19 +95,8 @@
                 </div>
 
                 <div>
-                    <label for="stage" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">
-                        {{ __('Approval stage') }}
-                    </label>
-                    <select id="stage" name="stage" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
-                        @foreach ($stageOptions as $value => $label)
-                            <option value="{{ $value }}" @selected($selectedStage === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div>
                     <label for="status" style="display:block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#94A3B8;margin-bottom:5px;">
-                        {{ __('Research Progress') }}
+                        {{ __('Workflow status') }}
                     </label>
                     <select id="status" name="status" class="kmsar-select" style="width:100%;" onchange="this.form.submit()">
                         @foreach ($statusOptions as $value => $label)
@@ -140,7 +115,7 @@
                 'primary_author' => __('Primary Author'),
                 'college' => __('College/Office'),
                 'classification' => __('Classification'),
-                'approval_stage' => __('Approval Stage'),
+                'status' => __('Workflow Status'),
                 'date_submitted' => __('Date Submitted'),
                 'actions' => __('Action'),
             ]"

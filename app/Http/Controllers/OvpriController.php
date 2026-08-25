@@ -7,6 +7,8 @@ use App\Models\Program;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
+use App\Services\ResearchReportingService;
+use App\Support\ResearchStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
@@ -19,26 +21,16 @@ class OvpriController extends Controller
 {
     use AuthorizesRequests;
 
-    private const COMPLETED_STATUSES = [
-        'completed_unpublished',
-        'presented_internal',
-        'presented_external',
-        'published_non_indexed',
-        'published_scopus',
-        'patent_granted',
-    ];
-
     private const IN_PROGRESS_STATUSES = ['proposal', 'ongoing'];
 
-    private const PRESENTED_STATUSES = ['presented_internal', 'presented_external'];
+    public function __construct(
+        private ResearchReportingService $reporting,
+    ) {}
 
-    private const CLASSIFICATION_LABELS = [
-        'internally_funded' => 'Internally funded',
-        'self_funded' => 'Self funded',
-        'externally_funded' => 'Externally funded',
-        'thesis' => 'Thesis',
-        'other' => 'Other',
-    ];
+    private function classificationLabels(): array
+    {
+        return config('kmsar.research_classifications', []);
+    }
 
     public function dashboard(Request $request): View
     {
@@ -49,7 +41,7 @@ class OvpriController extends Controller
         $cacheSuffix = ($dateFrom ?? 'all').'_'.($dateTo ?? 'all');
 
         $stats = Cache::remember(
-            'ovpri_dash_v5_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
+            'ovpri_dash_v6_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
             3600,
             fn () => $this->buildDashboardStats($dateFrom, $dateTo)
         );
@@ -64,7 +56,7 @@ class OvpriController extends Controller
         ];
 
         $sdgDistribution = Cache::remember(
-            'sdg_counts_v2_'.$cacheSuffix,
+            'sdg_counts_v3_'.$cacheSuffix,
             3600,
             fn () => $this->buildSdgDistribution($dateFrom, $dateTo, $sdgNames)
         );
@@ -85,6 +77,7 @@ class OvpriController extends Controller
             'submissionTrend' => $stats['submissionTrend'],
             'engagedTotal' => $stats['engagedTotal'],
             'engagedByCollege' => $stats['engagedByCollege'],
+            'agendaThemeBreakdown' => $stats['agendaThemeBreakdown'],
             'selectedCollege' => $selectedCollege,
             'programBreakdown' => $this->buildProgramBreakdown($selectedCollege, $dateFrom, $dateTo),
             'dateFrom' => $dateFrom,
@@ -99,36 +92,33 @@ class OvpriController extends Controller
     private function buildDashboardStats(?string $dateFrom, ?string $dateTo): array
     {
         $base = $this->baseResearchQuery($dateFrom, $dateTo);
-        $completed = $this->reportEligibleResearchQuery($dateFrom, $dateTo);
+        $accepted = $this->acceptedReportingQuery($dateFrom, $dateTo);
 
-        $totalResearch = (clone $completed)->count();
+        $totalResearch = (clone $accepted)->count();
         $researchInProgress = (clone $base)->whereIn('status', self::IN_PROGRESS_STATUSES)->count();
 
         $pendingApprovals = (clone $base)
-            ->where('approval_stage', 'ovpri_review')
+            ->whereIn('status', [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW])
             ->whereNotNull('submitted_at')
             ->count();
 
-        $scopusCount = (clone $base)
-            ->where(function ($q) {
-                $q->where('is_scopus_indexed', true)
-                    ->orWhere('status', 'published_scopus');
-            })
+        $scopusCount = (clone $accepted)
+            ->withOutcomeCodes(config('kmsar.scopus_outcome_code', 'published_scopus'))
             ->count();
 
-        $researchCountsByCollege = (clone $completed)
+        $researchCountsByCollege = (clone $accepted)
             ->selectRaw('mother_college_id, count(*) as total')
             ->groupBy('mother_college_id')
             ->pluck('total', 'mother_college_id');
 
-        $scopusCountsByCollege = (clone $base)
-            ->where('is_scopus_indexed', true)
+        $scopusCountsByCollege = (clone $accepted)
+            ->withOutcomeCodes(config('kmsar.scopus_outcome_code', 'published_scopus'))
             ->selectRaw('mother_college_id, count(*) as total')
             ->groupBy('mother_college_id')
             ->pluck('total', 'mother_college_id');
 
-        $presentedCountsByCollege = (clone $base)
-            ->whereIn('status', self::PRESENTED_STATUSES)
+        $presentedCountsByCollege = (clone $accepted)
+            ->withOutcomeCodes(config('kmsar.presented_outcome_codes', []))
             ->selectRaw('mother_college_id, count(*) as total')
             ->groupBy('mother_college_id')
             ->pluck('total', 'mother_college_id');
@@ -167,9 +157,13 @@ class OvpriController extends Controller
             'count' => (int) ($presentedCountsByCollege[$c->id] ?? 0),
         ]);
 
-        $classificationBreakdown = $this->buildClassificationBreakdown($completed);
+        $classificationBreakdown = $this->buildClassificationBreakdown($accepted);
+        $agendaThemeBreakdown = $this->reporting->buildAgendaThemeDistribution(clone $accepted);
 
-        $rejectedQuery = Research::query()->where('approval_stage', 'rejected');
+        $rejectedQuery = Research::query()->whereIn('status', [
+            ResearchStatus::INITIAL_REJECTED,
+            ResearchStatus::FINAL_REJECTED,
+        ]);
         if ($dateFrom) {
             $rejectedQuery->whereDate('start_date', '>=', $dateFrom);
         }
@@ -178,42 +172,33 @@ class OvpriController extends Controller
         }
 
         $workflowStatus = collect([
-            ['key' => 'ovpri_review', 'label' => __('OVPRI Review'), 'count' => (clone $base)->where('approval_stage', 'ovpri_review')->count()],
-            ['key' => 'approved', 'label' => __('Approved'), 'count' => (clone $base)->where('approval_stage', 'approved')->count()],
-            ['key' => 'rejected', 'label' => __('Rejected'), 'count' => $rejectedQuery->count()],
+            ['key' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'label' => __('Initial OVPRI Review'), 'count' => (clone $base)->where('status', ResearchStatus::INITIAL_OVPRI_REVIEW)->count()],
+            ['key' => ResearchStatus::FINAL_OVPRI_REVIEW, 'label' => __('Final OVPRI Review'), 'count' => (clone $base)->where('status', ResearchStatus::FINAL_OVPRI_REVIEW)->count()],
+            ['key' => ResearchStatus::RESEARCH_ACCEPTED, 'label' => __('Research Accepted'), 'count' => (clone $base)->where('status', ResearchStatus::RESEARCH_ACCEPTED)->count()],
+            ['key' => 'rejected', 'label' => __('Returned'), 'count' => $rejectedQuery->count()],
         ]);
 
         $trendYear = $dateFrom
             ? (int) date('Y', strtotime((string) $dateFrom))
             : (int) now()->year;
-        $isSqlite = Research::query()->getConnection()->getDriverName() === 'sqlite';
-        $monthlyQuery = clone $completed;
+        $monthSql = $this->reporting->acceptedMonthSql();
+        $monthlyQuery = clone $accepted;
 
         if ($dateFrom || $dateTo) {
-            $monthlyTotals = $isSqlite
-                ? $monthlyQuery
-                    ->selectRaw('CAST(strftime(\'%m\', start_date) AS INTEGER) as month, count(*) as total')
-                    ->groupByRaw('CAST(strftime(\'%m\', start_date) AS INTEGER)')
-                    ->get()
-                    ->keyBy(fn ($row) => (int) $row->month)
-                : $monthlyQuery
-                    ->selectRaw('MONTH(start_date) as month, count(*) as total')
-                    ->groupBy('month')
-                    ->get()
-                    ->keyBy(fn ($row) => (int) $row->month);
+            $monthlyTotals = $monthlyQuery
+                ->whereNotNull('research_accepted_at')
+                ->selectRaw("{$monthSql['select']}, count(*) as total")
+                ->groupByRaw($monthSql['group'])
+                ->get()
+                ->keyBy(fn ($row) => (int) $row->month);
         } else {
-            $monthlyQuery->whereYear('created_at', $trendYear);
-            $monthlyTotals = $isSqlite
-                ? $monthlyQuery
-                    ->selectRaw('CAST(strftime(\'%m\', created_at) AS INTEGER) as month, count(*) as total')
-                    ->groupByRaw('CAST(strftime(\'%m\', created_at) AS INTEGER)')
-                    ->get()
-                    ->keyBy(fn ($row) => (int) $row->month)
-                : $monthlyQuery
-                    ->selectRaw('MONTH(created_at) as month, count(*) as total')
-                    ->groupBy('month')
-                    ->get()
-                    ->keyBy(fn ($row) => (int) $row->month);
+            $monthlyTotals = $monthlyQuery
+                ->whereNotNull('research_accepted_at')
+                ->whereYear('research_accepted_at', $trendYear)
+                ->selectRaw("{$monthSql['select']}, count(*) as total")
+                ->groupByRaw($monthSql['group'])
+                ->get()
+                ->keyBy(fn ($row) => (int) $row->month);
         }
 
         $monthlyTrend = collect(range(1, 12))->map(function (int $month) use ($trendYear, $monthlyTotals) {
@@ -242,7 +227,13 @@ class OvpriController extends Controller
             'submissionTrend' => $this->buildSubmissionTrend(),
             'engagedTotal' => $engagement['total'],
             'engagedByCollege' => $engagement['byCollege'],
+            'agendaThemeBreakdown' => $agendaThemeBreakdown,
         ];
+    }
+
+    private function acceptedReportingQuery(?string $dateFrom, ?string $dateTo): Builder
+    {
+        return $this->reporting->acceptedQuery(null, $dateFrom, $dateTo, true);
     }
 
     private function resolveSelectedCollege(string $term): ?College
@@ -289,8 +280,9 @@ class OvpriController extends Controller
                         $q->whereHas('primaryAuthor', fn ($u) => $u->where('program_id', $program->id))
                             ->orWhereHas('researchAuthors', fn ($a) => $a->where('program_id', $program->id));
                     })
-                    ->reportEligible()
-                    ->whereOvpriApprovedBetween($dateFrom, $dateTo)
+                    ->reportingAccepted()
+                    ->when(filled($dateFrom), fn (Builder $q) => $q->whereDate('research_accepted_at', '>=', $dateFrom))
+                    ->when(filled($dateTo), fn (Builder $q) => $q->whereDate('research_accepted_at', '<=', $dateTo))
                     ->count();
 
                 return [
@@ -312,22 +304,22 @@ class OvpriController extends Controller
     {
         $startYear = (int) now()->year - 2;
         $endYear = (int) now()->year;
-        $isSqlite = Research::query()->getConnection()->getDriverName() === 'sqlite';
+        $isSqlite = $this->reporting->isSqlite();
 
         $query = Research::query()
-            ->reportEligible()
-            ->whereOvpriApprovedBetween(null, null)
-            ->whereYear('created_at', '>=', $startYear)
-            ->whereYear('created_at', '<=', $endYear);
+            ->reportingAccepted()
+            ->whereNotNull('research_accepted_at')
+            ->whereYear('research_accepted_at', '>=', $startYear)
+            ->whereYear('research_accepted_at', '<=', $endYear);
 
         $rows = $isSqlite
             ? $query
-                ->selectRaw("CAST(strftime('%Y', created_at) AS INTEGER) as year, CAST(strftime('%m', created_at) AS INTEGER) as month, count(*) as total")
-                ->groupByRaw("CAST(strftime('%Y', created_at) AS INTEGER), CAST(strftime('%m', created_at) AS INTEGER)")
+                ->selectRaw("CAST(strftime('%Y', research_accepted_at) AS INTEGER) as year, CAST(strftime('%m', research_accepted_at) AS INTEGER) as month, count(*) as total")
+                ->groupByRaw("CAST(strftime('%Y', research_accepted_at) AS INTEGER), CAST(strftime('%m', research_accepted_at) AS INTEGER)")
                 ->get()
             : $query
-                ->selectRaw('YEAR(created_at) as year, MONTH(created_at) as month, count(*) as total')
-                ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+                ->selectRaw('YEAR(research_accepted_at) as year, MONTH(research_accepted_at) as month, count(*) as total')
+                ->groupByRaw('YEAR(research_accepted_at), MONTH(research_accepted_at)')
                 ->get();
 
         $indexed = [];
@@ -382,9 +374,8 @@ class OvpriController extends Controller
     private function engagedUserIds(?string $dateFrom, ?string $dateTo, ?int $collegeId): \Illuminate\Support\Collection
     {
         $constrainResearch = function (Builder $q) use ($dateFrom, $dateTo): void {
-            $q->where('approval_stage', '!=', 'draft')
-                ->when($dateFrom, fn ($r) => $r->whereDate('start_date', '>=', $dateFrom))
-                ->when($dateTo, fn ($r) => $r->whereDate('start_date', '<=', $dateTo));
+            $q->reportingAccepted()
+                ->whereResearchAcceptedBetween($dateFrom, $dateTo);
         };
 
         $constrainUser = function (Builder $q) use ($collegeId): void {
@@ -420,7 +411,8 @@ class OvpriController extends Controller
     private function baseResearchQuery(?string $dateFrom, ?string $dateTo): Builder
     {
         $query = Research::query()
-            ->whereNotIn('approval_stage', ['draft', 'rejected']);
+            ->where('status', '!=', ResearchStatus::PROPOSAL)
+            ->whereNotIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED]);
 
         if ($dateFrom) {
             $query->whereDate('start_date', '>=', $dateFrom);
@@ -434,22 +426,12 @@ class OvpriController extends Controller
     }
 
     /**
-     * Completed research counted on dashboards and reports (OVPRI-approved, completed status).
-     */
-    private function reportEligibleResearchQuery(?string $dateFrom, ?string $dateTo): Builder
-    {
-        return Research::query()
-            ->reportEligible()
-            ->whereOvpriApprovedBetween($dateFrom, $dateTo);
-    }
-
-    /**
      * @param  array<int, string>  $sdgNames
      * @return \Illuminate\Support\Collection<int, array{sdg: int, label: string, count: int}>
      */
     private function buildSdgDistribution(?string $dateFrom, ?string $dateTo, array $sdgNames): \Illuminate\Support\Collection
     {
-        $query = $this->reportEligibleResearchQuery($dateFrom, $dateTo)
+        $query = $this->acceptedReportingQuery($dateFrom, $dateTo)
             ->whereNotNull('sdg_tags');
         $allSdgTags = $query->pluck('sdg_tags');
         $sdgCounts = array_fill(1, 17, 0);
@@ -479,7 +461,8 @@ class OvpriController extends Controller
      */
     private function buildClassificationBreakdown(Builder $base): \Illuminate\Support\Collection
     {
-        $primaryKeys = ['internally_funded', 'self_funded', 'externally_funded', 'thesis'];
+        $labels = $this->classificationLabels();
+        $primaryKeys = ['internally_funded', 'self_funded', 'externally_funded', 'student_thesis_dissertation'];
         $raw = (clone $base)
             ->select('research_classification', DB::raw('count(*) as total'))
             ->groupBy('research_classification')
@@ -498,7 +481,7 @@ class OvpriController extends Controller
         $merged['other'] = $otherTotal;
 
         return collect(array_merge($primaryKeys, ['other']))->map(fn (string $key) => [
-            'label' => self::CLASSIFICATION_LABELS[$key] ?? $key,
+            'label' => $labels[$key] ?? $key,
             'count' => $merged[$key],
         ]);
     }
@@ -523,7 +506,10 @@ class OvpriController extends Controller
         $user = $request->user();
         $isInstitutionalReviewer = $user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'super_admin']);
 
-        $isActiveOvpriQueue = $research->approval_stage === 'ovpri_review';
+        $isActiveOvpriQueue = in_array($research->status, [
+            ResearchStatus::INITIAL_OVPRI_REVIEW,
+            ResearchStatus::FINAL_OVPRI_REVIEW,
+        ], true);
         $hasOvpriHistory = $research->approvals
             ->where('approver_id', $user->id)
             ->where('stage', 'ovpri')

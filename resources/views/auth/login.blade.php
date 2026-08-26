@@ -225,7 +225,6 @@
     (function () {
         const form = document.querySelector('form[method="POST"]');
         const meta = document.querySelector('meta[name="csrf-token"]');
-        const csrfUrl = @json(route('login.csrf'));
 
         function syncCsrf(token) {
             if (! token) {
@@ -239,28 +238,6 @@
                 input.value = token;
             }
         }
-
-        async function refreshCsrf() {
-            try {
-                const response = await fetch(csrfUrl, {
-                    credentials: 'same-origin',
-                    headers: { Accept: 'application/json' },
-                });
-                if (! response.ok) {
-                    return;
-                }
-                const data = await response.json();
-                syncCsrf(data.csrf);
-            } catch (error) {
-                // Ignore network errors; form still uses the server-rendered token.
-            }
-        }
-
-        document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible') {
-                refreshCsrf();
-            }
-        });
 
         form?.addEventListener('submit', function () {
             syncCsrf(meta?.getAttribute('content'));

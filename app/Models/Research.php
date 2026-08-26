@@ -228,7 +228,7 @@ class Research extends Model implements AuditableContract
      */
     public function scopeReportingCompleted(Builder $query, bool $includeRejected = false): Builder
     {
-        $query->where('status', '!=', ResearchStatus::PROPOSAL)
+        $query->whereNotIn('status', [ResearchStatus::DRAFT, 'proposal'])
             ->whereHas('outcomeClassifications');
 
         if (! $includeRejected) {
@@ -244,11 +244,16 @@ class Research extends Model implements AuditableContract
             && in_array($status, config('kmsar.in_progress_statuses'), true);
     }
 
+    public function scopeExcludeFacultyOnly(Builder $query): Builder
+    {
+        return $query->whereNotIn('status', ResearchStatus::facultyOnlyStatuses());
+    }
+
     public function scopeDashboardInProgress(Builder $query, ?string $status = null): Builder
     {
-        $query->where('status', ResearchStatus::ONGOING);
+        $query->where('status', ResearchStatus::RESEARCH_REGISTERED);
 
-        if ($status !== null && $status !== ResearchStatus::ONGOING) {
+        if ($status !== null && $status !== ResearchStatus::RESEARCH_REGISTERED) {
             $query->whereRaw('1 = 0');
         }
 
@@ -346,6 +351,21 @@ class Research extends Model implements AuditableContract
     public function scopeFinalOvpriQueue(Builder $query): Builder
     {
         return $query->where('status', ResearchStatus::FINAL_OVPRI_REVIEW);
+    }
+
+    /**
+     * College dean / unit head visibility: mother college plus optional other affiliations.
+     */
+    public function scopeForCollegeScope(Builder $query, int $collegeId, bool $includeAffiliations = false): Builder
+    {
+        if (! $includeAffiliations) {
+            return $query->where('mother_college_id', $collegeId);
+        }
+
+        return $query->where(function (Builder $q) use ($collegeId) {
+            $q->where('mother_college_id', $collegeId)
+                ->orWhereJsonContains('other_college_id', $collegeId);
+        });
     }
 
     public function documents(): HasMany

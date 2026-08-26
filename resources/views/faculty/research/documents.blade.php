@@ -16,14 +16,20 @@
     >
         <x-page-header
             :title="$research->reference_number"
-            :subtitle="__('Step 3 of 3 · Upload documents') . ' · ' . str($research->title)->limit(100)"
+            :subtitle="($documentsOnlyMode ?? false)
+                ? __('Manage supporting documents · registration details are locked')
+                : __('Step 3 of 3 · Upload documents') . ' · ' . str($research->title)->limit(100)"
             :breadcrumb="[
                 ['label' => __('My Research'), 'route' => 'research.index'],
                 ['label' => $research->reference_number, 'route' => 'research.show', 'parameters' => [$research]],
                 ['label' => __('Documents')],
             ]"
         >
-            <x-button variant="outline" href="{{ route('research.wizard.authors', $research) }}">{{ __('Back') }}</x-button>
+            @if ($documentsOnlyMode ?? false)
+                <x-button variant="outline" href="{{ route('research.show', $research) }}">{{ __('Back to research') }}</x-button>
+            @else
+                <x-button variant="outline" href="{{ route('research.wizard.authors', $research) }}">{{ __('Back') }}</x-button>
+            @endif
             <x-button variant="primary" href="{{ route('research.show', $research) }}">{{ __('View Research Record') }}</x-button>
         </x-page-header>
 
@@ -50,12 +56,13 @@
             'research' => $research,
             'step1Complete' => $step1Complete,
             'step2Complete' => $step2Complete,
+            'documentsOnlyMode' => $documentsOnlyMode ?? false,
         ])
 
         @php
             $requirementMatrix = [
-                ['status' => 'proposal', 'status_label' => __('Proposal / abstract stage'), 'documents' => __('Abstract or Proposal Paper')],
-                ['status' => 'ongoing', 'status_label' => __('Research in progress'), 'documents' => __('Progress Report or Partial Data')],
+                ['status' => 'draft', 'status_label' => __('Draft / registration'), 'documents' => __('Abstract or Proposal Paper')],
+                ['status' => 'research_registered', 'status_label' => __('Research registered'), 'documents' => __('Progress Report or Partial Data')],
                 ['status' => 'completed_unpublished', 'status_label' => __('Done, not presented/published'), 'documents' => __('Full Paper / Manuscript')],
                 ['status' => 'presented_internal', 'status_label' => __('Presented inside AUF'), 'documents' => __('Certificate + Conference Program')],
                 ['status' => 'presented_external', 'status_label' => __('Presented outside AUF'), 'documents' => __('Certificate + Conference Program')],
@@ -141,11 +148,11 @@
                         <div>
                             <strong class="block mb-1">{{ __('Required for your progress status') }}</strong>
                             @switch ($research->status)
-                                @case('proposal')
-                                    {{ __('You are in the proposal / abstract stage. Upload an abstract or proposal paper.') }}
+                                @case('draft')
+                                    {{ __('Your research is saved as a draft. Upload an abstract or proposal paper before submitting.') }}
                                     @break
-                                @case('ongoing')
-                                    {{ __('Your research is ongoing. Upload a progress report or partial data.') }}
+                                @case('research_registered')
+                                    {{ __('Your research is registered. Upload a progress report, partial data, or other supporting documents.') }}
                                     @break
                                 @case('completed_unpublished')
                                     {{ __('Your work is complete but not yet published or presented. Upload the full paper or manuscript.') }}
@@ -370,7 +377,7 @@
 
                     {{-- Submit for review — shown at bottom of Documents tab --}}
                     <div style="margin-top:24px; padding-top:20px; border-top:1px solid #E2E8F0;">
-                        @if ($research->status === \App\Support\ResearchStatus::PROPOSAL)
+                        @if (\App\Support\ResearchStatus::isPreSubmission((string) $research->status))
                             @can('submit', $research)
                                 <form method="POST" action="{{ route('research.submit', $research) }}" x-data="{ submitting: false }" @submit="submitting = true">
                                     @csrf

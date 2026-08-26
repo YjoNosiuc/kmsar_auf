@@ -4,7 +4,7 @@ namespace App\Support;
 
 final class ResearchStatus
 {
-    public const PROPOSAL = 'proposal';
+    public const DRAFT = 'draft';
 
     public const INITIAL_DEAN_REVIEW = 'initial_dean_review';
 
@@ -13,8 +13,6 @@ final class ResearchStatus
     public const INITIAL_REJECTED = 'initial_rejected';
 
     public const RESEARCH_REGISTERED = 'research_registered';
-
-    public const ONGOING = 'ongoing';
 
     public const RESEARCH_COMPLETED = 'research_completed';
 
@@ -78,15 +76,109 @@ final class ResearchStatus
         return in_array($status, [self::INITIAL_OVPRI_REVIEW, self::FINAL_OVPRI_REVIEW], true);
     }
 
+    /**
+     * Pre-submission statuses visible only to faculty on My Research.
+     *
+     * @return list<string>
+     */
+    public static function facultyOnlyStatuses(): array
+    {
+        return [self::DRAFT];
+    }
+
+    /**
+     * Workflow status options for faculty filters (draft is shown on cards, not in the dropdown).
+     *
+     * @return array<string, string>
+     */
+    public static function facultyFilterOptions(): array
+    {
+        return self::institutionalFilterOptions();
+    }
+
+    /**
+     * Statuses shown in dean, OVPRI, admin, and CDAIC filters and registers.
+     *
+     * @return list<string>
+     */
+    public static function institutionalStatuses(): array
+    {
+        return array_values(array_filter(
+            self::all(),
+            static fn (string $status) => ! in_array($status, self::facultyOnlyStatuses(), true),
+        ));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function institutionalFilterOptions(): array
+    {
+        return collect(self::institutionalStatuses())
+            ->mapWithKeys(fn (string $value) => [$value => self::label($value)])
+            ->all();
+    }
+
+    /**
+     * In-progress counts for institutional dashboards: research registered only.
+     *
+     * @return list<string>
+     */
+    public static function institutionalInProgressStatuses(): array
+    {
+        return [self::RESEARCH_REGISTERED];
+    }
+
+    /**
+     * Outcome-based options for the reports "Research progress" filter (excludes workflow statuses).
+     *
+     * @return array<string, string>
+     */
+    public static function reportProgressFilterOptions(): array
+    {
+        return \App\Models\OutcomeClassification::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->pluck('name', 'code')
+            ->all();
+    }
+
+    public static function isFacultyOnly(string $status): bool
+    {
+        return in_array($status, self::facultyOnlyStatuses(), true);
+    }
+
+    /**
+     * Statuses that must not be used in workflow filter query params (dropdown or URL).
+     */
+    public static function isBlockedWorkflowFilter(?string $status): bool
+    {
+        if ($status === null || $status === '') {
+            return false;
+        }
+
+        return self::isFacultyOnly($status) || $status === 'proposal';
+    }
+
+    public static function isPreSubmission(string $status): bool
+    {
+        return self::isFacultyOnly($status);
+    }
+
     public static function isFullyEditable(string $status): bool
     {
-        return in_array($status, [self::PROPOSAL, self::INITIAL_REJECTED], true);
+        return in_array($status, [self::DRAFT, self::INITIAL_REJECTED], true);
+    }
+
+    public static function isDocumentsEditable(string $status): bool
+    {
+        return $status === self::RESEARCH_REGISTERED;
     }
 
     public static function isOutcomeEditable(string $status): bool
     {
         return in_array($status, [
-            self::ONGOING,
+            self::RESEARCH_REGISTERED,
             self::RESEARCH_ACCEPTED,
             self::FINAL_REJECTED,
         ], true);
@@ -99,7 +191,7 @@ final class ResearchStatus
 
     public static function canSubmitIntake(string $status, string $registrationType): bool
     {
-        if ($status !== self::PROPOSAL) {
+        if (! self::isPreSubmission($status)) {
             return false;
         }
 
@@ -118,7 +210,7 @@ final class ResearchStatus
 
     public static function canSubmitCompletion(string $status): bool
     {
-        return in_array($status, [self::ONGOING, self::RESEARCH_ACCEPTED], true);
+        return in_array($status, [self::RESEARCH_REGISTERED, self::RESEARCH_ACCEPTED], true);
     }
 
     public static function assertTransition(string $from, string $to): void
@@ -146,7 +238,7 @@ final class ResearchStatus
     public static function transitions(): array
     {
         return [
-            self::PROPOSAL => [
+            self::DRAFT => [
                 self::INITIAL_DEAN_REVIEW,
                 self::RESEARCH_REGISTERED,
             ],
@@ -162,9 +254,6 @@ final class ResearchStatus
                 self::INITIAL_DEAN_REVIEW,
             ],
             self::RESEARCH_REGISTERED => [
-                self::ONGOING,
-            ],
-            self::ONGOING => [
                 self::RESEARCH_COMPLETED,
             ],
             self::RESEARCH_COMPLETED => [
@@ -190,12 +279,12 @@ final class ResearchStatus
     public static function label(?string $status): string
     {
         return match ($status) {
-            self::PROPOSAL => __('Proposal'),
+            self::DRAFT => __('Draft'),
+            'proposal' => __('Draft'),
             self::INITIAL_DEAN_REVIEW => __('Initial Dean Review'),
             self::INITIAL_OVPRI_REVIEW => __('Initial OVPRI Review'),
             self::INITIAL_REJECTED => __('Initial Review — Returned'),
             self::RESEARCH_REGISTERED => __('Research Registered'),
-            self::ONGOING => __('Ongoing'),
             self::RESEARCH_COMPLETED => __('Research Completed'),
             self::FINAL_DEAN_REVIEW => __('Final Dean Review'),
             self::FINAL_OVPRI_REVIEW => __('Final OVPRI Review'),

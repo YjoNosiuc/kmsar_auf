@@ -28,17 +28,115 @@ uses(RefreshDatabase::class);
 
 describe('Wizard: Draft Creation', function () {
 
-    it('faculty can access the research create route and get redirected to wizard', function () {
+    it('faculty can open the registration chooser without creating a draft', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
 
-        $response = $this->actingAs($faculty)->get(route('research.create'));
+        $this->actingAs($faculty)
+            ->get(route('research.create'))
+            ->assertOk()
+            ->assertSee(__('Register new research'))
+            ->assertSee(__('Register existing research'));
+
+        $this->assertDatabaseCount('research', 0);
+    });
+
+    it('faculty can begin registration and get redirected to the wizard', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+
+        $response = $this->actingAs($faculty)->post(route('research.begin'), [
+            'registration_type' => 'new',
+        ]);
 
         $response->assertRedirect();
         $this->assertDatabaseHas('research', [
             'primary_author_id' => $faculty->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
         ]);
+    });
+
+    it('begin registration reuses an empty shell draft instead of creating duplicates', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+
+        $this->actingAs($faculty)->post(route('research.begin'), [
+            'registration_type' => 'new',
+        ])->assertRedirect();
+
+        $this->actingAs($faculty)->post(route('research.begin'), [
+            'registration_type' => 'new',
+        ])->assertRedirect();
+
+        $this->assertDatabaseCount('research', 1);
+    });
+
+    it('faculty can save registration as draft with title only', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+
+        $this->actingAs($faculty)->post(route('research.begin'), [
+            'registration_type' => 'new',
+        ])->assertRedirect();
+
+        $research = Research::where('primary_author_id', $faculty->id)->latest()->first();
+
+        $this->actingAs($faculty)
+            ->put(route('research.wizard.details.save', $research), [
+                'save_as_draft' => '1',
+                'registration_type' => 'new',
+                'title' => 'Draft Research Title Only',
+            ])
+            ->assertRedirect(route('research.index'))
+            ->assertSessionHas('success');
+
+        $research->refresh();
+        expect($research->status)->toBe(ResearchStatus::DRAFT);
+        expect($research->title)->toBe('Draft Research Title Only');
+
+        $this->actingAs($faculty)
+            ->get(route('research.index'))
+            ->assertOk()
+            ->assertSee('Draft Research Title Only', false);
+    });
+
+    it('hides empty-title proposal shells from My Research', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::DRAFT,
+            'title' => '',
+        ]);
+
+        $this->actingAs($faculty)
+            ->get(route('research.index'))
+            ->assertOk()
+            ->assertDontSee($research->reference_number, false);
+    });
+
+    it('titled draft records are not visible to dean or OVPRI lists', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $dean = $college->headUser;
+        $ovpri = makeOvpri();
+
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'title' => 'Faculty-only draft title',
+            'status' => ResearchStatus::DRAFT,
+        ]);
+
+        $this->actingAs($dean)
+            ->get(route('approval.queue'))
+            ->assertOk()
+            ->assertDontSee('Faculty-only draft title', false);
+
+        $this->actingAs($ovpri)
+            ->get(route('ovpri.research'))
+            ->assertOk()
+            ->assertDontSee('Faculty-only draft title', false);
     });
 
     it('non-faculty roles cannot access the create route', function () {
@@ -166,8 +264,32 @@ describe('Submit: proposal → initial dean review', function () {
             ->assertRedirect(route('research.show', $research));
 
         $research->refresh();
-        expect($research->status)->toBe(ResearchStatus::ONGOING);
+        expect($research->status)->toBe(ResearchStatus::RESEARCH_REGISTERED);
         expect($research->research_registered_at)->not->toBeNull();
+    });
+
+    it('registered research locks details and authors but allows documents wizard', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
+            'research_registered_at' => now(),
+            'submitted_at' => now(),
+        ]);
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.details', $research))
+            ->assertForbidden();
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.authors', $research))
+            ->assertForbidden();
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.documents', $research))
+            ->assertOk()
+            ->assertViewIs('faculty.research.documents');
     });
 
     it('submit sends ResearchSubmitted notification to college dean and confirmation to faculty', function () {
@@ -191,14 +313,14 @@ describe('Submit: proposal → initial dean review', function () {
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
             'registration_type' => 'new',
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
         ]);
 
         $this->actingAs($faculty)
             ->post(route('research.submit', $research))
             ->assertSessionHasErrors();
 
-        expect($research->fresh()->status)->toBe(ResearchStatus::PROPOSAL);
+        expect($research->fresh()->status)->toBe(ResearchStatus::DRAFT);
     });
 
     it('non-primary co-author without can_edit cannot submit', function () {
@@ -346,7 +468,7 @@ describe('OVPRI: approve / return (initial cycle)', function () {
             ->assertRedirect(route('ovpri.queue', ['cycle' => 'initial', 'tab' => 'approved']));
 
         $research->refresh();
-        expect($research->status)->toBe(ResearchStatus::ONGOING);
+        expect($research->status)->toBe(ResearchStatus::RESEARCH_REGISTERED);
         expect($research->research_registered_at)->not->toBeNull();
 
         $this->assertDatabaseHas('approvals', [
@@ -431,18 +553,15 @@ describe('Resubmit and completion (final cycle)', function () {
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now(),
         ]);
         $dean = $college->headUser;
 
-        $this->actingAs($faculty)
-            ->put(route('research.update-progress', $research), [
-                'outcome_classifications' => ['completed_not_presented_submitted'],
-                'remarks' => 'Completion package attached.',
-                'external_link' => 'https://example.com/completion-proof',
-            ])
-            ->assertRedirect(route('research.show', $research));
+        submitResearchCompletion($research, $faculty, [
+            'remarks' => 'Completion package attached.',
+            'external_link' => 'https://example.com/completion-proof',
+        ])->assertRedirect(route('research.show', $research));
 
         $research->refresh();
         expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
@@ -472,17 +591,14 @@ describe('Resubmit and completion (final cycle)', function () {
         $dean = $college->headUser;
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now(),
         ]);
 
-        $this->actingAs($faculty)
-            ->put(route('research.update-progress', $research), [
-                'outcome_classifications' => ['completed_not_presented_submitted'],
-                'remarks' => 'Completion package attached.',
-                'external_link' => 'https://example.com/completion-proof',
-            ])
-            ->assertRedirect(route('research.show', $research));
+        submitResearchCompletion($research, $faculty, [
+            'remarks' => 'Completion package attached.',
+            'external_link' => 'https://example.com/completion-proof',
+        ])->assertRedirect(route('research.show', $research));
 
         $research->refresh();
         expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
@@ -507,19 +623,38 @@ describe('Resubmit and completion (final cycle)', function () {
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now(),
         ]);
         $dean = $college->headUser;
 
-        $this->actingAs($faculty)
-            ->put(route('research.update-progress', $research), [
-                'outcome_classifications' => ['completed_not_presented_submitted'],
-                'remarks' => 'Update.',
-                'external_link' => 'https://example.com/progress-proof',
-            ]);
+        submitResearchCompletion($research, $faculty, [
+            'remarks' => 'Update.',
+            'external_link' => 'https://example.com/progress-proof',
+        ]);
 
         Notification::assertSentTo($dean, ResearchProgressUpdated::class);
+    });
+
+    it('rejects completion submission without at least one document', function () {
+        seedOutcomeClassifications();
+
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
+            'research_registered_at' => now(),
+        ]);
+
+        $this->actingAs($faculty)
+            ->from(route('research.show', $research))
+            ->put(route('research.update-progress', $research), [
+                'outcome_classifications' => ['completed_not_presented_submitted'],
+                'external_link' => 'https://example.com/link-only',
+            ])
+            ->assertRedirect(route('research.show', $research))
+            ->assertSessionHasErrors('files');
     });
 
     it('rejects disallowed links such as YouTube with a clear message on completion submit', function () {
@@ -530,16 +665,18 @@ describe('Resubmit and completion (final cycle)', function () {
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now(),
         ]);
 
+        $file = UploadedFile::fake()->createWithContent('proof.pdf', minimalPdfBinary());
+
         $response = $this->actingAs($faculty)
             ->from(route('research.show', $research))
-            ->put(route('research.update-progress', $research), [
+            ->call('PUT', route('research.update-progress', $research), [
                 'outcome_classifications' => ['completed_not_presented_submitted'],
                 'external_links' => ['https://youtube.com/watch?v=test'],
-            ]);
+            ], [], ['files' => [$file]]);
 
         $response->assertRedirect(route('research.show', $research));
         $response->assertSessionHasErrors('external_links.0');
@@ -554,16 +691,18 @@ describe('Resubmit and completion (final cycle)', function () {
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now(),
         ]);
 
+        $file = UploadedFile::fake()->createWithContent('proof.pdf', minimalPdfBinary());
+
         $this->actingAs($faculty)
             ->from(route('research.show', $research))
-            ->put(route('research.update-progress', $research), [
+            ->call('PUT', route('research.update-progress', $research), [
                 'outcome_classifications' => ['completed_not_presented_submitted'],
                 'external_links' => ['abc'],
-            ])
+            ], [], ['files' => [$file]])
             ->assertRedirect(route('research.show', $research))
             ->assertSessionHasErrors('external_links.0');
 
@@ -580,21 +719,20 @@ describe('Resubmit and completion (final cycle)', function () {
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now(),
         ]);
 
         $file = UploadedFile::fake()->createWithContent('proof.pdf', minimalPdfBinary());
 
         $this->actingAs($faculty)
-            ->put(route('research.update-progress', $research), [
+            ->call('PUT', route('research.update-progress', $research), [
                 'outcome_classifications' => ['completed_not_presented_submitted'],
                 'external_links' => [
                     'https://drive.google.com/file/d/abc/view',
                     'https://doi.org/10.1000/example',
                 ],
-                'files' => [$file],
-            ])
+            ], [], ['files' => [$file]])
             ->assertRedirect(route('research.show', $research));
 
         $research->refresh();
@@ -624,13 +762,11 @@ describe('Resubmit and completion (final cycle)', function () {
 
         $countBefore = (int) $research->final_review_count;
 
-        $this->actingAs($faculty)
-            ->put(route('research.update-progress', $research), [
-                'outcome_classifications' => ['presented_conference_auf'],
-                'remarks' => 'Revised outcome package.',
-                'external_link' => 'https://example.com/final-resubmit-proof',
-            ])
-            ->assertRedirect(route('research.show', $research));
+        submitResearchCompletion($research, $faculty, [
+            'outcome_classifications' => ['presented_conference_auf'],
+            'remarks' => 'Revised outcome package.',
+            'external_link' => 'https://example.com/final-resubmit-proof',
+        ])->assertRedirect(route('research.show', $research));
 
         $research->refresh();
         expect($research->status)->toBe(ResearchStatus::FINAL_DEAN_REVIEW);
@@ -661,9 +797,11 @@ describe('Full Lifecycle: new registration happy path', function () {
         $dean = $college->headUser;
         $ovpri = makeOvpri();
 
-        $this->actingAs($faculty)->get(route('research.create'));
+        $this->actingAs($faculty)->post(route('research.begin'), [
+            'registration_type' => 'new',
+        ])->assertRedirect();
         $research = Research::where('primary_author_id', $faculty->id)->latest()->first();
-        expect($research->status)->toBe(ResearchStatus::PROPOSAL);
+        expect($research->status)->toBe(ResearchStatus::DRAFT);
 
         $this->actingAs($faculty)->put(route('research.wizard.details.save', $research), [
             'registration_type' => 'new',
@@ -695,7 +833,7 @@ describe('Full Lifecycle: new registration happy path', function () {
         Notification::assertSentTo($ovpri, ResearchEndorsedToOvpri::class);
 
         $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Approved!']);
-        expect($research->fresh()->status)->toBe(ResearchStatus::ONGOING);
+        expect($research->fresh()->status)->toBe(ResearchStatus::RESEARCH_REGISTERED);
         Notification::assertSentTo($faculty, ResearchApproved::class);
         Notification::assertSentTo($dean, ResearchApprovedDean::class);
 
@@ -718,12 +856,12 @@ describe('Full Lifecycle: final acceptance path', function () {
 
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now()->subMonth(),
             'submitted_at' => now()->subMonth(),
         ]);
 
-        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
+        submitResearchCompletion($research, $faculty, [
             'outcome_classifications' => ['published_scopus_isi'],
             'remarks' => 'Final outputs attached.',
             'external_link' => 'https://example.com/final-output',
@@ -751,12 +889,12 @@ describe('Full Lifecycle: final acceptance path', function () {
 
         $research = makeDraftResearch($faculty, $college);
         $research->update([
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_registered_at' => now()->subMonths(2),
             'submitted_at' => now()->subMonths(2),
         ]);
 
-        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
+        submitResearchCompletion($research, $faculty, [
             'outcome_classifications' => ['completed_not_presented_submitted'],
             'remarks' => 'First completion.',
             'external_link' => 'https://example.com/first-completion',
@@ -773,7 +911,7 @@ describe('Full Lifecycle: final acceptance path', function () {
 
         $this->travel(1)->month();
 
-        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
+        submitResearchCompletion($research, $faculty, [
             'outcome_classifications' => ['published_scopus_isi'],
             'remarks' => 'Progress update after acceptance.',
             'external_link' => 'https://example.com/second-completion',

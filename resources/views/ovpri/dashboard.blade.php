@@ -86,7 +86,7 @@
         <div class="kmsar-stat-card" data-stat-card="in-progress">
             <div class="kmsar-stat-card-label">{{ __('Research In Progress') }}</div>
             <div class="kmsar-stat-card-value">{{ number_format($researchInProgress ?? 0) }}</div>
-            <div class="kmsar-stat-card-sub">{{ __('Proposal and ongoing') }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Research registered') }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-pending">
             <div class="kmsar-stat-card-label">{{ __('Pending OVPRI approval') }}</div>

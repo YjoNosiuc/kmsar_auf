@@ -355,7 +355,7 @@ describe('Faculty', function () {
 
         $this->actingAs($user)
             ->get(route('research.create'))
-            ->assertRedirect();
+            ->assertOk();
     });
 
     it('cannot access /admin/dashboard', function () {

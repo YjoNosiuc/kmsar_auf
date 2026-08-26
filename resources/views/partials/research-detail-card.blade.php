@@ -34,8 +34,8 @@
         ->filter()
         ->implode('; ');
     $statusBadge = match ($research->status) {
-        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
-        ResearchStatus::PROPOSAL, ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
+        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+        ResearchStatus::DRAFT, ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
         ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW, ResearchStatus::RESEARCH_COMPLETED => 'info',
         ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'returned',
         default => 'draft',

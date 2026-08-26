@@ -314,13 +314,12 @@ describe('ResearchProgressUpdated', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['status' => ResearchStatus::ONGOING, 'research_registered_at' => now()]);
+        $research->update(['status' => ResearchStatus::RESEARCH_REGISTERED, 'research_registered_at' => now()]);
         $dean = $college->headUser;
 
         seedOutcomeClassifications();
 
-        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
-            'outcome_classifications' => ['completed_not_presented_submitted'],
+        submitResearchCompletion($research, $faculty, [
             'remarks' => 'Midterm update.',
             'external_link' => 'https://example.com/progress-proof',
         ]);
@@ -335,12 +334,11 @@ describe('ResearchProgressUpdated', function () {
         $faculty = makeFaculty($college);
         $ovpri = makeOvpri();
         $research = makeDraftResearch($faculty, $college);
-        $research->update(['status' => ResearchStatus::ONGOING, 'research_registered_at' => now()]);
+        $research->update(['status' => ResearchStatus::RESEARCH_REGISTERED, 'research_registered_at' => now()]);
 
         seedOutcomeClassifications();
 
-        $this->actingAs($faculty)->put(route('research.update-progress', $research), [
-            'outcome_classifications' => ['completed_not_presented_submitted'],
+        submitResearchCompletion($research, $faculty, [
             'remarks' => 'Midterm update.',
             'external_link' => 'https://example.com/progress-proof',
         ]);

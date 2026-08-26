@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\College;
 use App\Models\Research;
 use App\Models\User;
+use App\Services\DashboardCacheService;
 use App\Services\ResearchReportingService;
 use App\Support\ResearchStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,8 +15,6 @@ use Illuminate\View\View;
 
 class DeanController extends Controller
 {
-    private const IN_PROGRESS_STATUSES = ['proposal', 'ongoing'];
-
     public function __construct(
         private ResearchReportingService $reporting,
     ) {}
@@ -32,23 +31,26 @@ class DeanController extends Controller
             ? College::query()->find($collegeId)
             : null;
 
-        $base = $this->collegeResearchQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
+        $base = $this->collegeInstitutionalQuery($college, $scopeAllColleges);
+        $accepted = $this->acceptedReportingQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
 
-        $recentResearch = (clone $base)
+        $totalResearch = (clone $accepted)->count();
+
+        $recentResearch = (clone $accepted)
             ->with(['primaryAuthor'])
+            ->orderByDesc('research_accepted_at')
             ->orderByDesc('updated_at')
             ->limit(15)
             ->get();
 
-        $cacheKey = 'dean_stats_v4_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m-d');
+        $cacheKey = 'dean_stats_v5_'.auth()->id().'_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_v'.DashboardCacheService::version().'_'.now()->format('Y-m-d');
 
         $cached = Cache::remember($cacheKey, 1800, function () use ($college, $collegeId, $dateFrom, $dateTo, $scopeAllColleges) {
-            $base = $this->collegeResearchQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
+            $base = $this->collegeInstitutionalQuery($college, $scopeAllColleges);
             $accepted = $this->acceptedReportingQuery($college, $dateFrom, $dateTo, $scopeAllColleges);
             $outcomeMetrics = clone $accepted;
 
-            $totalResearch = (clone $accepted)->count();
-            $researchInProgress = (clone $base)->whereIn('status', self::IN_PROGRESS_STATUSES)->count();
+            $researchInProgress = (clone $base)->whereIn('status', ResearchStatus::institutionalInProgressStatuses())->count();
 
             $pendingEndorsement = (clone $base)
                 ->whereIn('status', [ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW])
@@ -121,7 +123,6 @@ class DeanController extends Controller
             $agendaThemeBreakdown = $this->reporting->buildAgendaThemeDistribution(clone $accepted);
 
             return [
-                'totalResearch' => $totalResearch,
                 'researchInProgress' => $researchInProgress,
                 'pendingEndorsement' => $pendingEndorsement,
                 'publishedCount' => $publishedCount,
@@ -137,7 +138,7 @@ class DeanController extends Controller
 
         return view('dean.dashboard', [
             'college' => $college,
-            'totalResearch' => $cached['totalResearch'] ?? 0,
+            'totalResearch' => $totalResearch,
             'researchInProgress' => $cached['researchInProgress'] ?? 0,
             'pendingEndorsement' => $cached['pendingEndorsement'] ?? 0,
             'presentedCount' => $cached['presentedCount'] ?? 0,
@@ -154,21 +155,21 @@ class DeanController extends Controller
         ]);
     }
 
-    private function collegeResearchQuery(?College $college, ?string $dateFrom = null, ?string $dateTo = null, bool $allColleges = false): Builder
+    private function collegeInstitutionalQuery(?College $college, bool $allColleges = false): Builder
     {
         $q = Research::query()
-            ->where('status', '!=', ResearchStatus::PROPOSAL)
+            ->where('status', '!=', ResearchStatus::DRAFT)
             ->whereNotIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED]);
 
         if ($allColleges) {
             // Super admin: university-wide, no college filter.
         } elseif ($college) {
-            $q->where('mother_college_id', $college->id);
+            $q->forCollegeScope((int) $college->id, true);
         } else {
             $q->whereRaw('1 = 0');
         }
 
-        return $this->applyStartDateRange($q, $dateFrom, $dateTo);
+        return $q;
     }
 
     private function acceptedReportingQuery(?College $college, ?string $dateFrom, ?string $dateTo, bool $allColleges = false): Builder
@@ -178,20 +179,8 @@ class DeanController extends Controller
             $dateFrom,
             $dateTo,
             $allColleges || $college !== null,
+            includeAffiliatedColleges: ! $allColleges && $college !== null,
         );
-    }
-
-    private function applyStartDateRange(Builder $query, ?string $dateFrom, ?string $dateTo): Builder
-    {
-        if ($dateFrom) {
-            $query->whereDate('start_date', '>=', $dateFrom);
-        }
-
-        if ($dateTo) {
-            $query->whereDate('start_date', '<=', $dateTo);
-        }
-
-        return $query;
     }
 
     /**
@@ -254,7 +243,7 @@ class DeanController extends Controller
         $presentedCodes = config('kmsar.presented_outcome_codes', []);
         $scopusCode = config('kmsar.scopus_outcome_code', 'published_scopus');
 
-        $researchQuery = $this->reporting->acceptedQuery($collegeId, $dateFrom, $dateTo, true)
+        $researchQuery = $this->reporting->acceptedQuery($collegeId, $dateFrom, $dateTo, true, true)
             ->where(function (Builder $b) use ($facultyIds) {
                 $b->whereIn('primary_author_id', $facultyIds)
                     ->orWhereHas('researchAuthors', fn (Builder $a) => $a->whereIn('user_id', $facultyIds));

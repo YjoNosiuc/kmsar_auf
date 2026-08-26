@@ -9,17 +9,7 @@
 @section('content')
     @php
         $filterHidden = collect($filters ?? [])->filter(fn ($v) => $v !== null && $v !== '')->all();
-        $statusOpts = [
-            'proposal' => __('Proposal / abstract'),
-            'ongoing' => __('Ongoing'),
-            'completed_unpublished' => __('Completed (unpublished)'),
-            'presented_internal' => __('Presented (internal)'),
-            'presented_external' => __('Presented (external)'),
-            'published_non_indexed' => __('Published (non-indexed)'),
-            'published_scopus' => __('Published (Scopus/WoS Indexed)'),
-            'patent_submitted' => __('Patent submitted'),
-            'patent_granted' => __('Patent granted'),
-        ];
+        $statusOpts = \App\Support\ResearchStatus::institutionalFilterOptions();
         $classOpts = [
             'self_funded' => __('Self-funded'),
             'internally_funded' => __('Internally funded'),

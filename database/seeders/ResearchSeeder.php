@@ -33,7 +33,7 @@ class ResearchSeeder extends Seeder
                 'registration_type' => 'new',
                 'research_classification' => 'student_thesis_dissertation',
                 'agenda_themes' => ['theme_2', 'theme_4'],
-                'status' => ResearchStatus::PROPOSAL,
+                'status' => ResearchStatus::DRAFT,
                 'sdg_tags' => [4, 9],
                 'created_at' => '2025-09-08 11:45:00',
             ],
@@ -45,7 +45,7 @@ class ResearchSeeder extends Seeder
                 'registration_type' => 'new',
                 'research_classification' => 'student_thesis_dissertation',
                 'agenda_themes' => ['theme_1', 'theme_4'],
-                'status' => ResearchStatus::PROPOSAL,
+                'status' => ResearchStatus::DRAFT,
                 'sdg_tags' => [3, 10],
                 'created_at' => '2025-09-12 08:30:00',
             ],
@@ -100,7 +100,7 @@ class ResearchSeeder extends Seeder
                 'registration_type' => 'new',
                 'research_classification' => 'college_unit_department_initiated',
                 'agenda_themes' => ['theme_4'],
-                'status' => ResearchStatus::ONGOING,
+                'status' => ResearchStatus::RESEARCH_REGISTERED,
                 'sdg_tags' => [4, 9],
                 'submitted_at' => '2025-01-10 09:00:00',
                 'research_registered_at' => '2025-01-20 14:00:00',
@@ -271,7 +271,7 @@ class ResearchSeeder extends Seeder
 
         $submittedAt = $submittedAtRaw !== null
             ? Carbon::parse($submittedAtRaw)
-            : ($status === ResearchStatus::PROPOSAL ? null : $createdAt->copy()->addHours(1));
+            : ($status === ResearchStatus::DRAFT ? null : $createdAt->copy()->addHours(1));
 
         $registeredAt = $registeredAtRaw !== null
             ? Carbon::parse($registeredAtRaw)
@@ -279,7 +279,7 @@ class ResearchSeeder extends Seeder
 
         $firstCompletedAt = $firstCompletedAtRaw !== null
             ? Carbon::parse($firstCompletedAtRaw)
-            : (($outcomes !== [] && $status !== ResearchStatus::PROPOSAL)
+            : (($outcomes !== [] && $status !== ResearchStatus::DRAFT)
                 ? ($registeredAt ?? $createdAt)->copy()->addWeeks(2)
                 : null);
 
@@ -342,7 +342,7 @@ class ResearchSeeder extends Seeder
     {
         return in_array($status, [
             ResearchStatus::RESEARCH_REGISTERED,
-            ResearchStatus::ONGOING,
+            ResearchStatus::RESEARCH_REGISTERED,
             ResearchStatus::RESEARCH_COMPLETED,
             ResearchStatus::FINAL_DEAN_REVIEW,
             ResearchStatus::FINAL_OVPRI_REVIEW,

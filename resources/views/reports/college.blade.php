@@ -33,19 +33,9 @@
         $previewRows = $preview ?? $previewRows ?? collect();
         $exportFilters = array_merge(['include_rejected' => '0'], $filters ?? []);
         $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
-        $statusOpts = collect([
-            'proposal' => __('Proposal / abstract'),
-            'ongoing' => __('Ongoing'),
-        ])->merge(
-            \App\Models\OutcomeClassification::query()
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->pluck('name', 'code')
-        )->all();
+        $statusOpts = \App\Support\ResearchStatus::reportProgressFilterOptions();
         $classOpts = config('kmsar.research_classifications', []);
-        $workflowStatusOptions = collect(\App\Support\ResearchStatus::all())
-            ->mapWithKeys(fn (string $value) => [$value => \App\Support\ResearchStatus::label($value)])
-            ->all();
+        $workflowStatusOptions = \App\Support\ResearchStatus::institutionalFilterOptions();
         $facultyOpts = ($faculties ?? collect())->mapWithKeys(fn ($u) => [$u->id => $u->name])->all();
         $page = max(1, (int) ($page ?? 1));
         $perPage = max(10, (int) ($perPage ?? 10));

@@ -11,15 +11,15 @@
         use App\Support\ResearchStatus;
 
         $statusOptions = collect(['' => __('All')])
-            ->merge(collect(ResearchStatus::all())->mapWithKeys(fn (string $value) => [$value => ResearchStatus::label($value)]))
+            ->merge(collect(ResearchStatus::institutionalFilterOptions()))
             ->all();
 
         $statusBadgeVariant = static function (string $status): string {
             return match ($status) {
-                ResearchStatus::PROPOSAL => 'draft',
+                ResearchStatus::DRAFT => 'draft',
                 ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
                 ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
-                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
                 ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'rejected',
                 ResearchStatus::RESEARCH_COMPLETED => 'info',
                 default => 'info',

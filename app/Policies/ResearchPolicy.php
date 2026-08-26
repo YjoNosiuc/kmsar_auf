@@ -29,11 +29,12 @@ class ResearchPolicy
             return true;
         }
 
-        if ($user->hasAnyRole(['ovpri_admin', 'cdaic_admin'])) {
-            if ($research->status === ResearchStatus::PROPOSAL) {
-                return false;
-            }
+        if (ResearchStatus::isPreSubmission((string) $research->status)
+            && $user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'college_dean', 'unit_head'])) {
+            return false;
+        }
 
+        if ($user->hasAnyRole(['ovpri_admin', 'cdaic_admin'])) {
             return true;
         }
 
@@ -42,7 +43,7 @@ class ResearchPolicy
         }
 
         if ($user->hasAnyRole(['college_dean', 'unit_head']) || $user->can('research.view_college')) {
-            if ($research->status === ResearchStatus::PROPOSAL) {
+            if (ResearchStatus::isPreSubmission((string) $research->status)) {
                 return false;
             }
 
@@ -110,7 +111,31 @@ class ResearchPolicy
 
     public function uploadDocuments(User $user, Research $research): bool
     {
-        return $this->update($user, $research) || $this->updateOutcomes($user, $research);
+        if ($this->update($user, $research)) {
+            return true;
+        }
+
+        if (ResearchStatus::isDocumentsEditable((string) $research->status)) {
+            if ((int) $research->primary_author_id === (int) $user->id && $user->can('research.update')) {
+                return true;
+            }
+
+            return $this->coAuthorCanEdit($user, $research);
+        }
+
+        return $this->updateOutcomes($user, $research);
+    }
+
+    public function manageRegistrationDocuments(User $user, Research $research): bool
+    {
+        if (! $this->uploadDocuments($user, $research)) {
+            return false;
+        }
+
+        $status = (string) $research->status;
+
+        return ResearchStatus::isFullyEditable($status)
+            || ResearchStatus::isDocumentsEditable($status);
     }
 
     public function submit(User $user, Research $research): bool
@@ -119,7 +144,7 @@ class ResearchPolicy
             return false;
         }
 
-        if ($research->status !== ResearchStatus::PROPOSAL) {
+        if (! ResearchStatus::isPreSubmission((string) $research->status)) {
             return false;
         }
 

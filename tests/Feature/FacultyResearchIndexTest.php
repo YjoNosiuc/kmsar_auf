@@ -15,7 +15,7 @@ describe('Faculty My Research filters', function () {
             'title' => $hiddenTitle,
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'research_classification' => 'self_funded',
             'created_at' => now()->subDays(40),
         ]);
@@ -25,7 +25,7 @@ describe('Faculty My Research filters', function () {
                 'title' => "NEWER LIST ITEM {$i}",
                 'primary_author_id' => $faculty->id,
                 'mother_college_id' => $college->id,
-                'status' => ResearchStatus::ONGOING,
+                'status' => ResearchStatus::RESEARCH_REGISTERED,
                 'research_classification' => 'self_funded',
                 'created_at' => now()->subDays($i),
             ]);
@@ -44,6 +44,17 @@ describe('Faculty My Research filters', function () {
             ->assertDontSee('NEWER LIST ITEM 1');
     });
 
+    it('does not offer draft in the workflow status filter dropdown', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+
+        $response = $this->actingAs($faculty)
+            ->get(route('research.index'))
+            ->assertOk();
+
+        $response->assertDontSee('value="draft"', false);
+    });
+
     it('filters by workflow status on the server', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
@@ -52,7 +63,7 @@ describe('Faculty My Research filters', function () {
             'title' => 'DRAFT PROPOSAL RECORD',
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'research_classification' => 'self_funded',
         ]);
 
@@ -60,18 +71,24 @@ describe('Faculty My Research filters', function () {
             'title' => 'ONGOING RECORD',
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::ONGOING,
+            'status' => ResearchStatus::RESEARCH_REGISTERED,
             'research_classification' => 'self_funded',
         ]);
 
         $this->actingAs($faculty)
-            ->get(route('research.index', ['status' => ResearchStatus::PROPOSAL]))
+            ->get(route('research.index', ['status' => ResearchStatus::DRAFT]))
             ->assertOk()
             ->assertSee('DRAFT PROPOSAL RECORD')
-            ->assertDontSee('ONGOING RECORD');
+            ->assertSee('ONGOING RECORD');
 
         $this->actingAs($faculty)
-            ->get(route('research.index', ['status' => ResearchStatus::ONGOING]))
+            ->get(route('research.index', ['status' => 'proposal']))
+            ->assertOk()
+            ->assertSee('DRAFT PROPOSAL RECORD')
+            ->assertSee('ONGOING RECORD');
+
+        $this->actingAs($faculty)
+            ->get(route('research.index', ['status' => ResearchStatus::RESEARCH_REGISTERED]))
             ->assertOk()
             ->assertSee('ONGOING RECORD')
             ->assertDontSee('DRAFT PROPOSAL RECORD');
@@ -86,7 +103,7 @@ describe('Faculty My Research filters', function () {
                 'title' => "SEARCHABLE BLOCKCHAIN STUDY {$i}",
                 'primary_author_id' => $faculty->id,
                 'mother_college_id' => $college->id,
-                'status' => ResearchStatus::ONGOING,
+                'status' => ResearchStatus::RESEARCH_REGISTERED,
                 'research_classification' => 'self_funded',
                 'created_at' => now()->subDays($i),
             ]);

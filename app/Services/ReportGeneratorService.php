@@ -135,8 +135,8 @@ class ReportGeneratorService
     public function statusLabel(string $status): string
     {
         return match ($status) {
-            ResearchStatus::PROPOSAL => __('Proposal'),
-            ResearchStatus::ONGOING => __('Ongoing'),
+            ResearchStatus::DRAFT, 'proposal' => __('Draft'),
+            ResearchStatus::RESEARCH_REGISTERED => __('Research Registered'),
             ResearchStatus::RESEARCH_ACCEPTED => __('Research accepted'),
             ResearchStatus::INITIAL_DEAN_REVIEW => __('Initial dean review'),
             ResearchStatus::INITIAL_OVPRI_REVIEW => __('Initial OVPRI review'),
@@ -261,14 +261,15 @@ class ReportGeneratorService
 
     public function otherCollegeAffiliations(Research $research): string
     {
-        if ($research->otherCollege) {
-            $code = $research->otherCollege->code ?? '';
-            $name = $research->otherCollege->name ?? '';
+        $lines = $research->otherColleges()->map(function ($college) {
+            return trim(($college->code ?? '').' — '.($college->name ?? ''));
+        })->filter();
 
-            return trim($code.' — '.$name);
+        if ($lines->isEmpty()) {
+            return '—';
         }
 
-        return '—';
+        return $lines->implode('; ');
     }
 
     /**

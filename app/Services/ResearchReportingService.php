@@ -17,11 +17,12 @@ class ResearchReportingService
         ?string $dateFrom = null,
         ?string $dateTo = null,
         bool $universityWide = true,
+        bool $includeAffiliatedColleges = false,
     ): Builder {
         $query = Research::query()->reportingAccepted();
 
         if ($motherCollegeId !== null) {
-            $query->where('mother_college_id', $motherCollegeId);
+            $query->forCollegeScope($motherCollegeId, $includeAffiliatedColleges);
         } elseif (! $universityWide) {
             $query->whereRaw('1 = 0');
         }

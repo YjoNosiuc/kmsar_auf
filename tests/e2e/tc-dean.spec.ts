@@ -33,7 +33,7 @@ async function createAndSubmitResearchAsCamp(page: Page, title: string): Promise
   await page.check('input[name="expected_output[]"][value="publication"]');
   await page.fill('input[name="start_date"]', '2026-01-01');
   await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'proposal');
+  await page.selectOption('select[name="status"]', 'draft');
   await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
   await Promise.all([
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
@@ -62,7 +62,7 @@ async function openDeanReview(page: Page, researchId: string): Promise<void> {
 async function submitProgressUpdate(page: Page, researchId: string): Promise<void> {
   await page.goto(`/research/${researchId}`);
   await page.getByRole('button', { name: 'Update Progress' }).click();
-  await page.locator('select[name="status"]').selectOption('ongoing');
+  await page.locator('select[name="status"]').selectOption('research_registered');
   await page.locator('form[action*="update-progress"] input[name="files[]"]').setInputFiles(SAMPLE_PDF);
   await page.locator('form[action*="update-progress"] button[type="submit"]').click();
 }

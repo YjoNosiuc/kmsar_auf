@@ -22,7 +22,7 @@ class LoginController extends Controller
             return $this->redirectAfterLogin(Auth::user());
         }
 
-        if ($request->hasSession()) {
+        if ($request->boolean('expired') && $request->hasSession()) {
             $request->session()->regenerateToken();
         }
 

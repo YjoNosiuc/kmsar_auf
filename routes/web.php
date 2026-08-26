@@ -28,6 +28,7 @@ use App\Http\Controllers\OvpriController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResearchController;
+use App\Services\DashboardCacheService;
 use App\Services\ResearchReportingService;
 use App\Http\Controllers\UserSearchController;
 
@@ -56,10 +57,6 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
     Route::get('/login/csrf-token', function (Request $request) {
-        if ($request->hasSession()) {
-            $request->session()->regenerateToken();
-        }
-
         return response()->json(['csrf' => csrf_token()]);
     })->name('login.csrf');
     Route::get('/register', [RegisterController::class, 'create'])
@@ -135,6 +132,7 @@ Route::middleware(['auth', 'nocache', 'role:faculty|viewer|super_admin'])
     ->group(function () {
         Route::get('/', [ResearchController::class, 'index'])->name('research.index');
         Route::get('/create', [ResearchController::class, 'create'])->name('research.create');
+        Route::post('/begin', [ResearchController::class, 'beginRegistration'])->name('research.begin');
         Route::post('/', [ResearchController::class, 'store'])->name('research.store');
         Route::get('/{research}/details', [ResearchController::class, 'registrationDetails'])->name('research.wizard.details');
         Route::put('/{research}/details', [ResearchController::class, 'saveRegistrationDetails'])->name('research.wizard.details.save');
@@ -274,11 +272,11 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 ]);
             }
 
-            $inProgressStatuses = config('kmsar.in_progress_statuses');
+            $inProgressStatuses = ResearchStatus::institutionalInProgressStatuses();
 
             $activeResearch = fn () => $applyStartDates(
                 Research::query()
-                    ->where('status', '!=', ResearchStatus::PROPOSAL)
+                    ->where('status', '!=', ResearchStatus::DRAFT)
                     ->whereNotIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED])
             );
 
@@ -295,7 +293,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 'approved' => (int) $applyStartDates(
                     Research::query()->whereIn('status', [
                         ResearchStatus::RESEARCH_REGISTERED,
-                        ResearchStatus::ONGOING,
+                        ResearchStatus::RESEARCH_REGISTERED,
                         ResearchStatus::RESEARCH_COMPLETED,
                         ResearchStatus::RESEARCH_ACCEPTED,
                     ])
@@ -406,7 +404,7 @@ Route::middleware(['auth', 'nocache', 'role:super_admin'])
                 ->count();
 
             $monthlySubmissions = Cache::remember(
-                'admin_monthly_stats_v3_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_'.now()->format('Y-m'),
+                'admin_monthly_stats_v3_'.($dateFrom ?? 'all').'_'.($dateTo ?? 'all').'_v'.DashboardCacheService::version().'_'.now()->format('Y-m'),
                 3600,
                 function () use ($reporting, $dateFrom, $dateTo) {
                     $monthSql = $reporting->acceptedMonthSql();

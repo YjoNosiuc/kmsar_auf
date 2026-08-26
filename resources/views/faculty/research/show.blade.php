@@ -5,10 +5,10 @@
     $listRoute = route('research.index');
     $statusLabel = ResearchStatus::label($research->status);
     $statusBadgeVariant = match ($research->status) {
-        ResearchStatus::PROPOSAL => 'draft',
+        ResearchStatus::DRAFT => 'draft',
         ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
         ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
-        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+        ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
         ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'returned',
         ResearchStatus::RESEARCH_COMPLETED => 'info',
         default => 'draft',
@@ -118,7 +118,12 @@
                         <x-button variant="primary" type="button" @click="showUpdateProgress = true" aria-label="{{ __('Submit completion') }}">{{ __('Submit completion') }}</x-button>
                     @endcan
                 @endif
-                @if ($research->status === ResearchStatus::PROPOSAL)
+                @if ($research->status === ResearchStatus::RESEARCH_REGISTERED)
+                    @can('manageRegistrationDocuments', $research)
+                        <x-button variant="outline" href="{{ route('research.wizard.documents', $research) }}">{{ __('Manage documents') }}</x-button>
+                    @endcan
+                @endif
+                @if (ResearchStatus::isPreSubmission((string) $research->status))
                     @can('update', $research)
                         <x-button variant="primary" href="{{ route('research.wizard.details', $research) }}">{{ __('Edit Details') }}</x-button>
                         <x-button variant="outline" href="{{ route('research.wizard.documents', $research) }}">{{ __('Continue to documents') }}</x-button>
@@ -286,7 +291,7 @@
                                 </table>
                             </div>
 
-                            @if ($research->status === ResearchStatus::PROPOSAL)
+                            @if (ResearchStatus::isPreSubmission((string) $research->status))
                                 @can('update', $research)
                                     <div class="mt-6 border-t border-[var(--color-border)] pt-6">
                                         <form
@@ -452,7 +457,7 @@
                     </table>
                 </div>
 
-                @if ($research->status === ResearchStatus::PROPOSAL)
+                @if (ResearchStatus::isPreSubmission((string) $research->status))
                     <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:16px 20px;border-top:3px solid #1E3A8A;">
                         <h2 class="kmsar-card-title" style="margin:0 0 8px 0;">{{ __('Ready to submit?') }}</h2>
                         <p class="kmsar-body" style="margin:0 0 16px;font-size:13px;color:#64748B;">{{ __('Update details and documents in the registration wizard, then submit for dean review from the Documents step.') }}</p>
@@ -494,7 +499,7 @@
                     data-disallowed-hosts="{{ e(json_encode(config('kmsar.disallowed_external_link_hosts', []))) }}"
                     data-msg-invalid="{{ e(__('Invalid link. Please enter a correct URL.')) }}"
                     data-msg-blocked="{{ e(__('This link type is not accepted for supporting proof. Please use a Google Drive, OneDrive, Dropbox, or DOI link instead.')) }}"
-                    data-msg-required="{{ e(__('Please add at least one link (Google Drive, OneDrive, Dropbox, or DOI).')) }}"
+                    data-msg-required="{{ e(__('Please upload at least one supporting document.')) }}"
                     @submit="handleSubmit($event)"
                 >
                     @csrf
@@ -613,89 +618,112 @@
                                 @enderror
                             </div>
 
-                            {{-- Supporting document --}}
+                            {{-- Supporting documents (required) + optional links --}}
                             <div>
                                 <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:2px;letter-spacing:0.02em;">
-                                    {{ __('Supporting Document') }}
+                                    {{ __('Supporting documents') }}
                                     <span style="color:#DC2626;">*</span>
                                 </label>
-                                <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">{{ __('Upload proof supporting your new status (e.g. publication proof, conference certificate, patent receipt), or paste public link(s).') }}</p>
+                                <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">{{ __('Add documents one at a time. At least one file is required. Links are optional.') }}</p>
 
-                                <div>
-                                    <input type="hidden" name="upload_type" :value="uploadType">
-
-                                    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin:0 0 8px;">
-                                        {{ __('Upload Method') }}
+                                <div
+                                    class="kmsar-dropzone"
+                                    style="margin-bottom:12px;"
+                                    @click="$refs.fileInput.click()"
+                                    @dragover.prevent
+                                    @drop.prevent="handleDrop($event)"
+                                >
+                                    <svg class="kmsar-dropzone-icon" xmlns="http://www.w3.org/2000/svg"
+                                        fill="none" viewBox="0 0 24 24"
+                                        stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                        <path stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+                                    </svg>
+                                    <p class="kmsar-dropzone-title">
+                                        <span>{{ __('Add a document') }}</span> {{ __('or drag and drop') }}
                                     </p>
-                                    <div class="kmsar-tabs" style="margin-bottom: 1rem;">
-                                        <button
-                                            type="button"
-                                            class="kmsar-tab"
-                                            :class="{ 'active': uploadType === 'file' }"
-                                            @click="setUploadType('file')"
-                                        >{{ __('Upload File') }}</button>
-                                        <button
-                                            type="button"
-                                            class="kmsar-tab"
-                                            :class="{ 'active': uploadType === 'link' }"
-                                            @click="setUploadType('link')"
-                                        >{{ __('Add Link') }}</button>
-                                    </div>
+                                    <p class="kmsar-dropzone-hint">
+                                        {{ __('PDF, Word, Excel, Image · Max 100MB · up to :max files', ['max' => $maxUploadFiles]) }}
+                                    </p>
+                                    <input
+                                        type="file"
+                                        x-ref="fileInput"
+                                        name="files[]"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                                        class="hidden"
+                                        style="display:none;"
+                                        @change="handleFileSelect($event)"
+                                    >
+                                </div>
 
-                                    {{-- File upload panel --}}
-                                    <div x-show="uploadType === 'file'" style="display: none;">
-                                        <div
-                                            class="kmsar-dropzone"
-                                            @click="$refs.fileInput.click()"
-                                            @dragover.prevent
-                                            @drop.prevent="handleDrop($event)"
-                                        >
-                                            <svg class="kmsar-dropzone-icon" xmlns="http://www.w3.org/2000/svg"
-                                                fill="none" viewBox="0 0 24 24"
-                                                stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                <path stroke-linecap="round"
-                                                    stroke-linejoin="round"
-                                                    d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-                                            </svg>
-                                            <p class="kmsar-dropzone-title">
-                                                <span>{{ __('Click to upload') }}</span> {{ __('or drag and drop') }}
-                                            </p>
-                                            <p class="kmsar-dropzone-hint">
-                                                {{ __('PDF, Word, Excel, Image · Max 100MB · up to :max files', ['max' => $maxUploadFiles]) }}
-                                            </p>
-                                            <input
-                                                type="file"
-                                                x-ref="fileInput"
-                                                name="files[]"
-                                                multiple
-                                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                                                class="hidden"
-                                                style="display:none;"
-                                                :disabled="uploadType !== 'file'"
-                                                @change="handleFileSelect($event)"
-                                            >
-                                            <p class="modal-file-name" style="font-size:12px;color:#475569;margin:10px 0 0;min-height:16px;" x-text="fileSummary"></p>
-                                        </div>
-                                        <p class="kmsar-form-hint" style="margin-top:8px;font-size:11px;color:#94A3B8;">
-                                            {{ __('You may select multiple files in one upload (up to :max).', ['max' => $maxUploadFiles]) }}
-                                        </p>
+                                <div x-show="selectedFiles.length" x-cloak style="display:none;margin-bottom:16px;">
+                                    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#94A3B8;margin:0 0 8px;">
+                                        {{ __('Added documents') }} (<span x-text="selectedFiles.length"></span>)
+                                    </p>
+                                    <div style="display:flex;flex-direction:column;gap:8px;">
+                                        <template x-for="item in selectedFiles" :key="item.uid">
+                                            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #E2E8F0;border-radius:8px;background:#fff;">
+                                                <div style="width:40px;height:40px;border-radius:8px;background:#EFF6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+                                                    <img x-show="item.isImage" :src="item.previewUrl" alt="" style="width:100%;height:100%;object-fit:cover;">
+                                                    <svg x-show="!item.isImage" style="width:20px;height:20px;color:#1E3A8A;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                                    </svg>
+                                                </div>
+                                                <div style="flex:1;min-width:0;">
+                                                    <div style="font-size:13px;font-weight:600;color:#0F172A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" x-text="item.name"></div>
+                                                    <div style="font-size:11px;color:#94A3B8;" x-text="item.sizeLabel"></div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    x-show="item.canPreview"
+                                                    @click="previewSelectedFile(item)"
+                                                    style="padding:6px 10px;border:1px solid #E2E8F0;background:#fff;border-radius:6px;font-size:11px;font-weight:600;color:#1E3A8A;cursor:pointer;"
+                                                >{{ __('Preview') }}</button>
+                                                <button
+                                                    type="button"
+                                                    @click="removeSelectedFile(item.uid)"
+                                                    style="width:32px;height:32px;border:1px solid #FECACA;background:#FEF2F2;border-radius:6px;color:#DC2626;cursor:pointer;flex-shrink:0;"
+                                                    aria-label="{{ __('Remove document') }}"
+                                                >
+                                                    <svg style="width:16px;height:16px;margin:0 auto;display:block;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </template>
                                     </div>
+                                </div>
 
-                                    {{-- Link panel --}}
-                                    <div x-show="uploadType === 'link'" style="display: none;">
-                                        <div style="border:1px solid #E2E8F0;border-radius:10px;padding:16px;background:#F8FAFC;">
-                                            <p
-                                                x-show="linkErrorSummary"
-                                                x-cloak
-                                                x-text="linkErrorSummary"
-                                                class="kmsar-form-error"
-                                                role="alert"
-                                                style="margin:0 0 10px;font-size:13px;"
-                                            ></p>
-                                            <div style="display:flex;flex-direction:column;gap:10px;">
-                                                <template x-for="(link, index) in links" :key="index">
-                                                    <div>
-                                                        <div style="display:flex;gap:8px;align-items:flex-start;">
+                                <p
+                                    x-show="fileError"
+                                    x-cloak
+                                    x-text="fileError"
+                                    class="kmsar-form-error"
+                                    role="alert"
+                                    style="margin:0 0 12px;font-size:13px;"
+                                ></p>
+
+                                <div style="border-top:1px solid #F1F5F9;padding-top:14px;">
+                                    <label style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:2px;letter-spacing:0.02em;">
+                                        {{ __('External links') }}
+                                        <span style="font-size:11px;font-weight:400;color:#94A3B8;margin-left:4px;">{{ __('(optional)') }}</span>
+                                    </label>
+                                    <p style="font-size:11px;color:#94A3B8;margin:0 0 10px;">{{ __('Paste Google Drive, OneDrive, Dropbox, or DOI links if needed.') }}</p>
+
+                                    <div style="border:1px solid #E2E8F0;border-radius:10px;padding:16px;background:#F8FAFC;">
+                                        <p
+                                            x-show="linkErrorSummary"
+                                            x-cloak
+                                            x-text="linkErrorSummary"
+                                            class="kmsar-form-error"
+                                            role="alert"
+                                            style="margin:0 0 10px;font-size:13px;"
+                                        ></p>
+                                        <div style="display:flex;flex-direction:column;gap:10px;">
+                                            <template x-for="(link, index) in links" :key="index">
+                                                <div>
+                                                    <div style="display:flex;gap:8px;align-items:flex-start;">
                                                         <div style="position:relative;flex:1;">
                                                             <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#94A3B8;">
                                                                 <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -706,15 +734,11 @@
                                                                 type="text"
                                                                 name="external_links[]"
                                                                 x-model="links[index]"
-                                                                :disabled="uploadType !== 'link'"
                                                                 :aria-invalid="linkErrors[index] ? 'true' : 'false'"
                                                                 @input="clearLinkError(index)"
-                                                                placeholder=""
                                                                 :style="linkErrors[index]
                                                                     ? 'width:100%;padding:10px 12px 10px 34px;border:1.5px solid #DC2626;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;'
-                                                                    : 'width:100%;padding:10px 12px 10px 34px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;transition:border-color 0.15s;'"
-                                                                onfocus="if (!this.getAttribute('aria-invalid') || this.getAttribute('aria-invalid') === 'false') { this.style.borderColor='#1E3A8A'; this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'; }"
-                                                                onblur="if (!this.getAttribute('aria-invalid') || this.getAttribute('aria-invalid') === 'false') { this.style.borderColor='#E2E8F0'; this.style.boxShadow='none'; }"
+                                                                    : 'width:100%;padding:10px 12px 10px 34px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;'"
                                                             >
                                                         </div>
                                                         <button
@@ -728,35 +752,26 @@
                                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                                             </svg>
                                                         </button>
-                                                        </div>
-                                                        <p
-                                                            x-show="linkErrors[index]"
-                                                            x-cloak
-                                                            x-text="linkErrors[index]"
-                                                            class="kmsar-form-error"
-                                                            role="alert"
-                                                            style="margin:4px 0 0;font-size:12px;"
-                                                        ></p>
                                                     </div>
-                                                </template>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                @click="addLink()"
-                                                x-show="links.length < maxLinks"
-                                                style="margin-top:12px;padding:8px 12px;border:1px dashed #CBD5E1;background:#fff;border-radius:8px;font-size:12px;font-weight:600;color:#1E3A8A;cursor:pointer;width:100%;"
-                                            >
-                                                {{ __('Add another link') }}
-                                            </button>
-                                            <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
-                                                <span style="padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">Google Drive</span>
-                                                <span style="padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">OneDrive</span>
-                                                <span style="padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">DOI Link</span>
-                                            </div>
+                                                    <p
+                                                        x-show="linkErrors[index]"
+                                                        x-cloak
+                                                        x-text="linkErrors[index]"
+                                                        class="kmsar-form-error"
+                                                        role="alert"
+                                                        style="margin:4px 0 0;font-size:12px;"
+                                                    ></p>
+                                                </div>
+                                            </template>
                                         </div>
-                                        <p class="kmsar-form-hint" style="margin-top:8px;font-size:11px;color:#94A3B8;">
-                                            {{ __('Paste Google Drive, OneDrive, Dropbox, or DOI links. Video and social media URLs are not accepted.') }}
-                                        </p>
+                                        <button
+                                            type="button"
+                                            @click="addLink()"
+                                            x-show="links.length < maxLinks"
+                                            style="margin-top:12px;padding:8px 12px;border:1px dashed #CBD5E1;background:#fff;border-radius:8px;font-size:12px;font-weight:600;color:#1E3A8A;cursor:pointer;width:100%;"
+                                        >
+                                            {{ __('Add another link') }}
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -850,17 +865,18 @@ document.addEventListener('DOMContentLoaded', function() {
     <script>
         document.addEventListener('alpine:init', () => {
             Alpine.data('researchProgressProof', () => ({
-                uploadType: 'file',
                 links: [''],
                 linkErrors: [''],
                 linkErrorSummary: '',
                 maxFiles: 10,
                 maxLinks: 10,
-                fileSummary: '',
+                selectedFiles: [],
+                nextFileUid: 1,
+                fileError: '',
                 disallowedHosts: [],
                 msgInvalid: 'Invalid link. Please enter a correct URL.',
                 msgBlocked: 'This link type is not accepted for supporting proof. Please use a Google Drive, OneDrive, Dropbox, or DOI link instead.',
-                msgRequired: 'Please add at least one link.',
+                msgRequired: 'Please upload at least one supporting document.',
                 init() {
                     const root = this.$el;
                     try {
@@ -874,7 +890,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.linkErrors = this.links.map(() => '');
                     this.maxFiles = parseInt(root.dataset.maxFiles || '10', 10);
                     this.maxLinks = parseInt(root.dataset.maxLinks || '10', 10);
-                    this.uploadType = root.dataset.uploadType === 'link' ? 'link' : 'file';
                     try {
                         this.disallowedHosts = JSON.parse(root.dataset.disallowedHosts || '[]');
                     } catch (e) {
@@ -884,14 +899,70 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.msgBlocked = root.dataset.msgBlocked || this.msgBlocked;
                     this.msgRequired = root.dataset.msgRequired || this.msgRequired;
                 },
-                setUploadType(type) {
-                    this.uploadType = type;
-                    this.linkErrorSummary = '';
-                    this.linkErrors = this.links.map(() => '');
-                    if (type === 'link' && this.$refs.fileInput) {
-                        this.$refs.fileInput.value = '';
-                        this.fileSummary = '';
+                formatFileSize(bytes) {
+                    if (bytes < 1024) {
+                        return bytes + ' B';
                     }
+                    if (bytes < 1024 * 1024) {
+                        return (bytes / 1024).toFixed(1) + ' KB';
+                    }
+                    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+                },
+                buildFileEntry(file) {
+                    const mime = (file.type || '').toLowerCase();
+                    const isImage = mime.startsWith('image/');
+                    const isPdf = mime === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                    const previewUrl = (isImage || isPdf) ? URL.createObjectURL(file) : null;
+
+                    return {
+                        uid: this.nextFileUid++,
+                        file,
+                        name: file.name,
+                        sizeLabel: this.formatFileSize(file.size),
+                        isImage,
+                        canPreview: isImage || isPdf,
+                        previewUrl,
+                    };
+                },
+                addFile(file) {
+                    if (! file) {
+                        return;
+                    }
+                    if (this.selectedFiles.length >= this.maxFiles) {
+                        this.fileError = 'You may upload up to ' + this.maxFiles + ' files.';
+                        return;
+                    }
+                    this.fileError = '';
+                    this.selectedFiles.push(this.buildFileEntry(file));
+                    this.syncFilesToInput();
+                },
+                removeSelectedFile(uid) {
+                    const index = this.selectedFiles.findIndex((item) => item.uid === uid);
+                    if (index === -1) {
+                        return;
+                    }
+                    const [removed] = this.selectedFiles.splice(index, 1);
+                    if (removed?.previewUrl) {
+                        URL.revokeObjectURL(removed.previewUrl);
+                    }
+                    this.syncFilesToInput();
+                },
+                previewSelectedFile(item) {
+                    if (! item?.previewUrl) {
+                        return;
+                    }
+                    if (typeof window.kmsarOpenPreviewModal === 'function') {
+                        window.kmsarOpenPreviewModal(item.previewUrl, item.name);
+                    }
+                },
+                syncFilesToInput() {
+                    const input = this.$refs.fileInput;
+                    if (! input) {
+                        return;
+                    }
+                    const dt = new DataTransfer();
+                    this.selectedFiles.forEach((item) => dt.items.add(item.file));
+                    input.files = dt.files;
                 },
                 clearLinkError(index) {
                     this.linkErrors[index] = '';
@@ -921,7 +992,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         return this.msgInvalid;
                     }
                     const host = (parsed.hostname || '').toLowerCase();
-                    if (host === '' || !host.includes('.')) {
+                    if (host === '' || ! host.includes('.')) {
                         return this.msgInvalid;
                     }
                     if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(host)) {
@@ -932,7 +1003,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     for (const blocked of this.disallowedHosts) {
                         const blockedHost = String(blocked || '').toLowerCase();
-                        if (blockedHost === '' ) {
+                        if (blockedHost === '') {
                             continue;
                         }
                         if (host === blockedHost || host.endsWith('.' + blockedHost)) {
@@ -945,8 +1016,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     this.linkErrors = this.links.map((link) => this.validateOneLink(link));
                     const filledLinks = this.links.filter((link) => (link || '').trim() !== '');
                     if (filledLinks.length === 0) {
-                        this.linkErrorSummary = this.msgRequired;
-                        return false;
+                        this.linkErrorSummary = '';
+                        return true;
                     }
                     const hasInvalid = this.linkErrors.some((message, index) => {
                         return (this.links[index] || '').trim() !== '' && message !== '';
@@ -959,15 +1030,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     return true;
                 },
                 handleSubmit(event) {
-                    if (this.uploadType !== 'link') {
+                    this.syncFilesToInput();
+                    if (this.selectedFiles.length === 0) {
+                        event.preventDefault();
+                        this.fileError = this.msgRequired;
                         return;
                     }
                     if (! this.validateLinks()) {
                         event.preventDefault();
-                        this.$nextTick(() => {
-                            const panel = this.$el.querySelector('[x-show="uploadType === \'link\'"]');
-                            panel?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        });
                     }
                 },
                 addLink() {
@@ -993,32 +1063,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (! input || ! e.dataTransfer || ! e.dataTransfer.files || ! e.dataTransfer.files.length) {
                         return;
                     }
-                    this.applyFiles(input, e.dataTransfer.files);
+                    this.addFile(e.dataTransfer.files[0]);
+                    input.value = '';
                 },
                 handleFileSelect(e) {
                     const input = e.target;
-                    if (! input || ! input.files) {
+                    if (! input || ! input.files || ! input.files.length) {
                         return;
                     }
-                    this.applyFiles(input, input.files);
-                },
-                applyFiles(input, fileList) {
-                    if (fileList.length > this.maxFiles) {
-                        alert('You may upload up to ' + this.maxFiles + ' files at once.');
-                        input.value = '';
-                        this.fileSummary = '';
-                        return;
-                    }
-                    const dt = new DataTransfer();
-                    Array.from(fileList).forEach((f) => dt.items.add(f));
-                    input.files = dt.files;
-                    if (input.files.length === 0) {
-                        this.fileSummary = '';
-                    } else if (input.files.length === 1) {
-                        this.fileSummary = input.files[0].name;
-                    } else {
-                        this.fileSummary = input.files.length + ' files selected';
-                    }
+                    this.addFile(input.files[0]);
+                    input.value = '';
                 },
             }));
 

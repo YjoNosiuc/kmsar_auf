@@ -3,13 +3,31 @@ import { login, credentials } from './auth';
 import { runTinker } from './db';
 
 const WIZARD_TIMEOUT = 90_000;
+export const COMPLETION_SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
+
+/** Add at least one supporting document in the completion modal. */
+export async function uploadCompletionDocument(page: Page): Promise<void> {
+  const fileInput = page.locator('form[action*="update-progress"] input[name="files[]"]');
+  await fileInput.setInputFiles(COMPLETION_SAMPLE_PDF);
+  await expect(page.locator('form[action*="update-progress"]').getByText(/Added documents/i)).toBeVisible({
+    timeout: WIZARD_TIMEOUT,
+  });
+}
+
+/** Optionally fill the first external link field in the completion modal. */
+export async function fillOptionalCompletionLink(page: Page, externalLink: string): Promise<void> {
+  const linkInput = page.locator('form[action*="update-progress"] input[name="external_links[]"]').first();
+  if (await linkInput.isVisible().catch(() => false)) {
+    await linkInput.fill(externalLink);
+  }
+}
 
 export const ResearchWorkflowStatus = {
-  PROPOSAL: 'proposal',
+  DRAFT: 'draft',
   INITIAL_DEAN_REVIEW: 'initial_dean_review',
   INITIAL_OVPRI_REVIEW: 'initial_ovpri_review',
   INITIAL_REJECTED: 'initial_rejected',
-  ONGOING: 'ongoing',
+  RESEARCH_REGISTERED: 'research_registered',
   RESEARCH_COMPLETED: 'research_completed',
   FINAL_DEAN_REVIEW: 'final_dean_review',
   FINAL_OVPRI_REVIEW: 'final_ovpri_review',
@@ -66,9 +84,22 @@ async function fillWizardStep1(page: Page, title: string, registrationType: 'new
   await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
   const statusSelect = page.locator('select[name="status"]');
   if (await statusSelect.count()) {
-    await statusSelect.selectOption('proposal');
+    await statusSelect.selectOption('draft');
   }
   await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+}
+
+/** Start registration from the chooser and land on wizard step 1. */
+export async function beginRegistration(
+  page: Page,
+  registrationType: 'new' | 'existing' = 'new',
+): Promise<void> {
+  await page.goto('/research/create');
+  const label = registrationType === 'existing'
+    ? 'Register existing research'
+    : 'Register new research';
+  await page.getByRole('button', { name: label, exact: true }).click();
+  await page.waitForURL(/\/research\/\d+\/details/, { timeout: WIZARD_TIMEOUT });
 }
 
 /**
@@ -81,12 +112,7 @@ export async function createAndSubmitResearch(
   registrationType: 'new' | 'existing' = 'new',
 ): Promise<string | undefined> {
   await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-  const createUrl =
-    registrationType === 'existing'
-      ? '/research/create?registration_type=existing'
-      : '/research/create';
-  await page.goto(createUrl);
-  await page.waitForURL(/\/research\/\d+\/details/, { timeout: WIZARD_TIMEOUT });
+  await beginRegistration(page, registrationType);
 
   await fillWizardStep1(page, title, registrationType);
 
@@ -248,7 +274,7 @@ export async function driveNewRegistrationToOngoing(page: Page, title: string): 
 
   await endorseResearch(page, researchId);
   await approveResearch(page, researchId);
-  expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.ONGOING);
+  expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.RESEARCH_REGISTERED);
 
   return researchId;
 }
@@ -303,8 +329,8 @@ export async function submitCompletionViaModal(
     await page.locator(`input[name="outcome_classifications[]"][value="${code}"]`).check();
   }
 
-  await page.locator('form[action*="update-progress"] button.kmsar-tab').filter({ hasText: /Add Link/i }).click();
-  await page.locator('form[action*="update-progress"] input[name="external_links[]"]').first().fill(externalLink);
+  await uploadCompletionDocument(page);
+  await fillOptionalCompletionLink(page, externalLink);
   await page.locator('form[action*="update-progress"] button[type="submit"]').click();
   await page.waitForURL(new RegExp(`/research/${researchId}$`), { timeout: WIZARD_TIMEOUT });
 }
@@ -340,8 +366,8 @@ export async function resubmitFinalViaModal(
   }
 
   const externalLink = options.externalLink ?? `https://example.com/final-resubmit-${Date.now()}`;
-  await page.locator('form[action*="update-progress"] button.kmsar-tab').filter({ hasText: /Add Link/i }).click();
-  await page.locator('form[action*="update-progress"] input[name="external_links[]"]').first().fill(externalLink);
+  await uploadCompletionDocument(page);
+  await fillOptionalCompletionLink(page, externalLink);
   await page.getByRole('button', { name: 'Resubmit for final review', exact: true }).click();
   await page.waitForURL(new RegExp(`/research/${researchId}$`), { timeout: WIZARD_TIMEOUT });
 }
@@ -397,7 +423,7 @@ export async function assertOutcomeFieldsEditable(page: Page, researchId: string
   await openBtn.click();
 
   await expect(page.locator('input[name="outcome_classifications[]"]').first()).toBeEnabled();
-  await page.locator('form[action*="update-progress"] button.kmsar-tab').filter({ hasText: /Add Link/i }).click();
+  await expect(page.locator('form[action*="update-progress"] input[name="files[]"]')).toBeAttached();
   await expect(page.locator('form[action*="update-progress"] input[name="external_links[]"]').first()).toBeVisible();
 }
 

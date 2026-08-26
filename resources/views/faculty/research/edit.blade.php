@@ -237,8 +237,8 @@
                 name="status"
                 :label="__('Research progress status')"
                 :options="[
-                    'proposal' => __('Proposal / abstract'),
-                    'ongoing' => __('Ongoing'),
+                    'draft' => __('Draft'),
+                    'research_registered' => __('Research Registered'),
                     'completed_unpublished' => __('Completed (unpublished)'),
                     'presented_internal' => __('Presented (internal)'),
                     'presented_external' => __('Presented (external)'),

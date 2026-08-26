@@ -2,13 +2,13 @@
 
 namespace App\Imports;
 
+use App\Services\DashboardCacheService;
 use App\Support\ResearchStatus;
 use App\Models\Document;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\OnEachRow;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -113,16 +113,17 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
             $approvalStage = strtolower(trim((string) ($data['approval_stage'] ?? '')));
             $status = strtolower(trim((string) ($data['status'] ?? '')));
             if ($status === '') {
-                $status = 'proposal';
+                $status = 'draft';
             }
 
             $workflowStatus = match ($approvalStage) {
-                'draft' => ResearchStatus::PROPOSAL,
+                'draft' => ResearchStatus::DRAFT,
+                'proposal' => ResearchStatus::DRAFT,
                 'dean_review' => ResearchStatus::INITIAL_DEAN_REVIEW,
                 'ovpri_review' => ResearchStatus::INITIAL_OVPRI_REVIEW,
                 'approved' => in_array($status, config('kmsar.completed_statuses', []), true)
                     ? ResearchStatus::RESEARCH_ACCEPTED
-                    : ResearchStatus::ONGOING,
+                    : ResearchStatus::RESEARCH_REGISTERED,
                 'rejected', 'returned_to_faculty' => in_array($status, config('kmsar.completed_statuses', []), true)
                     ? ResearchStatus::FINAL_REJECTED
                     : ResearchStatus::INITIAL_REJECTED,
@@ -181,9 +182,9 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                     'start_date' => $startDate,
                     'estimated_completion_date' => $endDate,
                     'status' => $workflowStatus,
-                    'submitted_at' => $workflowStatus !== ResearchStatus::PROPOSAL ? now() : null,
+                    'submitted_at' => ResearchStatus::isPreSubmission($workflowStatus) ? null : now(),
                     'research_registered_at' => in_array($workflowStatus, [
-                        ResearchStatus::ONGOING,
+                        ResearchStatus::RESEARCH_REGISTERED,
                         ResearchStatus::RESEARCH_ACCEPTED,
                         ResearchStatus::INITIAL_OVPRI_REVIEW,
                         ResearchStatus::INITIAL_DEAN_REVIEW,
@@ -277,43 +278,7 @@ class ResearchImport implements OnEachRow, WithHeadingRow, WithStartRow
                 return $research;
             });
 
-            // Clear OVPRI / admin caches (current and previous hour to avoid boundary staleness)
-            foreach ([now(), now()->subHour()] as $moment) {
-                $hourKey = $moment->format('Y-m-d-H');
-                Cache::forget('ovpri_dash_v4_all_all_'.$hourKey);
-                Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
-                Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
-                Cache::forget('ovpri_stats_all_'.$hourKey);
-                for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                    Cache::forget('ovpri_stats_'.$year.'_'.$hourKey);
-                }
-            }
-            Cache::forget('admin_monthly_stats_v2_all_all_'.now()->format('Y-m'));
-            Cache::forget('admin_monthly_stats_'.now()->format('Y-m'));
-            Cache::forget('sdg_counts_v2_all_all');
-            Cache::forget('sdg_counts');
-            Cache::forget('sdg_counts_all');
-            for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                Cache::forget('sdg_counts_'.$year);
-            }
-
-            // Clear dean cache for the research college
-            $collegeId = $research->mother_college_id;
-            $deanUsers = User::whereHas('roles', fn ($q) => $q->where('name', 'college_dean'))
-                ->where('college_id', $collegeId)
-                ->pluck('id');
-            foreach ($deanUsers as $deanId) {
-                foreach ([now(), now()->subDay()] as $day) {
-                    $dayKey = $day->format('Y-m-d');
-                    Cache::forget('dean_stats_v2_'.$deanId.'_all_all_'.$dayKey);
-                    Cache::forget('dean_stats_'.$deanId.'_all_all_'.$dayKey);
-                    Cache::forget('dean_stats_'.$deanId.'_all_'.$dayKey);
-                    for ($year = now()->year - 9; $year <= now()->year + 1; $year++) {
-                        Cache::forget('dean_stats_'.$deanId.'_'.$year.'_all_'.$dayKey);
-                        Cache::forget('dean_stats_'.$deanId.'_'.$year.'_'.$dayKey);
-                    }
-                }
-            }
+            DashboardCacheService::flush();
 
             $this->imported++;
         } catch (\Throwable $e) {

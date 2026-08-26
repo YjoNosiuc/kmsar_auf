@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\ResearchStatus;
 use App\Models\Document;
 use App\Models\Research;
 use App\Models\User;
@@ -68,9 +67,8 @@ class DocumentController extends Controller
     public function destroy(Document $document): RedirectResponse
     {
         $research = $document->research;
-        $this->authorize('update', $research);
+        $this->authorize('manageRegistrationDocuments', $research);
 
-        abort_if($research->status !== ResearchStatus::PROPOSAL, 403, __('Cannot delete documents after submission.'));
         abort_if((int) $document->uploaded_by !== (int) auth()->id(), 403);
 
         if ($document->disk_path && $this->researchAppDisk()->exists($document->disk_path)) {

@@ -12,6 +12,7 @@ use App\Models\ResearchAuthor;
 use App\Models\User;
 use App\Notifications\ResearchProgressUpdated;
 use App\Services\ApprovalService;
+use App\Services\DashboardCacheService;
 use App\Services\FileValidationService;
 use App\Rules\ResearchExternalLink;
 use App\Support\ResearchDeanRouting;
@@ -21,7 +22,6 @@ use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -43,9 +43,18 @@ class ResearchController extends Controller
 
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:200'],
-            'status' => ['nullable', 'string', Rule::in(config('kmsar.statuses', []))],
+            'status' => ['nullable', 'string', 'max:40'],
             'review_cycle' => ['nullable', 'string', Rule::in(['initial', 'final'])],
         ]);
+
+        $status = trim((string) ($filters['status'] ?? ''));
+        if ($status === ''
+            || ResearchStatus::isBlockedWorkflowFilter($status)
+            || ! array_key_exists($status, ResearchStatus::facultyFilterOptions())) {
+            $filters['status'] = '';
+        } else {
+            $filters['status'] = $status;
+        }
 
         $research = $this->approvalService->paginateResearchForUser(
             $request->user(),
@@ -63,18 +72,24 @@ class ResearchController extends Controller
         ]);
     }
 
-    public function create(Request $request): RedirectResponse
+    public function create(Request $request): View
     {
         $this->authorize('create', Research::class);
 
-        $registrationType = $request->query('registration_type', 'new');
-        if (! in_array($registrationType, config('kmsar.registration_types', []), true)) {
-            $registrationType = 'new';
-        }
+        return view('faculty.research.create');
+    }
 
-        $research = $this->approvalService->createDraftAfterRegistrationType(
+    public function beginRegistration(Request $request): RedirectResponse
+    {
+        $this->authorize('create', Research::class);
+
+        $validated = $request->validate([
+            'registration_type' => ['required', 'string', Rule::in(config('kmsar.registration_types', []))],
+        ]);
+
+        $research = $this->approvalService->findOrCreateShellDraft(
             $request->user(),
-            $registrationType
+            $validated['registration_type']
         );
 
         return redirect()
@@ -99,10 +114,26 @@ class ResearchController extends Controller
 
         $this->normalizeResearchFormRequest($request);
 
+        if ($request->boolean('save_as_draft')) {
+            $data = $request->validate($this->draftRegistrationValidationRules());
+            $data = $this->finalizeResearchPayload($data, $request);
+
+            if (ResearchStatus::isPreSubmission((string) $research->status)) {
+                $research->update(['registration_type' => $data['registration_type']]);
+            }
+
+            $this->approvalService->updateResearchDraft($research, $data);
+            $this->forgetResearchDashboardCaches($research);
+
+            return redirect()
+                ->route('research.index')
+                ->with('success', __('Draft saved. You can continue registration anytime from My Research.'));
+        }
+
         $data = $request->validate($this->researchValidationRules());
         $data = $this->finalizeResearchPayload($data, $request);
 
-        if ($research->status === ResearchStatus::PROPOSAL) {
+        if (ResearchStatus::isPreSubmission((string) $research->status)) {
             $research->update(['registration_type' => $data['registration_type']]);
         }
 
@@ -273,26 +304,31 @@ class ResearchController extends Controller
 
     public function registrationDocuments(Research $research): View|RedirectResponse
     {
-        $this->authorize('update', $research);
+        $this->authorize('manageRegistrationDocuments', $research);
 
-        if (! $this->wizardStep1Complete($research)) {
-            return redirect()
-                ->route('research.wizard.details', $research)
-                ->with('warning', __('Please complete Step 1 before proceeding.'));
-        }
+        $documentsOnlyMode = ResearchStatus::isDocumentsEditable((string) $research->status);
 
-        if (! $this->wizardStep2Complete($research)) {
-            return redirect()
-                ->route('research.wizard.authors', $research)
-                ->with('warning', __('Please select a primary author before proceeding to Documents.'));
+        if (! $documentsOnlyMode) {
+            if (! $this->wizardStep1Complete($research)) {
+                return redirect()
+                    ->route('research.wizard.details', $research)
+                    ->with('warning', __('Please complete Step 1 before proceeding.'));
+            }
+
+            if (! $this->wizardStep2Complete($research)) {
+                return redirect()
+                    ->route('research.wizard.authors', $research)
+                    ->with('warning', __('Please select a primary author before proceeding to Documents.'));
+            }
         }
 
         $research->load(['documents']);
 
         return view('faculty.research.documents', [
             'research' => $research,
-            'step1Complete' => true,
-            'step2Complete' => true,
+            'step1Complete' => $documentsOnlyMode || $this->wizardStep1Complete($research),
+            'step2Complete' => $documentsOnlyMode || $this->wizardStep2Complete($research),
+            'documentsOnlyMode' => $documentsOnlyMode,
         ]);
     }
 
@@ -388,7 +424,7 @@ class ResearchController extends Controller
 
     public function submit(Request $request, Research $research): RedirectResponse
     {
-        if ($research->status !== ResearchStatus::PROPOSAL) {
+        if (! ResearchStatus::isPreSubmission((string) $research->status)) {
             return redirect()
                 ->route('research.show', $research)
                 ->with('info', __('This research has already been submitted.'));
@@ -405,7 +441,7 @@ class ResearchController extends Controller
         if ($research->registration_type === 'existing') {
             return redirect()
                 ->route('research.show', $research)
-                ->with('success', __('Existing research registered. Your record is now ongoing.'));
+                ->with('success', __('Existing research registered. Your record is now research registered.'));
         }
 
         return redirect()
@@ -437,8 +473,8 @@ class ResearchController extends Controller
 
     public function destroy(Research $research): RedirectResponse
     {
-        if ($research->status !== ResearchStatus::PROPOSAL) {
-            abort(403, 'Only proposal stage research can be deleted.');
+        if (! ResearchStatus::isPreSubmission((string) $research->status)) {
+            abort(403, __('Only draft stage research can be deleted.'));
         }
 
         if ($research->primary_author_id !== auth()->id()) {
@@ -472,17 +508,12 @@ class ResearchController extends Controller
             }
         }
 
-        $hasFiles = $request->hasFile('files');
+        $hasFiles = $request->hasFile('files') && count($request->file('files')) > 0;
 
-        if (! $hasFiles && $links === []) {
-            $uploadType = (string) $request->input('upload_type', 'file');
-            $message = $uploadType === 'link'
-                ? __('Please add at least one link (Google Drive, OneDrive, Dropbox, or DOI).')
-                : __('Please upload at least one supporting file or switch to Add Link and paste a URL.');
-
+        if (! $hasFiles) {
             return back()
                 ->withInput()
-                ->withErrors(['proof' => $message]);
+                ->withErrors(['proof' => __('Please upload at least one supporting document.')]);
         }
 
         $nextVersion = ((int) $research->documents()->max('version')) + 1;
@@ -681,38 +712,40 @@ class ResearchController extends Controller
 
     private function forgetResearchDashboardCaches(Research $research, ?int $previousMotherCollegeId = null): void
     {
-        foreach ([now(), now()->subHour()] as $moment) {
-            $hourKey = $moment->format('Y-m-d-H');
-            Cache::forget('ovpri_dash_v4_all_all_'.$hourKey);
-            Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
-            Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
-            Cache::forget('ovpri_stats_all_all_'.$hourKey);
-            Cache::forget('ovpri_stats_all_'.$hourKey);
-        }
-        $monthKey = now()->format('Y-m');
-        Cache::forget('admin_monthly_stats_v2_all_all_'.$monthKey);
-        Cache::forget('admin_monthly_stats_all_all_'.$monthKey);
-        Cache::forget('admin_monthly_stats_'.$monthKey);
-        Cache::forget('sdg_counts_v2_all_all');
-        Cache::forget('sdg_counts');
-        Cache::forget('sdg_counts_all');
-        Cache::forget('sdg_counts_all_all');
+        unset($research, $previousMotherCollegeId);
 
-        $collegeIds = array_unique(array_filter([
-            $research->mother_college_id,
-            $previousMotherCollegeId,
-        ]));
+        DashboardCacheService::flush();
+    }
 
-        foreach ($collegeIds as $collegeId) {
-            foreach (ResearchDeanRouting::deanUserIdsForCollege((int) $collegeId) as $id) {
-                foreach ([now(), now()->subDay()] as $day) {
-                    $dayKey = $day->format('Y-m-d');
-                    Cache::forget('dean_stats_v2_'.$id.'_all_all_'.$dayKey);
-                    Cache::forget('dean_stats_'.$id.'_all_all_'.$dayKey);
-                    Cache::forget('dean_stats_'.$id.'_all_'.$dayKey);
-                }
-            }
-        }
+    /**
+     * @return array<string, mixed>
+     */
+    private function draftRegistrationValidationRules(): array
+    {
+        return [
+            'registration_type' => ['required', 'in:new,existing'],
+            'title' => ['required', 'string', 'max:500'],
+            'mother_college_id' => ['nullable', 'exists:colleges,id'],
+            'other_college_id' => ['nullable', 'array'],
+            'other_college_id.*' => ['integer', 'exists:colleges,id'],
+            'research_classification' => [
+                'nullable',
+                'string',
+                'max:60',
+                Rule::in(array_keys(config('kmsar.research_classifications', []))),
+            ],
+            'research_classification_other' => ['nullable', 'string', 'max:500'],
+            'funding_agency' => ['nullable', 'string', 'max:100'],
+            'agenda_themes' => ['nullable', 'array'],
+            'agenda_themes.*' => ['string', Rule::in(array_keys(config('kmsar.agenda_themes', [])))],
+            'sdg_tags' => ['nullable', 'array'],
+            'sdg_tags.*' => ['integer', 'between:1,17'],
+            'expected_output' => ['nullable', 'array'],
+            'expected_output.*' => ['in:publication,patent,policy_brief,other'],
+            'expected_output_other' => ['nullable', 'string', 'max:2000'],
+            'start_date' => ['nullable', 'date'],
+            'estimated_completion_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+        ];
     }
 
     /**

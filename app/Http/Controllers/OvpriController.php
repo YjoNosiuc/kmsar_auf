@@ -7,6 +7,7 @@ use App\Models\Program;
 use App\Models\Research;
 use App\Models\ResearchAuthor;
 use App\Models\User;
+use App\Services\DashboardCacheService;
 use App\Services\ResearchReportingService;
 use App\Support\ResearchStatus;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,8 +21,6 @@ use Illuminate\View\View;
 class OvpriController extends Controller
 {
     use AuthorizesRequests;
-
-    private const IN_PROGRESS_STATUSES = ['proposal', 'ongoing'];
 
     public function __construct(
         private ResearchReportingService $reporting,
@@ -39,9 +38,10 @@ class OvpriController extends Controller
         $collegeTerm = trim((string) $request->input('college', ''));
         $selectedCollege = $this->resolveSelectedCollege($collegeTerm);
         $cacheSuffix = ($dateFrom ?? 'all').'_'.($dateTo ?? 'all');
+        $cacheVersion = DashboardCacheService::version();
 
         $stats = Cache::remember(
-            'ovpri_dash_v6_'.$cacheSuffix.'_'.now()->format('Y-m-d-H'),
+            'ovpri_dash_v7_'.$cacheSuffix.'_v'.$cacheVersion.'_'.now()->format('Y-m-d-H'),
             3600,
             fn () => $this->buildDashboardStats($dateFrom, $dateTo)
         );
@@ -56,7 +56,7 @@ class OvpriController extends Controller
         ];
 
         $sdgDistribution = Cache::remember(
-            'sdg_counts_v3_'.$cacheSuffix,
+            'sdg_counts_v3_'.$cacheSuffix.'_v'.$cacheVersion,
             3600,
             fn () => $this->buildSdgDistribution($dateFrom, $dateTo, $sdgNames)
         );
@@ -95,7 +95,7 @@ class OvpriController extends Controller
         $accepted = $this->acceptedReportingQuery($dateFrom, $dateTo);
 
         $totalResearch = (clone $accepted)->count();
-        $researchInProgress = (clone $base)->whereIn('status', self::IN_PROGRESS_STATUSES)->count();
+        $researchInProgress = (clone $base)->whereIn('status', ResearchStatus::institutionalInProgressStatuses())->count();
 
         $pendingApprovals = (clone $base)
             ->whereIn('status', [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW])
@@ -174,7 +174,7 @@ class OvpriController extends Controller
         $workflowStatus = collect([
             ['key' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'label' => __('Initial OVPRI Review'), 'count' => (clone $base)->where('status', ResearchStatus::INITIAL_OVPRI_REVIEW)->count()],
             ['key' => ResearchStatus::FINAL_OVPRI_REVIEW, 'label' => __('Final OVPRI Review'), 'count' => (clone $base)->where('status', ResearchStatus::FINAL_OVPRI_REVIEW)->count()],
-            ['key' => ResearchStatus::RESEARCH_ACCEPTED, 'label' => __('Research Accepted'), 'count' => (clone $base)->where('status', ResearchStatus::RESEARCH_ACCEPTED)->count()],
+            ['key' => ResearchStatus::RESEARCH_ACCEPTED, 'label' => __('Research Accepted'), 'count' => (clone $accepted)->count()],
             ['key' => 'rejected', 'label' => __('Returned'), 'count' => $rejectedQuery->count()],
         ]);
 
@@ -411,7 +411,7 @@ class OvpriController extends Controller
     private function baseResearchQuery(?string $dateFrom, ?string $dateTo): Builder
     {
         $query = Research::query()
-            ->where('status', '!=', ResearchStatus::PROPOSAL)
+            ->where('status', '!=', ResearchStatus::DRAFT)
             ->whereNotIn('status', [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED]);
 
         if ($dateFrom) {

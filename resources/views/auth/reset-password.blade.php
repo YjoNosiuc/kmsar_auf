@@ -27,7 +27,7 @@
     <div class="kmsar-login-brand">
         <div class="kmsar-login-brand-inner">
             <div class="kmsar-login-brand-inst">Angeles University Foundation</div>
-            <div class="kmsar-login-brand-title">KMSAR <span>Reset</span></div>
+            <div class="kmsar-login-brand-title">KMSAR</div>
             <p class="kmsar-login-brand-sub">Choose a new password for your account.</p>
         </div>
     </div>

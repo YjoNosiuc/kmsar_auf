@@ -364,9 +364,12 @@
                 [x-cloak] { display:none !important; }
             </style>
 
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 1.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 1.5rem; gap:12px; flex-wrap:wrap;">
                 <a href="{{ route('research.index') }}" class="kmsar-btn kmsar-btn--secondary">{{ __('Back') }}</a>
-                <button type="submit" class="kmsar-btn kmsar-btn--primary">{{ __('Continue to authors') }}</button>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button type="submit" name="save_as_draft" value="1" class="kmsar-btn kmsar-btn--outline">{{ __('Save as draft') }}</button>
+                    <button type="submit" class="kmsar-btn kmsar-btn--primary">{{ __('Continue to authors') }}</button>
+                </div>
             </div>
         </form>
     </x-card>

@@ -106,7 +106,7 @@ describe('Document upload', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -136,7 +136,7 @@ describe('Document upload', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -167,7 +167,7 @@ describe('Document upload', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $owner->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -194,7 +194,7 @@ describe('Document upload', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -221,7 +221,7 @@ describe('Document upload', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -255,7 +255,7 @@ describe('Document delete', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -266,6 +266,39 @@ describe('Document delete', function () {
             'research_id' => $research->id,
             'uploaded_by' => $faculty->id,
             'disk_path' => 'research_files/'.$college->id.'/'.$research->id.'/test-delete.pdf',
+            'external_link' => null,
+            'mime_type' => 'application/pdf',
+            'version' => 1,
+        ]);
+        documentTestPutFileOnDisk($document);
+
+        $this->actingAs($faculty)
+            ->delete(route('documents.destroy', $document))
+            ->assertRedirect();
+
+        expect(Document::query()->whereKey($document->id)->exists())->toBeFalse();
+    });
+
+    it('faculty can delete a document from returned initial-review research', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::INITIAL_REJECTED,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        $document = Document::factory()->create([
+            'research_id' => $research->id,
+            'uploaded_by' => $faculty->id,
+            'disk_path' => 'research_files/'.$college->id.'/'.$research->id.'/returned-delete.pdf',
             'external_link' => null,
             'mime_type' => 'application/pdf',
             'version' => 1,
@@ -321,7 +354,7 @@ describe('Document delete', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $owner->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -355,7 +388,7 @@ describe('Document delete', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -400,7 +433,7 @@ describe('Document download', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -496,7 +529,7 @@ describe('Document download', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -526,7 +559,7 @@ describe('Document download', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);
@@ -563,7 +596,7 @@ describe('Document preview', function () {
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
             'mother_college_id' => $college->id,
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'sdg_tags' => [1, 4],
             'expected_output' => ['publication'],
         ]);

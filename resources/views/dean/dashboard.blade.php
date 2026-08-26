@@ -77,7 +77,7 @@
         <div class="kmsar-stat-card" data-stat-card="in-progress">
             <div class="kmsar-stat-card-label">{{ __('Research In Progress') }}</div>
             <div class="kmsar-stat-card-value">{{ number_format($researchInProgress ?? 0) }}</div>
-            <div class="kmsar-stat-card-sub">{{ __('Proposal and ongoing') }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Research registered') }}</div>
         </div>
         <div class="kmsar-stat-card kmsar-card--accent-pending">
             <div class="kmsar-stat-card-label">{{ __('Pending Endorsement') }}</div>
@@ -242,10 +242,10 @@
 
         $statusBadgeVariant = static function (string $status): string {
             return match ($status) {
-                ResearchStatus::PROPOSAL => 'draft',
+                ResearchStatus::DRAFT => 'draft',
                 ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
                 ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
-                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
                 ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'rejected',
                 ResearchStatus::RESEARCH_COMPLETED => 'info',
                 default => 'info',
@@ -259,7 +259,7 @@
             <div>
                 <h2 class="kmsar-card-title">{{ __('Recent research') }}</h2>
                 <p class="kmsar-body mt-1" style="color: var(--color-text-secondary); font-size: 0.875rem;">
-                    {{ __('Latest updates from your college, newest first.') }}
+                    {{ __('Latest research accepted for your college (including affiliations), newest first.') }}
                 </p>
             </div>
         </div>
@@ -280,7 +280,7 @@
                                 <td>
                                     @if (in_array($item->status, [ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW], true))
                                         <a href="{{ route('approval.review', $item) }}" class="kmsar-link font-medium">{{ $item->reference_number }}</a>
-                                    @elseif ($item->status === ResearchStatus::PROPOSAL)
+                                    @elseif ($item->status === ResearchStatus::DRAFT)
                                         <span class="font-medium" style="color: var(--color-text-muted);">{{ $item->reference_number }}</span>
                                         <div class="kmsar-body" style="font-size: 0.75rem; color: var(--color-text-muted); margin-top: 2px;">{{ __('Not yet submitted') }}</div>
                                     @else

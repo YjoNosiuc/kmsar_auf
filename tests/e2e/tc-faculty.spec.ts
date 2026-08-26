@@ -7,6 +7,7 @@ import {
   openFacultyResearchList,
   facultyResearchCard,
   selectCurrentUserAsPrimary,
+  beginRegistration,
 } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
@@ -28,13 +29,12 @@ async function fillStep1(
   await page.check('input[name="expected_output[]"][value="publication"]');
   await page.fill('input[name="start_date"]', '2026-01-01');
   await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'proposal');
+  await page.selectOption('select[name="status"]', 'draft');
   await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
 }
 
 async function startWizardStep1(page: Page): Promise<string> {
-  await page.goto('/research/create');
-  await page.waitForURL(/\/research\/(\d+)\/details/);
+  await beginRegistration(page, 'new');
   return page.url().match(/\/research\/(\d+)\//)?.[1] ?? '';
 }
 
@@ -150,9 +150,11 @@ test.describe('Faculty — UAT Test Suite', () => {
     runTinker(`use Illuminate\\Support\\Facades\\Hash; App\\Models\\User::where('email', '${credentials.faculty_camp.email}')->update(['password' => Hash::make('password')]);`);
   });
 
-  test('TC-009: click New Research redirects to Wizard Step 1', async ({ page }) => {
+  test('TC-009: click New Research opens chooser then wizard step 1', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.click('a:has-text("Register new")');
+    await expect(page).toHaveURL(/\/research\/create$/);
+    await page.getByRole('button', { name: 'Register new research', exact: true }).click();
     await expect(page).toHaveURL(/\/research\/\d+\/details/);
     await expect(page.getByText(/Step 1 of 3/i)).toBeVisible();
   });
@@ -540,12 +542,12 @@ test.describe('Faculty — UAT Test Suite', () => {
     expect(researchId).toBeTruthy();
 
     runTinker(
-      `App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'approved', 'status' => 'proposal']);`,
+      `App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'approved', 'status' => 'draft']);`,
     );
 
     await page.goto(`/research/${researchId}`);
     await page.getByRole('button', { name: 'Update Progress' }).click();
-    await page.locator('select[name="status"]').selectOption('ongoing');
+    await page.locator('select[name="status"]').selectOption('research_registered');
     await page.locator('form[action*="update-progress"] input[name="files[]"]').setInputFiles(SAMPLE_PDF);
     await page.locator('form[action*="update-progress"] button[type="submit"]').click();
     await expect(

@@ -73,8 +73,19 @@ class ApprovalService
             });
         }
 
+        // Hide empty draft shells; titled drafts remain visible to the author only.
+        $query->where(function ($q) use ($user) {
+            $q->where('status', '!=', ResearchStatus::DRAFT)
+                ->orWhere(function ($visible) use ($user) {
+                    $visible->where('status', ResearchStatus::DRAFT)
+                        ->where('primary_author_id', $user->id)
+                        ->whereNotNull('title')
+                        ->where('title', '!=', '');
+                });
+        });
+
         $status = trim((string) ($filters['status'] ?? ''));
-        if ($status !== '') {
+        if ($status !== '' && ! ResearchStatus::isBlockedWorkflowFilter($status)) {
             $query->where('status', $status);
         }
 
@@ -94,13 +105,18 @@ class ApprovalService
         ?string $status = null,
         ?string $reviewCycle = null,
     ): LengthAwarePaginator {
+        $institutionalStatus = $status !== null && ! ResearchStatus::isFacultyOnly($status)
+            ? $status
+            : null;
+
         return Research::query()
+            ->excludeFacultyOnly()
             ->with(['motherCollege', 'primaryAuthor', 'outcomeClassifications'])
             ->when($college, fn ($q) => $q->where('mother_college_id', $college))
             ->when($reviewCycle === ResearchStatus::REVIEW_CYCLE_INITIAL, fn ($q) => $q->whereIn('status', ResearchStatus::initialReviewStatuses()))
             ->when($reviewCycle === ResearchStatus::REVIEW_CYCLE_FINAL, fn ($q) => $q->whereIn('status', ResearchStatus::finalReviewStatuses()))
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->when(! $status && ! $reviewCycle, fn ($q) => $q->where('status', ResearchStatus::RESEARCH_ACCEPTED))
+            ->when($institutionalStatus, fn ($q) => $q->where('status', $institutionalStatus))
+            ->when(! $institutionalStatus && ! $reviewCycle, fn ($q) => $q->where('status', ResearchStatus::RESEARCH_ACCEPTED))
             ->latest()
             ->paginate($perPage);
     }
@@ -121,6 +137,26 @@ class ApprovalService
         }
 
         return $query->exists();
+    }
+
+    public function findOrCreateShellDraft(User $user, string $registrationType): Research
+    {
+        $existing = Research::query()
+            ->where('primary_author_id', $user->id)
+            ->where('status', ResearchStatus::DRAFT)
+            ->where('registration_type', $registrationType)
+            ->where(function ($query): void {
+                $query->whereNull('title')->orWhere('title', '');
+            })
+            ->whereDoesntHave('documents')
+            ->latest('updated_at')
+            ->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        return $this->createDraftAfterRegistrationType($user, $registrationType);
     }
 
     public function createDraftAfterRegistrationType(User $user, string $registrationType): Research
@@ -159,7 +195,7 @@ class ApprovalService
                 'expected_output_other' => null,
                 'start_date' => now()->toDateString(),
                 'estimated_completion_date' => now()->addYear()->toDateString(),
-                'status' => ResearchStatus::PROPOSAL,
+                'status' => ResearchStatus::DRAFT,
                 'revision_count' => 0,
                 'final_review_count' => 0,
                 'is_scopus_indexed' => false,
@@ -252,12 +288,78 @@ class ApprovalService
                 'expected_output_other' => $data['expected_output_other'] ?? null,
                 'start_date' => $data['start_date'],
                 'estimated_completion_date' => $data['estimated_completion_date'],
-                'status' => ResearchStatus::PROPOSAL,
+                'status' => ResearchStatus::DRAFT,
                 'revision_count' => 0,
                 'final_review_count' => 0,
                 'is_scopus_indexed' => false,
             ]);
         });
+    }
+
+    public function updateResearchDraft(Research $research, array $data): void
+    {
+        if (! ResearchStatus::isFullyEditable((string) $research->status)) {
+            throw ValidationException::withMessages([
+                'status' => [__('Registration details cannot be edited at this stage.')],
+            ]);
+        }
+
+        $title = trim((string) ($data['title'] ?? ''));
+        if ($title === '') {
+            throw ValidationException::withMessages([
+                'title' => [__('Title is required to save a draft.')],
+            ]);
+        }
+
+        if ($this->duplicateTitleExists($title, $research->id)) {
+            throw ValidationException::withMessages([
+                'title' => [self::DUPLICATE_TITLE_MESSAGE],
+            ]);
+        }
+
+        $updates = [
+            'title' => $title,
+            'status' => ResearchStatus::DRAFT,
+            'registration_type' => $data['registration_type'] ?? $research->registration_type,
+        ];
+
+        if (filled($data['mother_college_id'] ?? null)) {
+            $updates['mother_college_id'] = (int) $data['mother_college_id'];
+        }
+
+        if (array_key_exists('other_college_id', $data)) {
+            $updates['other_college_id'] = $this->normalizeOtherCollegeIds(
+                $data['other_college_id'] ?? null,
+                (int) ($updates['mother_college_id'] ?? $research->mother_college_id),
+            );
+        }
+
+        foreach ([
+            'research_classification',
+            'research_classification_other',
+            'funding_agency',
+            'expected_output_other',
+            'start_date',
+            'estimated_completion_date',
+        ] as $field) {
+            if (array_key_exists($field, $data) && filled($data[$field])) {
+                $updates[$field] = $data[$field];
+            }
+        }
+
+        if (array_key_exists('sdg_tags', $data)) {
+            $updates['sdg_tags'] = $data['sdg_tags'] ?? [];
+        }
+
+        if (array_key_exists('agenda_themes', $data)) {
+            $updates['agenda_themes'] = $data['agenda_themes'] ?? [];
+        }
+
+        if (array_key_exists('expected_output', $data) && is_array($data['expected_output']) && $data['expected_output'] !== []) {
+            $updates['expected_output'] = $data['expected_output'];
+        }
+
+        $research->update($updates);
     }
 
     /**
@@ -323,9 +425,9 @@ class ApprovalService
         DB::transaction(function () use ($researchId, $actor) {
             $locked = Research::query()->lockForUpdate()->findOrFail($researchId);
 
-            if ($locked->status !== ResearchStatus::PROPOSAL) {
+            if (! ResearchStatus::isPreSubmission($locked->status)) {
                 throw ValidationException::withMessages([
-                    'status' => [__('Research must be in proposal stage to submit.')],
+                    'status' => [__('Research must be in draft stage to submit.')],
                 ]);
             }
 
@@ -340,7 +442,7 @@ class ApprovalService
             if ($locked->registration_type === 'existing') {
                 $now = now();
                 $locked->update([
-                    'status' => ResearchStatus::ONGOING,
+                    'status' => ResearchStatus::RESEARCH_REGISTERED,
                     'submitted_at' => $now,
                     'research_registered_at' => $now,
                 ]);
@@ -348,7 +450,7 @@ class ApprovalService
                 $this->writeAuditLog($actor, $locked, 'research.submitted', [
                     'status' => $oldStatus,
                 ], [
-                    'status' => ResearchStatus::ONGOING,
+                    'status' => ResearchStatus::RESEARCH_REGISTERED,
                     'registration_type' => 'existing',
                     'review_cycle' => null,
                 ]);
@@ -503,14 +605,14 @@ class ApprovalService
                 $now = now();
                 $oldStatus = $locked->status;
                 $locked->update([
-                    'status' => ResearchStatus::ONGOING,
+                    'status' => ResearchStatus::RESEARCH_REGISTERED,
                     'research_registered_at' => $now,
                 ]);
 
                 $this->writeAuditLog($ovpri, $locked, 'approval.initial.approved', [
                     'status' => $oldStatus,
                 ], [
-                    'status' => ResearchStatus::ONGOING,
+                    'status' => ResearchStatus::RESEARCH_REGISTERED,
                     'review_cycle' => ResearchStatus::REVIEW_CYCLE_INITIAL,
                     'research_registered_at' => $now->toIso8601String(),
                 ]);
@@ -627,7 +729,7 @@ class ApprovalService
 
             if (! ResearchStatus::canSubmitCompletion($locked->status)) {
                 throw ValidationException::withMessages([
-                    'status' => [__('Completion can only be submitted from ongoing or accepted research.')],
+                    'status' => [__('Completion can only be submitted from registered or accepted research.')],
                 ]);
             }
 

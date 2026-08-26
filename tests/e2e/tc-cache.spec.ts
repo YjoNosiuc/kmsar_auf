@@ -42,7 +42,7 @@ async function submitAsFaculty(
   await page.check('input[name="expected_output[]"][value="publication"]');
   await page.fill('input[name="start_date"]', '2026-01-01');
   await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'proposal');
+  await page.selectOption('select[name="status"]', 'draft');
   await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
   await Promise.all([
     page.waitForURL(/\/authors/, { timeout: 90_000 }),

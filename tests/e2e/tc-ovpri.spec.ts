@@ -20,7 +20,7 @@ function uniqueTitle(prefix: string): string {
 function ensureCampResearchVisible(): void {
   const stamp = Date.now();
   runTinker(
-    `$author = \\App\\Models\\User::where('email','faculty.camp1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CAMP')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CAMP-${stamp}'], ['title' => 'E2E CAMP Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'proposal', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
+    `$author = \\App\\Models\\User::where('email','faculty.camp1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CAMP')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CAMP-${stamp}'], ['title' => 'E2E CAMP Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'draft', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
   );
 }
 
@@ -442,9 +442,9 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.getByText(/Research Progress/i).first()).toBeVisible();
     await Promise.all([
       page.waitForURL(/status=/, { timeout: 30_000 }),
-      page.locator('select[name="status"]').selectOption('proposal'),
+      page.locator('select[name="status"]').selectOption('draft'),
     ]);
-    expect(page.url()).toMatch(/status=proposal/);
+    expect(page.url()).toMatch(/status=draft/);
     expect(page.url()).not.toMatch(/[?&]stage=draft/);
     await expect(page.locator('table tbody tr').first()).toBeVisible();
   });

@@ -16,13 +16,13 @@ use App\Models\User;
 use App\Notifications\ResearchApproved;
 use App\Notifications\ResearchApprovedDean;
 use App\Services\ApprovalService;
+use App\Services\DashboardCacheService;
 use App\Support\ResearchDeanRouting;
 use App\Support\ResearchStatus;
 use App\Support\SafeMail;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 
 class ApprovalController extends Controller
@@ -44,7 +44,7 @@ class ApprovalController extends Controller
 
         $ovpriStatuses = $cycleTab === 'final'
             ? [ResearchStatus::FINAL_OVPRI_REVIEW, ResearchStatus::RESEARCH_ACCEPTED]
-            : [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::ONGOING];
+            : [ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::RESEARCH_REGISTERED];
 
         $rejectedStatus = $cycleTab === 'final'
             ? ResearchStatus::FINAL_REJECTED
@@ -232,7 +232,7 @@ class ApprovalController extends Controller
 
         $approvedStatuses = $cycleTab === 'final'
             ? [ResearchStatus::RESEARCH_ACCEPTED]
-            : [ResearchStatus::ONGOING];
+            : [ResearchStatus::RESEARCH_REGISTERED];
 
         // Pending: load both cycles — the queue view splits Initial/Final client-side.
         $pending = $baseQuery()
@@ -381,31 +381,9 @@ class ApprovalController extends Controller
 
     private function forgetResearchDashboardCaches(Research $research): void
     {
-        foreach ([now(), now()->subHour()] as $moment) {
-            $hourKey = $moment->format('Y-m-d-H');
-            Cache::forget('ovpri_dash_v4_all_all_'.$hourKey);
-            Cache::forget('ovpri_dash_v3_all_all_'.$hourKey);
-            Cache::forget('ovpri_dash_v2_all_all_'.$hourKey);
-            Cache::forget('ovpri_stats_all_all_'.$hourKey);
-            Cache::forget('ovpri_stats_all_'.$hourKey);
-        }
-        $monthKey = now()->format('Y-m');
-        Cache::forget('admin_monthly_stats_v2_all_all_'.$monthKey);
-        Cache::forget('admin_monthly_stats_all_all_'.$monthKey);
-        Cache::forget('admin_monthly_stats_'.$monthKey);
-        Cache::forget('sdg_counts_v2_all_all');
-        Cache::forget('sdg_counts');
-        Cache::forget('sdg_counts_all');
-        Cache::forget('sdg_counts_all_all');
+        unset($research);
 
-        foreach (ResearchDeanRouting::deanUserIdsFor($research) as $id) {
-            foreach ([now(), now()->subDay()] as $day) {
-                $dayKey = $day->format('Y-m-d');
-                Cache::forget('dean_stats_v2_'.$id.'_all_all_'.$dayKey);
-                Cache::forget('dean_stats_'.$id.'_all_all_'.$dayKey);
-                Cache::forget('dean_stats_'.$id.'_all_'.$dayKey);
-            }
-        }
+        DashboardCacheService::flush();
     }
 
     private function authorizeCollegeScope(Request $request, Research $research): void

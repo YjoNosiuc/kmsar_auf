@@ -48,11 +48,11 @@ class SubmitCompletionRequest extends FormRequest
                 Rule::in(config('kmsar.outcome_classification_codes', [])),
             ],
             'remarks' => ['nullable', 'string', 'max:1000'],
+            'files' => ['required', 'array', 'min:1', 'max:'.$maxFiles],
+            'files.*' => ['file', 'max:102400', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png'],
             'external_links' => ['nullable', 'array', 'max:'.$maxLinks],
             'external_links.*' => ['nullable', 'string', 'max:2048', new ResearchExternalLink],
             'external_link' => ['nullable', 'string', 'max:2048', new ResearchExternalLink],
-            'files' => ['nullable', 'array', 'max:'.$maxFiles],
-            'files.*' => ['file', 'max:102400', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png'],
         ];
     }
 
@@ -64,6 +64,8 @@ class SubmitCompletionRequest extends FormRequest
         return [
             'outcome_classifications.required' => __('Select at least one outcome classification.'),
             'outcome_classifications.min' => __('Select at least one outcome classification.'),
+            'files.required' => __('Please upload at least one supporting document.'),
+            'files.min' => __('Please upload at least one supporting document.'),
             'files.max' => __('You may upload up to :max files at once.', ['max' => config('kmsar.max_research_upload_files', 10)]),
             'files.*.max' => __('Each file must be 100 MB or smaller.'),
             'files.*.mimes' => __('Files must be PDF, Word, Excel, or image format.'),

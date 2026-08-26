@@ -9,15 +9,18 @@
 @php
     $step1Complete = (bool) ($step1Complete ?? false);
     $step2Complete = (bool) ($step2Complete ?? false);
+    $documentsOnlyMode = (bool) ($documentsOnlyMode ?? false);
     $urls = [
-        1 => $research ? route('research.wizard.details', $research) : null,
-        2 => $research && $step1Complete ? route('research.wizard.authors', $research) : null,
-        3 => $research && $step1Complete && $step2Complete ? route('research.wizard.documents', $research) : null,
+        1 => (! $documentsOnlyMode && $research) ? route('research.wizard.details', $research) : null,
+        2 => (! $documentsOnlyMode && $research && $step1Complete) ? route('research.wizard.authors', $research) : null,
+        3 => $research && ($documentsOnlyMode || ($step1Complete && $step2Complete)) ? route('research.wizard.documents', $research) : null,
     ];
     $labels = [1 => __('Details'), 2 => __('Authors'), 3 => __('Documents')];
     $lockTitles = [
-        2 => __('Complete Step 1 first'),
-        3 => ! $step1Complete ? __('Complete Step 1 first') : __('Complete Step 2 first'),
+        2 => $documentsOnlyMode ? __('Locked after registration') : __('Complete Step 1 first'),
+        3 => $documentsOnlyMode
+            ? __('Documents only')
+            : (! $step1Complete ? __('Complete Step 1 first') : __('Complete Step 2 first')),
     ];
     $stepCount = 3;
 @endphp

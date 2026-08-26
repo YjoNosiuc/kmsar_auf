@@ -100,7 +100,7 @@
             </div>
             <div class="kmsar-stat-card-value" style="color:#2563EB;">{{ number_format($researchInProgress ?? 0) }}</div>
             <div class="kmsar-stat-card-label" style="margin-top:0.375rem;margin-bottom:0;">{{ __('Research In Progress') }}</div>
-            <div class="kmsar-stat-card-sub">{{ __('Proposal and ongoing') }}</div>
+            <div class="kmsar-stat-card-sub">{{ __('Research registered') }}</div>
         </div>
         <div class="kmsar-stat-card" style="position:relative;padding-top:2.75rem;">
             <div style="position:absolute;top:1rem;right:1rem;width:44px;height:44px;border-radius:50%;background:rgba(217,119,6,0.12);display:flex;align-items:center;justify-content:center;color:#D97706;" aria-hidden="true">

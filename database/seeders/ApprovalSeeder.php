@@ -43,7 +43,7 @@ class ApprovalSeeder extends Seeder
                 $cycle = ResearchStatus::REVIEW_CYCLE_FINAL;
             } elseif ($research->status === ResearchStatus::RESEARCH_ACCEPTED) {
                 $cycle = ResearchStatus::REVIEW_CYCLE_FINAL;
-            } elseif ($research->status === ResearchStatus::ONGOING) {
+            } elseif ($research->status === ResearchStatus::RESEARCH_REGISTERED) {
                 $cycle = ResearchStatus::REVIEW_CYCLE_INITIAL;
             }
 

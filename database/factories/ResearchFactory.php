@@ -69,7 +69,7 @@ class ResearchFactory extends Factory
             'expected_output_other' => null,
             'start_date' => $start->format('Y-m-d'),
             'estimated_completion_date' => $estimated->format('Y-m-d'),
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'revision_count' => 0,
             'final_review_count' => 0,
             'is_scopus_indexed' => false,
@@ -79,7 +79,7 @@ class ResearchFactory extends Factory
     public function draft(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => ResearchStatus::PROPOSAL,
+            'status' => ResearchStatus::DRAFT,
             'submitted_at' => null,
         ]);
     }

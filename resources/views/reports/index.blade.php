@@ -12,11 +12,9 @@
 
         $exportFilters = array_merge(['include_rejected' => '0'], $filters ?? []);
         $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
-        $statusKeys = array_merge(['proposal', 'ongoing'], config('kmsar.outcome_classification_codes', []));
+        $statusKeys = config('kmsar.outcome_classification_codes', []);
         $classificationKeys = array_keys(config('kmsar.research_classifications', []));
-        $workflowStatusOptions = collect(ResearchStatus::all())
-            ->mapWithKeys(fn (string $value) => [$value => ResearchStatus::label($value)])
-            ->all();
+        $workflowStatusOptions = ResearchStatus::institutionalFilterOptions();
         $stats = $reportStats ?? (
             $reportScope === 'college'
                 ? ['matching' => $totalCount, 'published' => 0, 'presented' => 0]
@@ -234,6 +232,7 @@
                         <th scope="col">{{ __("Author's Name") }}</th>
                         @if ($reportScope === 'ovpri')
                             <th scope="col">{{ __('College/Office') }}</th>
+                            <th scope="col">{{ __('Other college affiliations') }}</th>
                         @endif
                         <th scope="col">{{ __('Program/Dept') }}</th>
                         <th scope="col">{{ __('Co-Authors') }}</th>
@@ -259,6 +258,7 @@
                             <td>{{ $row->primaryAuthor?->name ?? '—' }}</td>
                             @if ($reportScope === 'ovpri')
                                 <td>{{ $row->motherCollege ? trim(($row->motherCollege->code ?? '').' — '.($row->motherCollege->name ?? '')) : '—' }}</td>
+                                <td class="kmsar-table-cell-sub">{{ $reportGenerator->otherCollegeAffiliations($row) }}</td>
                             @endif
                             <td>{{ $row->primaryAuthor?->program?->code ?? '—' }}</td>
                             <td class="kmsar-table-cell-sub">{{ $reportScope === 'college' ? $reportGenerator->coAuthorsCommaSeparated($row) : $reportGenerator->coAuthorsLine($row) }}</td>
@@ -282,7 +282,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $reportScope === 'ovpri' ? 11 : 8 }}" class="kmsar-body" style="text-align:center;padding:var(--space-6);">{{ __('No records to preview.') }}</td>
+                            <td colspan="{{ $reportScope === 'ovpri' ? 12 : 8 }}" class="kmsar-body" style="text-align:center;padding:var(--space-6);">{{ __('No records to preview.') }}</td>
                         </tr>
                     @endforelse
                 </tbody>

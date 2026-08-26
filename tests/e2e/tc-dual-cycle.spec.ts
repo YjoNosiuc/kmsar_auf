@@ -36,7 +36,7 @@ test.describe('Dual-cycle research workflow', () => {
     expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.INITIAL_OVPRI_REVIEW);
 
     await approveResearch(page, researchId!);
-    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.ONGOING);
+    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.RESEARCH_REGISTERED);
   });
 
   test('existing registration: shortcut to ongoing', async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe('Dual-cycle research workflow', () => {
     const researchId = await createAndSubmitResearch(page, title, 'existing');
     expect(researchId).toBeTruthy();
 
-    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.ONGOING);
+    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.RESEARCH_REGISTERED);
 
     const registeredAt = runTinker(
       `echo \\App\\Models\\Research::query()->whereKey(${researchId})->value('research_registered_at') ?? 'missing';`,
@@ -95,7 +95,7 @@ test.describe('Dual-cycle research workflow', () => {
 
       await endorseResearch(page, researchId!);
       await approveResearch(page, researchId!);
-      expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.ONGOING);
+      expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.RESEARCH_REGISTERED);
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto(`/research/${researchId}`);

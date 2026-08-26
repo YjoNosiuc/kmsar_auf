@@ -33,7 +33,7 @@ test.describe('Faculty research registration', () => {
     const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     await page.locator('input[name="start_date"]').fill(today);
     await page.locator('input[name="estimated_completion_date"]').fill(nextYear);
-    await page.locator('select[name="status"]').selectOption('proposal');
+    await page.locator('select[name="status"]').selectOption('draft');
     await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
     await page.getByRole('button', { name: 'Continue to authors' }).click();
 

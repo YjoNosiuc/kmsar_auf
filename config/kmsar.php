@@ -9,12 +9,11 @@ return [
     ],
 
     'statuses' => [
-        ResearchStatus::PROPOSAL,
+        ResearchStatus::DRAFT,
         ResearchStatus::INITIAL_DEAN_REVIEW,
         ResearchStatus::INITIAL_OVPRI_REVIEW,
         ResearchStatus::INITIAL_REJECTED,
         ResearchStatus::RESEARCH_REGISTERED,
-        ResearchStatus::ONGOING,
         ResearchStatus::RESEARCH_COMPLETED,
         ResearchStatus::FINAL_DEAN_REVIEW,
         ResearchStatus::FINAL_OVPRI_REVIEW,
@@ -73,10 +72,7 @@ return [
         'granted_patent_ipophl',
     ],
 
-    'in_progress_statuses' => [
-        ResearchStatus::PROPOSAL,
-        ResearchStatus::ONGOING,
-    ],
+    'in_progress_statuses' => [],
 
     'completed_statuses' => [
         'completed_not_presented_submitted',

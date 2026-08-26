@@ -28,8 +28,7 @@ class ReportController extends Controller
         'submitted_patent_ipophl',
         'published_scopus_isi',
         'granted_patent_ipophl',
-        'ongoing',
-        'proposal',
+        'research_registered',
     ];
 
     private const CLASSIFICATION_VALUES = [
@@ -155,7 +154,7 @@ class ReportController extends Controller
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'research_classification' => ['nullable', Rule::in(self::CLASSIFICATION_VALUES)],
             'status' => ['nullable', Rule::in(self::STATUS_VALUES)],
-            'workflow_status' => ['nullable', Rule::in(ResearchStatus::all())],
+            'workflow_status' => ['nullable', Rule::in(ResearchStatus::institutionalStatuses())],
             'faculty' => ['nullable', 'integer', 'exists:users,id'],
             'sdg' => ['nullable', 'integer', 'between:1,17'],
             'funding_agency' => ['nullable', 'string', 'max:100'],
@@ -386,7 +385,7 @@ class ReportController extends Controller
             $filters['include_rejected'] = '0';
         }
 
-        if (($filters['workflow_status'] ?? null) === ResearchStatus::PROPOSAL) {
+        if (ResearchStatus::isFacultyOnly((string) ($filters['workflow_status'] ?? ''))) {
             unset($filters['workflow_status']);
         }
 
@@ -413,7 +412,7 @@ class ReportController extends Controller
         ]);
 
         if ($collegeScoped && $scopedCollegeId !== null) {
-            $query->where('mother_college_id', $scopedCollegeId);
+            $query->forCollegeScope($scopedCollegeId, true);
         } elseif (! empty($filters['college_id'])) {
             $query->where('mother_college_id', (int) $filters['college_id']);
         }
@@ -429,11 +428,13 @@ class ReportController extends Controller
         $status = $filters['status'] ?? null;
         $includeRejected = ($filters['include_rejected'] ?? '0') === '1';
         $inProgressFilter = Research::isInProgressStatus($status);
+        $workflowStatus = trim((string) ($filters['workflow_status'] ?? ''));
+        $workflowOnly = $workflowStatus !== '' && empty($status) && ! $inProgressFilter;
         $rejectedStatuses = [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED];
 
         if ($inProgressFilter) {
-            if ($status === ResearchStatus::PROPOSAL) {
-                // Faculty drafts are excluded from institutional reports.
+            if (ResearchStatus::isFacultyOnly((string) $status)) {
+                // Faculty drafts and proposals are excluded from institutional reports.
                 $query->whereRaw('1 = 0');
             } else {
                 $query->where('status', $status);
@@ -446,6 +447,26 @@ class ReportController extends Controller
                     $filters['date_from'] ?? null,
                     $filters['date_to'] ?? null
                 );
+            }
+        } elseif ($workflowOnly) {
+            $query->where('status', $workflowStatus);
+
+            if ($workflowStatus === ResearchStatus::RESEARCH_ACCEPTED) {
+                $query->reportingAccepted();
+
+                if (filled($filters['date_from'] ?? null) || filled($filters['date_to'] ?? null)) {
+                    $query->whereResearchAcceptedBetween(
+                        $filters['date_from'] ?? null,
+                        $filters['date_to'] ?? null
+                    );
+                }
+            } elseif ($workflowStatus === ResearchStatus::RESEARCH_REGISTERED) {
+                if (filled($filters['date_from'] ?? null) || filled($filters['date_to'] ?? null)) {
+                    $query->whereResearchRegisteredBetween(
+                        $filters['date_from'] ?? null,
+                        $filters['date_to'] ?? null
+                    );
+                }
             }
         } elseif ($includeRejected) {
             $query->where(function (Builder $outer) use ($filters) {
@@ -489,7 +510,7 @@ class ReportController extends Controller
             }
         }
 
-        if (! empty($filters['workflow_status'])) {
+        if (! empty($filters['workflow_status']) && ! $workflowOnly) {
             $query->where('status', $filters['workflow_status']);
         }
 

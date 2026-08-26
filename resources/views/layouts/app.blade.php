@@ -445,9 +445,7 @@
             };
         })();
 
-        // Idle timeout — show the warning before logout. Hidden tabs pause so
-        // background timer throttling cannot skip the modal and dump the user
-        // on /login?expired=1 with no explanation.
+        // Idle timeout — countdown continues even when the tab is hidden.
         (function () {
             const modal = document.getElementById('kmsar-idle-modal');
             const countEl = document.getElementById('kmsar-idle-countdown');
@@ -457,6 +455,8 @@
             const logoutUrl = @json(route('logout'));
             const pingUrl = @json(route('session.ping'));
             const loginExpiredUrl = @json(route('login', ['expired' => 1]));
+            const LS_ACTIVITY = 'kmsar-last-activity';
+            const LS_DEADLINE = 'kmsar-idle-deadline';
             let csrfToken = @json(csrf_token());
 
             let lastActivity = Date.now();
@@ -479,27 +479,77 @@
                 }
             }
 
+            function readStoredActivity() {
+                try {
+                    const stored = parseInt(localStorage.getItem(LS_ACTIVITY) || '0', 10);
+                    return stored > 0 ? stored : lastActivity;
+                } catch (e) {
+                    return lastActivity;
+                }
+            }
+
+            function readStoredDeadline() {
+                try {
+                    return parseInt(localStorage.getItem(LS_DEADLINE) || '0', 10) || null;
+                } catch (e) {
+                    return countdownEndsAt;
+                }
+            }
+
+            function persistActivity(ts) {
+                lastActivity = ts;
+                try {
+                    localStorage.setItem(LS_ACTIVITY, String(ts));
+                } catch (e) {
+                    /* private mode */
+                }
+            }
+
+            function persistDeadline(ts) {
+                countdownEndsAt = ts;
+                try {
+                    localStorage.setItem(LS_DEADLINE, String(ts));
+                } catch (e) {
+                    /* private mode */
+                }
+            }
+
+            function clearDeadline() {
+                countdownEndsAt = null;
+                try {
+                    localStorage.removeItem(LS_DEADLINE);
+                } catch (e) {
+                    /* private mode */
+                }
+            }
+
             function hideWarning() {
                 modal.classList.remove('is-open');
                 modal.setAttribute('aria-hidden', 'true');
                 countEl.classList.remove('is-urgent');
                 isWarningShown = false;
-                countdownEndsAt = null;
+                clearDeadline();
             }
 
             function showWarning() {
                 if (isWarningShown) return;
                 isWarningShown = true;
-                countdownEndsAt = Date.now() + COUNTDOWN_MS;
+                const endsAt = Date.now() + COUNTDOWN_MS;
+                persistDeadline(endsAt);
                 countEl.textContent = COUNTDOWN_SECS;
                 countEl.classList.remove('is-urgent');
-                modal.classList.add('is-open');
-                modal.setAttribute('aria-hidden', 'false');
+                if (!document.hidden) {
+                    modal.classList.add('is-open');
+                    modal.setAttribute('aria-hidden', 'false');
+                }
             }
 
             function paintCountdown() {
-                if (!isWarningShown || countdownEndsAt === null) return;
-                const remaining = Math.max(0, Math.ceil((countdownEndsAt - Date.now()) / 1000));
+                const deadline = readStoredDeadline();
+                if (!deadline) return;
+
+                countdownEndsAt = deadline;
+                const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
                 countEl.textContent = remaining;
                 if (remaining <= 5) {
                     countEl.classList.add('is-urgent');
@@ -510,18 +560,35 @@
             }
 
             function markActivity() {
-                if (isWarningShown || document.hidden) return;
-                lastActivity = Date.now();
+                if (isWarningShown) return;
+                persistActivity(Date.now());
             }
 
             function tick() {
-                if (ticking || document.hidden || isLoggingOut) return;
+                if (ticking || isLoggingOut) return;
                 ticking = true;
                 try {
-                    if (!isWarningShown && (Date.now() - lastActivity) >= IDLE_MS) {
+                    const deadline = readStoredDeadline();
+                    if (deadline && Date.now() >= deadline) {
+                        kmsarIdleLogout();
+                        return;
+                    }
+
+                    if (deadline && !isWarningShown) {
+                        isWarningShown = true;
+                    }
+
+                    if (!isWarningShown && (Date.now() - readStoredActivity()) >= IDLE_MS) {
                         showWarning();
                     }
-                    paintCountdown();
+
+                    if (isWarningShown || deadline) {
+                        if (!document.hidden) {
+                            modal.classList.add('is-open');
+                            modal.setAttribute('aria-hidden', 'false');
+                        }
+                        paintCountdown();
+                    }
                 } finally {
                     ticking = false;
                 }
@@ -553,7 +620,7 @@
 
             window.kmsarIdleReset = function (fromOtherTab) {
                 hideWarning();
-                lastActivity = Date.now();
+                persistActivity(Date.now());
                 pingSession();
                 if (!fromOtherTab) {
                     try {
@@ -596,7 +663,6 @@
                 });
 
             document.addEventListener('visibilitychange', function () {
-                if (document.hidden) return;
                 tick();
             });
 
@@ -607,8 +673,12 @@
                 if (event.key === 'kmsar-auth-logout') {
                     window.location.href = loginExpiredUrl;
                 }
+                if (event.key === LS_DEADLINE || event.key === LS_ACTIVITY) {
+                    tick();
+                }
             });
 
+            persistActivity(Date.now());
             setInterval(tick, 1000);
             tick();
         })();

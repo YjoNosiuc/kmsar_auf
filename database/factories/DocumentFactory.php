@@ -31,7 +31,7 @@ class DocumentFactory extends Factory
             'external_link' => null,
             'mime_type' => 'application/pdf',
             'file_size_bytes' => fake()->numberBetween(1024, 5_000_000),
-            'research_status_at_upload' => strtoupper('proposal'),
+            'research_status_at_upload' => strtoupper('draft'),
             'version' => fake()->numberBetween(1, 5),
         ];
     }

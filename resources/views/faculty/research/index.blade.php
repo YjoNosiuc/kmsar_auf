@@ -11,10 +11,10 @@
         use App\Support\ResearchStatus;
 
         $borderByStatus = static fn (string $status): string => match ($status) {
-            ResearchStatus::PROPOSAL => '#94A3B8',
+            ResearchStatus::DRAFT => '#94A3B8',
             ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => '#D4AF37',
             ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => '#2563EB',
-            ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => '#059669',
+            ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED => '#059669',
             ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => '#DC2626',
             ResearchStatus::RESEARCH_COMPLETED => '#2563EB',
             default => '#94A3B8',
@@ -22,19 +22,17 @@
 
         $statusBadgeVariant = static function (string $status): string {
             return match ($status) {
-                ResearchStatus::PROPOSAL => 'draft',
+                ResearchStatus::DRAFT => 'draft',
                 ResearchStatus::INITIAL_DEAN_REVIEW, ResearchStatus::FINAL_DEAN_REVIEW => 'pending',
                 ResearchStatus::INITIAL_OVPRI_REVIEW, ResearchStatus::FINAL_OVPRI_REVIEW => 'info',
-                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::ONGOING, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
+                ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED => 'approved',
                 ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED => 'rejected',
                 ResearchStatus::RESEARCH_COMPLETED => 'info',
                 default => 'info',
             };
         };
 
-        $statusOptions = collect(ResearchStatus::all())
-            ->mapWithKeys(fn (string $value) => [$value => ResearchStatus::label($value)])
-            ->all();
+        $statusOptions = ResearchStatus::facultyFilterOptions();
 
         $expectedLabels = [
             'publication' => __('Publication'),
@@ -52,8 +50,16 @@
         ]"
     >
         @unless(auth()->user()->hasRole('viewer'))
-            <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
-            <x-button variant="outline" href="{{ route('research.create', ['registration_type' => 'existing']) }}">{{ __('Register existing research') }}</x-button>
+            <form method="POST" action="{{ route('research.begin') }}" style="display:inline;">
+                @csrf
+                <input type="hidden" name="registration_type" value="new">
+                <x-button type="submit" variant="primary">{{ __('Register new research') }}</x-button>
+            </form>
+            <form method="POST" action="{{ route('research.begin') }}" style="display:inline;">
+                @csrf
+                <input type="hidden" name="registration_type" value="existing">
+                <x-button type="submit" variant="outline">{{ __('Register existing research') }}</x-button>
+            </form>
         @endunless
     </x-page-header>
 
@@ -133,7 +139,7 @@
                         style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:#1E3A8A;color:#fff;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;"
                         aria-label="{{ __('View research') }}"
                     >{{ __('View') }} →</a>
-                    @if ($item->status === ResearchStatus::PROPOSAL && (int) $item->primary_author_id === (int) auth()->id())
+                    @if (ResearchStatus::isPreSubmission((string) $item->status) && (int) $item->primary_author_id === (int) auth()->id())
                         <form method="POST"
                               action="{{ route('research.destroy', $item) }}"
                               onsubmit="return confirm('Are you sure you want to delete this research? This cannot be undone.')">
@@ -161,8 +167,16 @@
                     <p style="margin:8px 0 0;font-size:13px;color:#64748B;line-height:1.5;">{{ __('Start the registration wizard to create your first submission.') }}</p>
                     @unless(auth()->user()->hasRole('viewer'))
                         <div style="margin-top:20px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;">
-                            <x-button variant="primary" href="{{ route('research.create') }}">{{ __('Register new research') }}</x-button>
-                            <x-button variant="outline" href="{{ route('research.create', ['registration_type' => 'existing']) }}">{{ __('Register existing research') }}</x-button>
+                            <form method="POST" action="{{ route('research.begin') }}" style="display:inline;">
+                                @csrf
+                                <input type="hidden" name="registration_type" value="new">
+                                <x-button type="submit" variant="primary">{{ __('Register new research') }}</x-button>
+                            </form>
+                            <form method="POST" action="{{ route('research.begin') }}" style="display:inline;">
+                                @csrf
+                                <input type="hidden" name="registration_type" value="existing">
+                                <x-button type="submit" variant="outline">{{ __('Register existing research') }}</x-button>
+                            </form>
                         </div>
                     @endunless
                 </div>

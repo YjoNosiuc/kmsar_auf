@@ -70,7 +70,7 @@ function makeDraftResearch(User $faculty, College $college): Research
         'primary_author_id' => $faculty->id,
         'mother_college_id' => $college->id,
         'registration_type' => 'new',
-        'status' => ResearchStatus::PROPOSAL,
+        'status' => ResearchStatus::DRAFT,
         'sdg_tags' => [1, 4],
         'expected_output' => ['publication'],
     ]);
@@ -87,9 +87,28 @@ function makeDraftResearch(User $faculty, College $college): Research
     Document::factory()->create([
         'research_id' => $research->id,
         'uploaded_by' => $faculty->id,
-        'research_status_at_upload' => 'proposal',
+        'research_status_at_upload' => 'draft',
         'version' => 1,
     ]);
 
     return $research;
+}
+
+/**
+ * @param  array<string, mixed>  $payload
+ */
+function submitResearchCompletion(Research $research, User $faculty, array $payload = []): \Illuminate\Testing\TestResponse
+{
+    $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('completion-proof.pdf', minimalPdfBinary());
+
+    return test()->actingAs($faculty)->call(
+        'PUT',
+        route('research.update-progress', $research),
+        array_merge([
+            'outcome_classifications' => ['completed_not_presented_submitted'],
+            'remarks' => 'Completion package attached.',
+        ], $payload),
+        [],
+        ['files' => [$file]],
+    );
 }

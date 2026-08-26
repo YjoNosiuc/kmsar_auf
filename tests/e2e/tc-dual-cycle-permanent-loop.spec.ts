@@ -116,7 +116,7 @@ test.describe('Dual-cycle permanent post-acceptance loop', () => {
     await page.locator('input[name="outcome_classifications[]"][value="published_scopus"]').check();
     await page.locator('input[name="outcome_classifications[]"][value="completed_unpublished"]').uncheck();
     await page.locator('input[name="outcome_classifications[]"][value="presented_internal"]').uncheck();
-    await page.locator('form[action*="update-progress"] button.kmsar-tab').filter({ hasText: /Add Link/i }).click();
+    await page.locator('form[action*="update-progress"] input[name="files[]"]').setInputFiles('tests/e2e/fixtures/sample.pdf');
     await page
       .locator('form[action*="update-progress"] input[name="external_links[]"]')
       .first()

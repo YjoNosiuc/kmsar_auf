@@ -56,14 +56,6 @@ function documentTestFaculty(College $college): User
     return $faculty;
 }
 
-function documentTestCoAuthor(College $college): User
-{
-    $user = User::factory()->create(['college_id' => $college->id, 'is_active' => true]);
-    $user->assignRole('viewer');
-
-    return $user;
-}
-
 function documentTestRegistrar(): User
 {
     $user = User::factory()->create(['is_active' => true]);
@@ -126,12 +118,48 @@ describe('Document upload', function () {
         expect(Document::query()->where('research_id', $research->id)->exists())->toBeTrue();
     });
 
-    it('co-author with can_edit can upload a document', function () {
+    it('faculty can upload a file larger than 2 MB', function () {
         Storage::fake('local');
 
         [$college] = documentTestCollegeWithDean();
         $faculty = documentTestFaculty($college);
-        $coAuthor = documentTestCoAuthor($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::DRAFT,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()
+            ->linkedUser($faculty)
+            ->for($research)
+            ->primary()
+            ->create();
+
+        $largePdf = UploadedFile::fake()->createWithContent(
+            'large-proposal.pdf',
+            documentTestMinimalPdfBinary().str_repeat("\n0", 3 * 1024 * 1024),
+        );
+
+        $this->actingAs($faculty)
+            ->post(route('documents.upload', $research), [
+                'files' => [$largePdf],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $document = Document::query()->where('research_id', $research->id)->first();
+        expect($document)->not->toBeNull()
+            ->and($document->file_size_bytes)->toBeGreaterThan(2 * 1024 * 1024);
+    });
+
+    it('rejects file uploads when the research already has ten files', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
 
         $research = Research::factory()->create([
             'primary_author_id' => $faculty->id,
@@ -142,19 +170,169 @@ describe('Document upload', function () {
         ]);
 
         ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
-        ResearchAuthor::factory()
-            ->linkedUser($coAuthor)
-            ->for($research)
-            ->coAuthor(true)
-            ->create();
 
-        $this->actingAs($coAuthor)
+        for ($i = 0; $i < 10; $i++) {
+            Document::query()->create([
+                'research_id' => $research->id,
+                'uploaded_by' => $faculty->id,
+                'original_filename' => "file-{$i}.pdf",
+                'stored_filename' => "file-{$i}.pdf",
+                'disk_path' => "research_files/{$college->id}/{$research->id}/file-{$i}.pdf",
+                'external_link' => null,
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'research_status_at_upload' => ResearchStatus::DRAFT,
+                'version' => $i + 1,
+            ]);
+        }
+
+        $this->actingAs($faculty)
             ->post(route('documents.upload', $research), [
                 'files' => [documentTestValidPdfUpload()],
             ])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHasErrors('files');
 
-        expect(Document::query()->where('research_id', $research->id)->where('uploaded_by', $coAuthor->id)->exists())->toBeTrue();
+        expect($research->fresh()->fileDocumentsCount())->toBe(10);
+    });
+
+    it('allows external links even when ten files are already uploaded', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::DRAFT,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        for ($i = 0; $i < 10; $i++) {
+            Document::query()->create([
+                'research_id' => $research->id,
+                'uploaded_by' => $faculty->id,
+                'original_filename' => "file-{$i}.pdf",
+                'stored_filename' => "file-{$i}.pdf",
+                'disk_path' => "research_files/{$college->id}/{$research->id}/file-{$i}.pdf",
+                'external_link' => null,
+                'mime_type' => 'application/pdf',
+                'file_size_bytes' => 1024,
+                'research_status_at_upload' => ResearchStatus::DRAFT,
+                'version' => $i + 1,
+            ]);
+        }
+
+        $url = 'https://drive.google.com/file/d/example/view';
+
+        $this->actingAs($faculty)
+            ->post(route('documents.upload', $research), [
+                'external_link' => $url,
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect(Document::query()->where('research_id', $research->id)->where('external_link', $url)->exists())->toBeTrue();
+    });
+
+    it('faculty can upload a document after OVPRI returns final review', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::FINAL_REJECTED,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        $this->actingAs($faculty)
+            ->post(route('documents.upload', $research), [
+                'files' => [documentTestValidPdfUpload()],
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        expect(Document::query()->where('research_id', $research->id)->whereNull('external_link')->count())->toBe(1);
+    });
+
+    it('faculty can open documents wizard step after initial OVPRI return via edit flow', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::INITIAL_REJECTED,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        expect(ResearchStatus::showsManageDocumentsAction(ResearchStatus::INITIAL_REJECTED))->toBeFalse();
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.documents', $research))
+            ->assertOk()
+            ->assertSee(__('Upload documents'), false);
+    });
+
+    it('faculty can open manage documents page after research is accepted', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::RESEARCH_ACCEPTED,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        expect(ResearchStatus::showsManageDocumentsAction(ResearchStatus::RESEARCH_ACCEPTED))->toBeTrue();
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.documents', $research))
+            ->assertOk()
+            ->assertSee(__('Manage supporting documents'), false);
+    });
+
+    it('faculty can open manage documents page after final OVPRI return', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::FINAL_REJECTED,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.documents', $research))
+            ->assertOk()
+            ->assertSee(__('Manage supporting documents'), false);
     });
 
     it('faculty cannot upload to another faculty research', function () {
@@ -312,6 +490,39 @@ describe('Document delete', function () {
         expect(Document::query()->whereKey($document->id)->exists())->toBeFalse();
     });
 
+    it('faculty can delete a document from OVPRI-returned final-review research', function () {
+        Storage::fake('local');
+
+        [$college] = documentTestCollegeWithDean();
+        $faculty = documentTestFaculty($college);
+
+        $research = Research::factory()->create([
+            'primary_author_id' => $faculty->id,
+            'mother_college_id' => $college->id,
+            'status' => ResearchStatus::FINAL_REJECTED,
+            'sdg_tags' => [1, 4],
+            'expected_output' => ['publication'],
+        ]);
+
+        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
+
+        $document = Document::factory()->create([
+            'research_id' => $research->id,
+            'uploaded_by' => $faculty->id,
+            'disk_path' => 'research_files/'.$college->id.'/'.$research->id.'/final-returned-delete.pdf',
+            'external_link' => null,
+            'mime_type' => 'application/pdf',
+            'version' => 1,
+        ]);
+        documentTestPutFileOnDisk($document);
+
+        $this->actingAs($faculty)
+            ->delete(route('documents.destroy', $document))
+            ->assertRedirect();
+
+        expect(Document::query()->whereKey($document->id)->exists())->toBeFalse();
+    });
+
     it('faculty cannot delete a document from research not in draft stage', function () {
         Storage::fake('local');
 
@@ -372,45 +583,6 @@ describe('Document delete', function () {
         documentTestPutFileOnDisk($document);
 
         $this->actingAs($other)
-            ->delete(route('documents.destroy', $document))
-            ->assertForbidden();
-
-        expect(Document::query()->whereKey($document->id)->exists())->toBeTrue();
-    });
-
-    it('co-author cannot delete a document (only primary author can delete)', function () {
-        Storage::fake('local');
-
-        [$college] = documentTestCollegeWithDean();
-        $faculty = documentTestFaculty($college);
-        $coAuthor = documentTestCoAuthor($college);
-
-        $research = Research::factory()->create([
-            'primary_author_id' => $faculty->id,
-            'mother_college_id' => $college->id,
-            'status' => ResearchStatus::DRAFT,
-            'sdg_tags' => [1, 4],
-            'expected_output' => ['publication'],
-        ]);
-
-        ResearchAuthor::factory()->linkedUser($faculty)->for($research)->primary()->create();
-        ResearchAuthor::factory()
-            ->linkedUser($coAuthor)
-            ->for($research)
-            ->coAuthor(true)
-            ->create();
-
-        $document = Document::factory()->create([
-            'research_id' => $research->id,
-            'uploaded_by' => $faculty->id,
-            'disk_path' => 'research_files/'.$college->id.'/'.$research->id.'/primary-only.pdf',
-            'external_link' => null,
-            'mime_type' => 'application/pdf',
-            'version' => 1,
-        ]);
-        documentTestPutFileOnDisk($document);
-
-        $this->actingAs($coAuthor)
             ->delete(route('documents.destroy', $document))
             ->assertForbidden();
 

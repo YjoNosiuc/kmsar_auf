@@ -1,9 +1,38 @@
 import { expect, Page } from '@playwright/test';
 import { login, credentials } from './auth';
-import { runTinker } from './db';
+import { runTinker, processQueuedJobs } from './db';
 
 const WIZARD_TIMEOUT = 90_000;
 export const COMPLETION_SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
+
+/** Shared UI copy for the dual-cycle registration wizard. */
+export const REGISTRATION_UI = {
+  submitInitialDeanReview: 'Submit for initial dean review',
+  continueToAuthors: 'Continue to authors',
+  continueToDocuments: 'Continue to documents',
+  initialDeanReviewLabel: /Initial Dean Review/i,
+  initialReviewReturnedLabel: /Initial Review Returned/i,
+  finalDeanReviewLabel: /Final Dean Review/i,
+  researchRegisteredLabel: /Research Registered/i,
+} as const;
+
+/** Fill wizard step 1 (required fields for continuing registration). */
+export async function fillRegistrationStep1(
+  page: Page,
+  title: string,
+  registrationType: 'new' | 'existing' = 'new',
+): Promise<void> {
+  await page.fill('textarea[name="title"]', title);
+  if (await page.locator('select[name="registration_type"]').count()) {
+    await page.selectOption('select[name="registration_type"]', registrationType);
+  }
+  await page.locator('input[name="research_classification"][value="internally_funded"]').check();
+  await page.check('input[name="agenda_themes[]"][value="theme_1"]');
+  await page.check('input[name="expected_output[]"][value="publication"]');
+  await page.fill('input[name="start_date"]', '2026-01-01');
+  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
+  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+}
 
 /** Add at least one supporting document in the completion modal. */
 export async function uploadCompletionDocument(page: Page): Promise<void> {
@@ -74,19 +103,7 @@ export async function submitExistingResearchFromDocuments(page: Page, researchId
 }
 
 async function fillWizardStep1(page: Page, title: string, registrationType: 'new' | 'existing' = 'new'): Promise<void> {
-  await page.fill('textarea[name="title"]', title);
-  if (await page.locator('select[name="registration_type"]').count()) {
-    await page.selectOption('select[name="registration_type"]', registrationType);
-  }
-  await page.selectOption('select[name="research_classification"]', 'internally_funded');
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  const statusSelect = page.locator('select[name="status"]');
-  if (await statusSelect.count()) {
-    await statusSelect.selectOption('draft');
-  }
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+  await fillRegistrationStep1(page, title, registrationType);
 }
 
 /** Start registration from the chooser and land on wizard step 1. */
@@ -130,7 +147,7 @@ export async function createAndSubmitResearch(
 
   await page.locator('#kmsar-document-file-input').setInputFiles('tests/e2e/fixtures/sample.pdf');
   await page.getByRole('button', { name: 'Save Document' }).click();
-  await expect(page.getByRole('tabpanel').getByText('Document uploaded successfully')).toBeVisible({
+  await expect(page.getByText(/uploaded successfully|Document uploaded/i).first()).toBeVisible({
     timeout: WIZARD_TIMEOUT,
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -145,6 +162,7 @@ export async function createAndSubmitResearch(
     } else {
       await submitResearchFromDocuments(page, researchId, 'new');
     }
+    processQueuedJobs();
   }
 
   return researchId;
@@ -156,6 +174,7 @@ export async function endorseResearch(page: Page, researchId: string) {
   await page.getByRole('button', { name: 'Endorse', exact: true }).click();
   await page.fill('#endorse-remarks', 'Research is well documented and ready for OVPRI review.');
   await page.locator('form[action*="endorse"] button[type="submit"]').click();
+  processQueuedJobs();
 }
 
 export async function approveResearch(
@@ -169,6 +188,7 @@ export async function approveResearch(
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await page.fill('#approve-remarks', 'Approved by OVPRI for institutional research records.');
   await page.locator('form[action*="approve"] button[type="submit"]').click();
+  processQueuedJobs();
 }
 
 export async function returnResearchOvpri(
@@ -187,6 +207,7 @@ export async function returnResearchOvpri(
   await page.locator('#ovpri-return-remarks').waitFor({ state: 'visible', timeout: 15_000 });
   await page.fill('#ovpri-return-remarks', remarks);
   await page.locator('form[action*="return"] button[type="submit"]').click();
+  processQueuedJobs();
 }
 
 export async function rejectResearchOvpri(
@@ -265,11 +286,34 @@ export async function submitCompletionWithLink(page: Page, researchId: string, l
   await submitCompletionViaModal(page, researchId, { externalLink: link });
 }
 
-/** New registration through initial review to ongoing. */
-export async function driveNewRegistrationToOngoing(page: Page, title: string): Promise<string> {
+/** New registration through initial review to research registered. */
+export async function setupRegisteredResearch(page: Page, title: string): Promise<string> {
+  return driveNewRegistrationToRegistered(page, title);
+}
+
+/** Registered research with completion submitted — awaiting final dean review. */
+export async function setupFinalDeanReviewResearch(page: Page, title: string): Promise<string> {
+  const researchId = await driveNewRegistrationToRegistered(page, title);
+  await submitCompletionViaModal(page, researchId);
+  expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.FINAL_DEAN_REVIEW);
+
+  return researchId;
+}
+
+/** Completion endorsed — awaiting final OVPRI review. */
+export async function setupFinalOvpriReviewResearch(page: Page, title: string): Promise<string> {
+  const researchId = await setupFinalDeanReviewResearch(page, title);
+  await endorseResearch(page, researchId);
+  expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.FINAL_OVPRI_REVIEW);
+
+  return researchId;
+}
+
+/** New registration through initial review to research registered. */
+export async function driveNewRegistrationToRegistered(page: Page, title: string): Promise<string> {
   const researchId = await createAndSubmitResearch(page, title, 'new');
   if (!researchId) {
-    throw new Error('Failed to create research for ongoing setup');
+    throw new Error('Failed to create research for registered setup');
   }
 
   await endorseResearch(page, researchId);
@@ -279,9 +323,12 @@ export async function driveNewRegistrationToOngoing(page: Page, title: string): 
   return researchId;
 }
 
+/** @deprecated Use driveNewRegistrationToRegistered() */
+export const driveNewRegistrationToOngoing = driveNewRegistrationToRegistered;
+
 /** Full new-path cycle through first final acceptance. */
 export async function driveNewRegistrationToAccepted(page: Page, title: string): Promise<string> {
-  const researchId = await driveNewRegistrationToOngoing(page, title);
+  const researchId = await driveNewRegistrationToRegistered(page, title);
 
   await submitCompletionViaModal(page, researchId, { classificationCode: 'completed_not_presented_submitted' });
   expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.FINAL_DEAN_REVIEW);
@@ -333,6 +380,7 @@ export async function submitCompletionViaModal(
   await fillOptionalCompletionLink(page, externalLink);
   await page.locator('form[action*="update-progress"] button[type="submit"]').click();
   await page.waitForURL(new RegExp(`/research/${researchId}$`), { timeout: WIZARD_TIMEOUT });
+  processQueuedJobs();
 }
 
 /** Final-rejected resubmit via the same modal (update-progress → resubmitFinal). */
@@ -395,6 +443,7 @@ export async function returnResearchDean(page: Page, researchId: string, remarks
   await page.getByRole('button', { name: 'Return', exact: true }).click();
   await page.fill('#return-remarks', remarks);
   await page.locator('form[action*="return"] button[type="submit"]').click();
+  processQueuedJobs();
 }
 
 export async function rejectResearchDean(page: Page, researchId: string, remarks: string): Promise<void> {

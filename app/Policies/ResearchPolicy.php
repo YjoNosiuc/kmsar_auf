@@ -75,6 +75,19 @@ class ResearchPolicy
         return $this->coAuthorCanEdit($user, $research);
     }
 
+    public function manageRegistrationWizard(User $user, Research $research): bool
+    {
+        if (! ResearchStatus::isFullyEditable((string) $research->status)) {
+            return false;
+        }
+
+        if ((int) $research->primary_author_id === (int) $user->id) {
+            return $user->can('research.create') || $user->can('research.update');
+        }
+
+        return $this->coAuthorCanEdit($user, $research);
+    }
+
     public function updateOutcomes(User $user, Research $research): bool
     {
         if (! ResearchStatus::isOutcomeEditable((string) $research->status)) {

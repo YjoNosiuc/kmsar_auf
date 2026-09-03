@@ -4,10 +4,16 @@ import { runTinker } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import {
   createAndSubmitResearch,
+  fillRegistrationStep1,
   openFacultyResearchList,
   facultyResearchCard,
   selectCurrentUserAsPrimary,
   beginRegistration,
+  returnResearchDean,
+  submitCompletionViaModal,
+  REGISTRATION_UI,
+  ResearchWorkflowStatus,
+  researchWorkflowStatus,
 } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
@@ -24,13 +30,10 @@ async function fillStep1(
   title: string,
   classification = 'internally_funded',
 ): Promise<void> {
-  await page.fill('textarea[name="title"]', title);
-  await page.selectOption('select[name="research_classification"]', classification);
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'draft');
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+  await fillRegistrationStep1(page, title, 'new');
+  if (classification !== 'internally_funded') {
+    await page.selectOption('select[name="research_classification"]', classification);
+  }
 }
 
 async function startWizardStep1(page: Page): Promise<string> {
@@ -108,22 +111,20 @@ test.describe('Faculty — UAT Test Suite', () => {
     await expect(page.locator('input[name="password"]')).toBeVisible();
   });
 
-  test('TC-006: view profile page loads with name and email', async ({ page }) => {
+  test('TC-006: view profile page loads with read-only name and email', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto('/profile');
     await expect(page.getByRole('heading', { name: 'My Profile' })).toBeVisible();
     await expect(page.locator('#profile_first_name')).toBeVisible();
+    await expect(page.locator('input[name="first_name"]')).toHaveCount(0);
     await expect(page.locator('#profile_email')).toHaveValue(credentials.faculty_ccs.email);
   });
 
-  test('TC-007: update name is stored as typed', async ({ page }) => {
+  test('TC-007: faculty cannot edit first name on profile', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto('/profile');
-    const newFirst = `E2e${Date.now()}`.slice(0, 12);
-    await page.fill('#profile_first_name', newFirst);
-    await page.click('button:has-text("Save changes")');
-    await expect(page.getByText('Profile updated successfully')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('#profile_first_name')).toHaveValue(newFirst);
+    await expect(page.locator('#profile_first_name')).toBeDisabled();
+    await expect(page.locator('#profile_last_name')).toBeDisabled();
   });
 
   test('TC-008: change password — old password no longer works', async ({ page }) => {
@@ -165,7 +166,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await startWizardStep1(page);
     await expect(
-      page.locator('select[name="research_classification"] option[value="thesis_dissertation"]'),
+      page.locator('select[name="research_classification"] option[value="student_thesis_dissertation"]'),
     ).toHaveCount(1);
     await fillStep1(page, uniqueTitle('TC010 Step1'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
@@ -189,7 +190,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC012 Authors'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
-    await expect(page.locator('.author-selected-card--primary')).toBeVisible();
+    await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await expect(page).toHaveURL(/\/documents/);
     await expect(page.getByText(/Step 3 of 3/i)).toBeVisible();
@@ -288,10 +289,11 @@ test.describe('Faculty — UAT Test Suite', () => {
     const researchId = await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC014 Docs'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
+    await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await expect(page.locator('.kmsar-dropzone, label.kmsar-dropzone').first()).toBeVisible();
     await expect(page.locator('#kmsar-document-file-input')).toBeAttached();
-    await expect(page.getByRole('button', { name: 'Submit for Dean Review', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: REGISTRATION_UI.submitInitialDeanReview, exact: true })).toBeVisible();
     expect(researchId).toBeTruthy();
   });
 
@@ -302,6 +304,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC015 PDF'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
+    await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_PDF);
     await page.getByRole('button', { name: 'Save Document' }).click();
@@ -316,6 +319,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC016 Invalid'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
+    await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_TXT);
     await page.getByRole('button', { name: 'Save Document' }).click();
@@ -330,6 +334,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC017 Link'));
     await page.getByRole('button', { name: 'Continue to authors' }).click();
+    await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await page.locator('form[action*="documents"]').getByRole('tab', { name: 'Add Link' }).click();
     await page.fill('input[name="external_link"]', link);
@@ -340,23 +345,23 @@ test.describe('Faculty — UAT Test Suite', () => {
     await expect(page.getByText(link).first()).toBeVisible();
   });
 
-  test('TC-018: submit research with document — stage changes to For Dean Review', async ({
+  test('TC-018: submit research with document — stage changes to Initial Dean Review', async ({
     page,
   }) => {
     const title = uniqueTitle('TC018 Submit');
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
     await page.goto(`/research/${researchId}`);
-    await expect(page.getByRole('cell', { name: 'Dean Review' })).toBeVisible();
+    await expect(page.getByText(REGISTRATION_UI.initialDeanReviewLabel).first()).toBeVisible();
   });
 
   test('TC-019: submit research with NO documents — blocked with error', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     const researchId = await startWizardStep1(page);
     await fillStep1(page, uniqueTitle('TC019 No Docs'));
-    await page.getByRole('button', { name: 'Continue to authors' }).click();
-    await page.getByRole('button', { name: 'Continue to documents' }).click();
-    const submit = page.getByRole('button', { name: 'Submit for Dean Review', exact: true });
+    await page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click();
+    await page.getByRole('button', { name: REGISTRATION_UI.continueToDocuments }).click();
+    const submit = page.getByRole('button', { name: REGISTRATION_UI.submitInitialDeanReview, exact: true });
     await expect(submit).toBeDisabled();
     await expect(
       page.getByText(/upload at least one document before submitting/i).first(),
@@ -446,7 +451,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await openFacultyResearchList(page, title);
     const card = facultyResearchCard(page, title);
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.locator('.kmsar-badge').filter({ hasText: 'Dean Review' })).toBeVisible();
+    await expect(card.locator('.kmsar-badge').filter({ hasText: REGISTRATION_UI.initialDeanReviewLabel })).toBeVisible();
     await card.getByRole('link', { name: /View research/i }).click();
     await expect(page.getByRole('link', { name: /^Edit$/i })).toHaveCount(0);
     await expect(page.locator('.kmsar-page-header-actions a:has-text("Edit")')).toHaveCount(0);
@@ -484,79 +489,44 @@ test.describe('Faculty — UAT Test Suite', () => {
     await openFacultyResearchList(page, title);
     const card = facultyResearchCard(page, title);
     await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.locator('.kmsar-badge').filter({ hasText: 'Dean Review' })).toBeVisible();
+    await expect(card.locator('.kmsar-badge').filter({ hasText: REGISTRATION_UI.initialDeanReviewLabel })).toBeVisible();
     await expect(card.getByRole('button', { name: 'Delete' })).toHaveCount(0);
   });
 
-  test('TC-028: after rejection Revise button appears and clicking it returns to Draft', async ({
+  test('TC-028: after dean return faculty can edit and resubmit for initial review', async ({
     page,
   }) => {
-    const title = uniqueTitle('TC028 Rejected');
+    const title = uniqueTitle('TC028 Returned');
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
-    runTinker(
-      `App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'rejected']);`,
-    );
 
-    await page.goto(`/research/${researchId}`);
-    await page.getByRole('button', { name: 'Revise', exact: true }).click();
-    await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`));
-    await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toHaveAttribute(
-      'href',
-      new RegExp(`/research/${researchId}/details$`),
-    );
-  });
-
-  test('TC-028b: after OVPRI return (returned_to_faculty) Revise button appears with Returned by OVPRI badge', async ({
-    page,
-  }) => {
-    const title = uniqueTitle('TC028b Ovpri Return');
-    const researchId = await createAndSubmitResearch(page, title);
-    expect(researchId).toBeTruthy();
-    runTinker(
-      `App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'returned_to_faculty']);`,
-    );
+    await returnResearchDean(page, researchId!, 'Please revise the methodology section and resubmit.');
+    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.INITIAL_REJECTED);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-    await openFacultyResearchList(page, title);
-    const card = facultyResearchCard(page, title);
-    await expect(card).toBeVisible({ timeout: 15_000 });
-    await expect(card.locator('.kmsar-badge').filter({ hasText: /Returned by OVPRI/i })).toBeVisible();
-    await expect(card.getByText(/^Rejected$/i)).toHaveCount(0);
-
     await page.goto(`/research/${researchId}`);
-    await expect(page.locator('.kmsar-badge').filter({ hasText: /Returned by OVPRI/i }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Revise', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Revise', exact: true }).click();
-    await expect(page.getByText(/returned to draft/i).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`));
-    await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Edit & resubmit' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Resubmit for initial review', exact: true })).toBeVisible();
   });
 
-  test('TC-029: after approval submit progress update — stage moves to Dean Review', async ({
+  test('TC-029: registered research can submit completion to final dean review', async ({
     page,
   }) => {
-    const title = uniqueTitle('TC029 Progress');
+    const title = uniqueTitle('TC029 Completion');
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
 
     runTinker(
-      `App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'approved', 'status' => 'draft']);`,
+      `\\App\\Models\\Research::find(${researchId})->update(['status' => '${ResearchWorkflowStatus.RESEARCH_REGISTERED}', 'research_registered_at' => now()]);`,
     );
 
+    await submitCompletionViaModal(page, researchId!, { classificationCode: 'completed_not_presented_submitted' });
+    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.FINAL_DEAN_REVIEW);
     await page.goto(`/research/${researchId}`);
-    await page.getByRole('button', { name: 'Update Progress' }).click();
-    await page.locator('select[name="status"]').selectOption('research_registered');
-    await page.locator('form[action*="update-progress"] input[name="files[]"]').setInputFiles(SAMPLE_PDF);
-    await page.locator('form[action*="update-progress"] button[type="submit"]').click();
-    await expect(
-      page.getByRole('alert').filter({ hasText: /Progress updated|re-endorsement/i }),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('cell', { name: 'Dean Review' })).toBeVisible();
+    await expect(page.getByText(REGISTRATION_UI.finalDeanReviewLabel).first()).toBeVisible();
   });
 
-  test('TC-030: try progress update on non-approved research — blocked', async ({ page }) => {
+  test('TC-030: try progress update on draft research — blocked', async ({ page }) => {
     const title = uniqueTitle('TC030 No Progress');
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     const researchId = await startWizardStep1(page);
@@ -564,7 +534,7 @@ test.describe('Faculty — UAT Test Suite', () => {
     await page.getByRole('button', { name: 'Continue to authors' }).click();
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await page.goto(`/research/${researchId}`);
-    await expect(page.getByRole('button', { name: 'Update Progress' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Submit completion|Update outcomes/i })).toHaveCount(0);
   });
 
   test('TC-031: notifications page lists all received alerts with timestamps', async ({

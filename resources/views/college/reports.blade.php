@@ -9,7 +9,7 @@
 @section('content')
     @php
         $filterHidden = collect($filters ?? [])->filter(fn ($v) => $v !== null && $v !== '')->all();
-        $statusOpts = \App\Support\ResearchStatus::institutionalFilterOptions();
+        $statusOpts = \App\Support\ResearchStatus::workflowFilterOptions();
         $classOpts = [
             'self_funded' => __('Self-funded'),
             'internally_funded' => __('Internally funded'),

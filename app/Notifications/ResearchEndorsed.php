@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Research;
+use App\Support\ResearchNotificationCopy;
 
 class ResearchEndorsed extends QueuedResearchNotification
 {
@@ -12,16 +13,12 @@ class ResearchEndorsed extends QueuedResearchNotification
         public Research $research
     ) {}
 
-
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [
-            'message'          => 'Your research '
-                                  . $this->research->reference_number
-                                  . ' has been endorsed by the college dean.',
-            'action_url'       => route('research.show',
-                                    $this->research),
-            'type'             => 'endorsed',
+            'message' => ResearchNotificationCopy::endorsedFaculty($this->research),
+            'action_url' => route('research.show', $this->research),
+            'type' => 'endorsed',
         ]);
     }
 }

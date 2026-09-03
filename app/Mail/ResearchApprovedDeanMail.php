@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\Research;
 use App\Models\User;
+use App\Support\ResearchStatus;
 
 class ResearchApprovedDeanMail extends ResearchNotificationMail
 {
@@ -14,22 +15,36 @@ class ResearchApprovedDeanMail extends ResearchNotificationMail
 
     protected function subjectLine(): string
     {
-        return 'Research Approved — '.$this->titleSnippet();
+        return match ($this->research->status) {
+            ResearchStatus::RESEARCH_REGISTERED => 'Research Registered — '.$this->titleSnippet(),
+            ResearchStatus::RESEARCH_ACCEPTED => 'Research Accepted — '.$this->titleSnippet(),
+            default => 'Research Approved — '.$this->titleSnippet(),
+        };
     }
 
     protected function heading(): string
     {
-        return 'Research Approved';
+        return match ($this->research->status) {
+            ResearchStatus::RESEARCH_REGISTERED => 'Research Registered',
+            ResearchStatus::RESEARCH_ACCEPTED => 'Research Accepted',
+            default => 'Research Approved',
+        };
     }
 
     protected function bodyText(): string
     {
-        return 'A research from your college has been approved by OVPRI. Faculty: '.$this->authorName().'.';
+        $faculty = $this->authorName();
+
+        return match ($this->research->status) {
+            ResearchStatus::RESEARCH_REGISTERED => 'Research from your college has been registered by OVPRI. Faculty: '.$faculty.'.',
+            ResearchStatus::RESEARCH_ACCEPTED => 'Research from your college has been accepted by OVPRI. Faculty: '.$faculty.'.',
+            default => 'Research from your college has been approved by OVPRI. Faculty: '.$faculty.'.',
+        };
     }
 
     protected function actionUrl(): ?string
     {
-        return route('approval.queue');
+        return route('approval.review', $this->research);
     }
 
     protected function actionLabel(): string

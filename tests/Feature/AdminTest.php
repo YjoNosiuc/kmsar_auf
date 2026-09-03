@@ -75,7 +75,7 @@ describe('Admin user management', function () {
             ->assertOk();
     });
 
-    it('does not list registrar accounts on the users table', function () {
+    it('does not list registrar or co_author accounts on the users table', function () {
         $admin = adminMakeSuperAdmin();
         $registrar = User::factory()->create([
             'email' => 'hidden.registrar@example.com',
@@ -84,10 +84,19 @@ describe('Admin user management', function () {
         ]);
         $registrar->assignRole('registrar');
 
+        $coAuthor = User::factory()->create([
+            'email' => 'hidden.coauthor@example.com',
+            'is_active' => true,
+            'is_pending' => false,
+        ]);
+        \Spatie\Permission\Models\Role::findOrCreate('co_author', 'web');
+        $coAuthor->assignRole('co_author');
+
         $this->actingAs($admin)
             ->get(route('admin.users.index'))
             ->assertOk()
-            ->assertDontSee('hidden.registrar@example.com');
+            ->assertDontSee('hidden.registrar@example.com')
+            ->assertDontSee('hidden.coauthor@example.com');
     });
 
     it('super_admin can create a new user with a role', function () {
@@ -108,6 +117,7 @@ describe('Admin user management', function () {
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
                 'college_id' => $college->id,
+                'user_type' => 'faculty',
                 'role' => 'faculty',
                 'is_active' => true,
             ])
@@ -144,6 +154,7 @@ describe('Admin user management', function () {
         $admin = adminMakeSuperAdmin();
         $target = User::factory()->create([
             'is_active' => true,
+            'user_type' => 'student',
             'employee_number' => fake()->unique()->numerify('##########'),
             'first_name' => 'ROLE',
             'last_name' => 'CHANGE',
@@ -162,6 +173,7 @@ describe('Admin user management', function () {
                 'password' => '',
                 'password_confirmation' => '',
                 'college_id' => $target->college_id,
+                'user_type' => 'faculty',
                 'role' => 'faculty',
                 'is_active' => true,
             ])
@@ -174,6 +186,7 @@ describe('Admin user management', function () {
         $admin = adminMakeSuperAdmin();
         $target = User::factory()->create([
             'is_active' => true,
+            'user_type' => 'student',
             'employee_number' => fake()->unique()->numerify('##########'),
             'first_name' => 'DEACT',
             'last_name' => 'IVE',
@@ -192,6 +205,7 @@ describe('Admin user management', function () {
                 'password' => '',
                 'password_confirmation' => '',
                 'college_id' => $target->college_id,
+                'user_type' => 'student',
                 'role' => 'viewer',
                 'is_active' => 0,
             ])
@@ -230,6 +244,7 @@ describe('Admin user management', function () {
                 'password' => 'password123',
                 'password_confirmation' => 'password123',
                 'college_id' => $college->id,
+                'user_type' => 'student',
                 'role' => 'viewer',
                 'is_active' => true,
             ])
@@ -242,6 +257,58 @@ describe('Admin user management', function () {
             ->and($created->middle_name)->toBe('middle')
             ->and($created->name)->toContain('lowercase')
             ->and($created->name)->toContain('names');
+    });
+
+    it('rejects a role that is not allowed for the selected user type', function () {
+        $admin = adminMakeSuperAdmin();
+        $college = makeCollege(false);
+
+        $this->actingAs($admin)
+            ->from(route('admin.users.index'))
+            ->post(route('admin.users.store'), [
+                'employee_number' => fake()->unique()->numerify('##########'),
+                'first_name' => 'Student',
+                'last_name' => 'User',
+                'email' => fake()->unique()->safeEmail(),
+                'password' => 'password123',
+                'password_confirmation' => 'password123',
+                'college_id' => $college->id,
+                'user_type' => 'student',
+                'role' => 'super_admin',
+                'is_active' => true,
+            ])
+            ->assertSessionHasErrors('role');
+    });
+
+    it('rejects assigning faculty role to student user type on update', function () {
+        $admin = adminMakeSuperAdmin();
+        $target = User::factory()->create([
+            'is_active' => true,
+            'user_type' => 'student',
+            'first_name' => 'STUDENT',
+            'last_name' => 'USER',
+            'employee_number' => fake()->unique()->numerify('##########'),
+            'email' => fake()->unique()->safeEmail(),
+        ]);
+        $target->assignRole('viewer');
+
+        $this->actingAs($admin)
+            ->from(route('admin.users.index'))
+            ->put(route('admin.users.update', $target), [
+                'employee_number' => $target->employee_number,
+                'first_name' => 'STUDENT',
+                'last_name' => 'USER',
+                'middle_name' => $target->middle_name,
+                'suffix' => $target->suffix,
+                'email' => $target->email,
+                'password' => '',
+                'password_confirmation' => '',
+                'college_id' => $target->college_id,
+                'user_type' => 'student',
+                'role' => 'faculty',
+                'is_active' => true,
+            ])
+            ->assertSessionHasErrors('role');
     });
 
     it('programs api returns programs for the selected college', function () {

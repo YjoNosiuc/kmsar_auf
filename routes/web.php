@@ -127,10 +127,9 @@ Route::middleware(['auth', 'nocache'])->group(function () {
 | Faculty & viewer — research module
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'nocache', 'role:faculty|viewer|super_admin'])
+Route::middleware(['auth', 'nocache', 'role:faculty|super_admin'])
     ->prefix('research')
     ->group(function () {
-        Route::get('/', [ResearchController::class, 'index'])->name('research.index');
         Route::get('/create', [ResearchController::class, 'create'])->name('research.create');
         Route::post('/begin', [ResearchController::class, 'beginRegistration'])->name('research.begin');
         Route::post('/', [ResearchController::class, 'store'])->name('research.store');
@@ -140,18 +139,24 @@ Route::middleware(['auth', 'nocache', 'role:faculty|viewer|super_admin'])
         Route::post('/{research}/authors', [ResearchController::class, 'saveRegistrationAuthors'])->name('research.wizard.authors.save');
         Route::get('/{research}/documents', [ResearchController::class, 'registrationDocuments'])->name('research.wizard.documents');
         Route::put('/{research}/update-progress', [ResearchController::class, 'updateProgress'])->name('research.update-progress');
-        Route::get('/{research}', [ResearchController::class, 'show'])->name('research.show');
         Route::get('/{research}/edit', [ResearchController::class, 'edit'])->name('research.edit');
         Route::put('/{research}', [ResearchController::class, 'update'])->name('research.update');
         Route::delete('/{research}', [ResearchController::class, 'destroy'])->name('research.destroy');
         Route::post('/{research}/submit', [ResearchController::class, 'submit'])->name('research.submit');
         Route::post('/{research}/revise', [ResearchController::class, 'revise'])->name('research.revise');
         Route::post('/{research}/documents', [DocumentController::class, 'store'])->name('documents.upload');
-        Route::get('/{research}/documents/{document}/download', [FileController::class, 'download'])->name('documents.download');
-        Route::get('/{research}/documents/{document}/preview', [FileController::class, 'preview'])->name('documents.preview');
     });
 
 Route::middleware(['auth', 'nocache', 'role:faculty|viewer|super_admin'])
+    ->prefix('research')
+    ->group(function () {
+        Route::get('/', [ResearchController::class, 'index'])->name('research.index');
+        Route::get('/{research}/documents/{document}/download', [FileController::class, 'download'])->name('documents.download');
+        Route::get('/{research}/documents/{document}/preview', [FileController::class, 'preview'])->name('documents.preview');
+        Route::get('/{research}', [ResearchController::class, 'show'])->name('research.show');
+    });
+
+Route::middleware(['auth', 'nocache', 'role:faculty|super_admin'])
     ->delete('/documents/{document}', [DocumentController::class, 'destroy'])
     ->name('documents.destroy');
 

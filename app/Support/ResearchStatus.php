@@ -93,7 +93,19 @@ final class ResearchStatus
      */
     public static function facultyFilterOptions(): array
     {
-        return self::institutionalFilterOptions();
+        return self::workflowFilterOptions();
+    }
+
+    /**
+     * Workflow status options for dashboard and report filters (excludes internal/transient statuses).
+     *
+     * @return array<string, string>
+     */
+    public static function workflowFilterOptions(): array
+    {
+        return collect(self::institutionalFilterOptions())
+            ->reject(fn (string $label, string $value) => $value === self::RESEARCH_COMPLETED)
+            ->all();
     }
 
     /**
@@ -157,7 +169,9 @@ final class ResearchStatus
             return false;
         }
 
-        return self::isFacultyOnly($status) || $status === 'proposal';
+        return self::isFacultyOnly($status)
+            || $status === 'proposal'
+            || $status === self::RESEARCH_COMPLETED;
     }
 
     public static function isPreSubmission(string $status): bool
@@ -172,7 +186,41 @@ final class ResearchStatus
 
     public static function isDocumentsEditable(string $status): bool
     {
-        return $status === self::RESEARCH_REGISTERED;
+        return in_array($status, [
+            self::RESEARCH_REGISTERED,
+            self::RESEARCH_ACCEPTED,
+            self::FINAL_REJECTED,
+        ], true);
+    }
+
+    /**
+     * Faculty may add or remove uploaded files (not registration wizard fields).
+     */
+    public static function canModifyDocuments(string $status): bool
+    {
+        return self::isFullyEditable($status) || self::isDocumentsEditable($status);
+    }
+
+    /**
+     * Documents wizard opens in registration-locked mode (upload/delete only).
+     */
+    public static function usesDocumentsOnlyUploadPage(string $status): bool
+    {
+        return self::isDocumentsEditable($status) && ! self::isFullyEditable($status);
+    }
+
+    /**
+     * Show the standalone “Manage documents” action on the research record page.
+     *
+     * Not shown for initial review returns — faculty use Edit & resubmit (full wizard).
+     */
+    public static function showsManageDocumentsAction(string $status): bool
+    {
+        return in_array($status, [
+            self::RESEARCH_REGISTERED,
+            self::RESEARCH_ACCEPTED,
+            self::FINAL_REJECTED,
+        ], true);
     }
 
     public static function isOutcomeEditable(string $status): bool
@@ -283,14 +331,14 @@ final class ResearchStatus
             'proposal' => __('Draft'),
             self::INITIAL_DEAN_REVIEW => __('Initial Dean Review'),
             self::INITIAL_OVPRI_REVIEW => __('Initial OVPRI Review'),
-            self::INITIAL_REJECTED => __('Initial Review — Returned'),
+            self::INITIAL_REJECTED => __('Initial Review Returned'),
             self::RESEARCH_REGISTERED => __('Research Registered'),
             self::RESEARCH_COMPLETED => __('Research Completed'),
             self::FINAL_DEAN_REVIEW => __('Final Dean Review'),
             self::FINAL_OVPRI_REVIEW => __('Final OVPRI Review'),
-            self::FINAL_REJECTED => __('Final Review — Returned'),
+            self::FINAL_REJECTED => __('Final Review Returned'),
             self::RESEARCH_ACCEPTED => __('Research Accepted'),
-            default => $status ? ucwords(str_replace('_', ' ', $status)) : '—',
+            default => $status ? ucwords(str_replace('_', ' ', $status)) : '-',
         };
     }
 }

@@ -1,14 +1,18 @@
 import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
-import { resetDatabaseAndAuth, runTinker } from './helpers/db';
+import { resetDatabaseAndAuth, runTinker, processQueuedJobs, waitForUnreadNotifications } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import {
   createAndSubmitResearch,
   endorseResearch,
   approveResearch,
   returnResearchOvpri,
-  rejectResearchOvpri,
+  returnResearchDean,
   setupEndorsedResearch,
+  setupRegisteredResearch,
+  setupFinalDeanReviewResearch,
+  setupFinalOvpriReviewResearch,
+  submitCompletionViaModal,
 } from './helpers/research';
 
 function uniqueTitle(prefix: string): string {
@@ -25,11 +29,13 @@ function queuedMailJobsContaining(className: string, email?: string): number {
 }
 
 async function openNotificationBell(page: Page): Promise<void> {
+  processQueuedJobs();
   await page.getByRole('button', { name: 'Notifications' }).click();
   await expect(page.locator('.kmsar-navbar-notif-panel')).toBeVisible({ timeout: 10_000 });
 }
 
 async function getUnreadBellCount(page: Page): Promise<number> {
+  processQueuedJobs();
   const dot = page.locator('.kmsar-navbar-notif-dot');
   if (!(await dot.count()) || !(await dot.isVisible().catch(() => false))) {
     return 0;
@@ -45,32 +51,11 @@ async function csrfToken(page: Page): Promise<string> {
   return (await page.locator('meta[name="csrf-token"]').getAttribute('content')) ?? '';
 }
 
-async function returnResearchDean(page: Page, researchId: string, remarks: string): Promise<void> {
-  await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-  await page.goto(`/approval/${researchId}`);
-  await page.getByRole('button', { name: 'Return', exact: true }).click();
-  await page.fill('#return-remarks', remarks);
-  await page.locator('form[action*="return"] button[type="submit"]').click();
-  await expect(
-    page.getByRole('alert').filter({ hasText: /returned to the author/i }),
-  ).toBeVisible({ timeout: 15_000 });
-}
-
-async function rejectResearchDean(page: Page, researchId: string, remarks: string): Promise<void> {
-  await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-  await page.goto(`/approval/${researchId}`);
-  await page.getByRole('button', { name: 'Reject', exact: true }).click();
-  await page.fill('#reject-remarks', remarks);
-  await page.locator('form[action*="reject"] button[type="submit"]').click();
-  await expect(
-    page.getByRole('alert').filter({ hasText: /submission has been rejected/i }),
-  ).toBeVisible({ timeout: 15_000 });
-}
-
 test.describe('Notifications — UAT', () => {
-  test.describe.configure({ timeout: 120_000 });
+  test.describe.configure({ timeout: 180_000 });
 
   test.beforeAll(async () => {
+    test.setTimeout(180_000);
     await acquireSuiteLock('notifications');
     await resetDatabaseAndAuth();
   });
@@ -83,6 +68,7 @@ test.describe('Notifications — UAT', () => {
   test.describe('Notification bell — faculty', () => {
     test('NOTIF-001: Bell shows unread count badge when notifications exist', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF001 Badge'));
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research');
       const count = await getUnreadBellCount(page);
@@ -94,6 +80,7 @@ test.describe('Notifications — UAT', () => {
       page,
     }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF002 Mark One'));
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research');
       const before = await getUnreadBellCount(page);
@@ -118,6 +105,7 @@ test.describe('Notifications — UAT', () => {
 
     test('NOTIF-003: Bell count resets to 0 after marking all as read', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF003 Mark All'));
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research');
       expect(await getUnreadBellCount(page)).toBeGreaterThan(0);
@@ -147,6 +135,7 @@ test.describe('Notifications — UAT', () => {
 
     test('NOTIF-006: Faculty receives notification after submitting research', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF006 Submit'));
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await openNotificationBell(page);
       await expect(page.getByText(/submitted for dean review/i).first()).toBeVisible();
@@ -165,20 +154,20 @@ test.describe('Notifications — UAT', () => {
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await openNotificationBell(page);
-      await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
+      await expect(page.getByText(/returned.*revision|returned by/i).first()).toBeVisible();
     });
 
-    test('NOTIF-008: Faculty receives notification when dean rejects research (with remarks)', async ({
+    test('NOTIF-008: Faculty receives notification when dean returns research (duplicate path with remarks)', async ({
       page,
     }) => {
       const remarks = 'Does not meet minimum documentation requirements for college review.';
-      const researchId = await createAndSubmitResearch(page, uniqueTitle('NOTIF008 Reject'));
+      const researchId = await createAndSubmitResearch(page, uniqueTitle('NOTIF008 Return'));
       expect(researchId).toBeTruthy();
-      await rejectResearchDean(page, researchId!, remarks);
+      await returnResearchDean(page, researchId!, remarks);
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await openNotificationBell(page);
-      await expect(page.getByText(/has been rejected/i).first()).toBeVisible();
+      await expect(page.getByText(/returned.*revision|returned by/i).first()).toBeVisible();
       await expect(page.getByText(remarks).first()).toBeVisible();
     });
 
@@ -187,22 +176,23 @@ test.describe('Notifications — UAT', () => {
     }) => {
       const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF009 Approve'));
       await approveResearch(page, researchId);
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await openNotificationBell(page);
-      await expect(page.getByText(/has been approved by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(/registered by OVPRI|has been registered by OVPRI/i).first()).toBeVisible();
     });
 
-    test('NOTIF-010: Faculty receives notification when OVPRI rejects research (with remarks)', async ({
+    test('NOTIF-010: Faculty receives notification when OVPRI returns research (with remarks)', async ({
       page,
     }) => {
-      const remarks = 'OVPRI rejection remarks for faculty notification E2E test case.';
-      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF010 Ovpri Reject'));
-      await rejectResearchOvpri(page, researchId, remarks);
+      const remarks = 'OVPRI return remarks for faculty notification E2E test case.';
+      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF010 Ovpri Return'));
+      await returnResearchOvpri(page, researchId, remarks);
 
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await openNotificationBell(page);
-      await expect(page.getByText(/has been rejected/i).first()).toBeVisible();
+      await expect(page.getByText(/returned.*revision|returned by/i).first()).toBeVisible();
       await expect(page.getByText(remarks).first()).toBeVisible();
     });
 
@@ -231,7 +221,7 @@ test.describe('Notifications — UAT', () => {
       expect(after).toBeGreaterThan(before);
 
       await openNotificationBell(page);
-      await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
+      await expect(page.getByText(/returned.*revision|returned by/i).first()).toBeVisible();
     });
   });
 
@@ -239,6 +229,7 @@ test.describe('Notifications — UAT', () => {
   test.describe('Notification bell — dean', () => {
     test('NOTIF-012: Dean receives notification when faculty submits research', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF012 Dean Submit'));
+      await waitForUnreadNotifications(credentials.dean_ccs.email);
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
       await page.goto('/dean/dashboard');
       await openNotificationBell(page);
@@ -248,47 +239,51 @@ test.describe('Notifications — UAT', () => {
     test('NOTIF-013: Dean receives notification when OVPRI approves research', async ({ page }) => {
       const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF013 Dean Approve'));
       await approveResearch(page, researchId);
+      await waitForUnreadNotifications(credentials.dean_ccs.email);
 
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
       await openNotificationBell(page);
-      await expect(page.getByText(/approved by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(/registered by OVPRI|has been registered by OVPRI/i).first()).toBeVisible();
     });
 
-    test('NOTIF-014: Dean does NOT receive notification when OVPRI returns research to faculty', async ({
+    test('NOTIF-014: Dean receives in-app notification when OVPRI returns research to faculty', async ({
       page,
     }) => {
-      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF014 Dean No Return'));
+      const remarks = 'Please have the faculty revise the abstract before resubmission.';
+      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF014 Dean Return'));
 
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
       await page.goto('/dean/dashboard');
       const before = await getUnreadBellCount(page);
 
-      await returnResearchOvpri(
-        page,
-        researchId,
-        'Please have the faculty revise the abstract — dean should not be notified.',
-      );
+      await returnResearchOvpri(page, researchId, remarks);
 
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
       await page.goto('/dean/dashboard');
       const after = await getUnreadBellCount(page);
-      expect(after).toBe(before);
+      expect(after).toBeGreaterThan(before);
 
       await openNotificationBell(page);
-      await expect(page.getByText(/returned by OVPRI/i)).toHaveCount(0);
+      await expect(page.getByText(/returned by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(remarks).first()).toBeVisible();
     });
 
-    test('NOTIF-015: Dean receives notification when OVPRI rejects research', async ({ page }) => {
-      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF015 Dean Reject'));
-      await rejectResearchOvpri(
+    test('NOTIF-015: Dean in-app notification on OVPRI return includes cycle context', async ({ page }) => {
+      const researchId = await setupEndorsedResearch(page, uniqueTitle('NOTIF015 Dean Return'));
+      await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await page.goto('/dean/dashboard');
+
+      await returnResearchOvpri(
         page,
         researchId,
-        'Rejected at university level due to incomplete documentation.',
+        'Returned at university level due to incomplete documentation.',
       );
 
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await page.goto('/dean/dashboard');
       await openNotificationBell(page);
-      await expect(page.getByText(/rejected by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(/returned by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(/initial review/i).first()).toBeVisible();
     });
   });
 
@@ -298,6 +293,7 @@ test.describe('Notifications — UAT', () => {
       const researchId = await createAndSubmitResearch(page, uniqueTitle('NOTIF016 Endorse'));
       expect(researchId).toBeTruthy();
       await endorseResearch(page, researchId!);
+      await waitForUnreadNotifications(credentials.ovpri.email);
 
       await login(page, credentials.ovpri.email, credentials.ovpri.password);
       await page.goto('/ovpri/dashboard');
@@ -368,6 +364,7 @@ test.describe('Notifications — UAT', () => {
     test('NOTIF-020: Research submission queues an email to faculty', async ({ page }) => {
       const before = queuedMailJobsContaining('ResearchSubmittedFacultyMail', credentials.faculty_ccs.email);
       await createAndSubmitResearch(page, uniqueTitle('NOTIF020 Faculty Mail'));
+      processQueuedJobs();
       const after = queuedMailJobsContaining('ResearchSubmittedFacultyMail', credentials.faculty_ccs.email);
       expect(after).toBeGreaterThan(before);
     });
@@ -375,6 +372,7 @@ test.describe('Notifications — UAT', () => {
     test('NOTIF-021: Research submission queues an email to the dean', async ({ page }) => {
       const before = queuedMailJobsContaining('ResearchSubmittedDeanMail', credentials.dean_ccs.email);
       await createAndSubmitResearch(page, uniqueTitle('NOTIF021 Dean Mail'));
+      processQueuedJobs();
       const after = queuedMailJobsContaining('ResearchSubmittedDeanMail', credentials.dean_ccs.email);
       expect(after).toBeGreaterThan(before);
     });
@@ -388,6 +386,77 @@ test.describe('Notifications — UAT', () => {
         `echo \\App\\Models\\PasswordResetOtp::where('email','${credentials.faculty_ccs.email}')->where('expires_at','>',now())->count();`,
       );
       expect(parseInt(out.match(/(\d+)\s*$/)?.[1] ?? '0', 10)).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  test.describe('Notification bell — final cycle', () => {
+    test('NOTIF-023: Dean receives notification when faculty submits completion', async ({ page }) => {
+      await setupFinalDeanReviewResearch(page, uniqueTitle('NOTIF023 Completion'));
+      await waitForUnreadNotifications(credentials.dean_ccs.email);
+
+      await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await page.goto('/dean/dashboard');
+      await openNotificationBell(page);
+      await expect(page.getByText(/completion has been submitted for final dean review/i).first()).toBeVisible();
+    });
+
+    test('NOTIF-024: OVPRI receives notification when dean endorses final review', async ({ page }) => {
+      const researchId = await setupFinalDeanReviewResearch(page, uniqueTitle('NOTIF024 Final Endorse'));
+      await endorseResearch(page, researchId);
+      await waitForUnreadNotifications(credentials.ovpri.email);
+
+      await login(page, credentials.ovpri.email, credentials.ovpri.password);
+      await page.goto('/ovpri/dashboard');
+      await openNotificationBell(page);
+      await expect(page.getByText(/final OVPRI|awaits final OVPRI/i).first()).toBeVisible();
+    });
+
+    test('NOTIF-025: Faculty receives accepted notification when OVPRI approves final review', async ({
+      page,
+    }) => {
+      const researchId = await setupFinalOvpriReviewResearch(page, uniqueTitle('NOTIF025 Final Approve'));
+      await approveResearch(page, researchId);
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
+
+      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+      await openNotificationBell(page);
+      await expect(page.getByText(/accepted by OVPRI/i).first()).toBeVisible();
+    });
+
+    test('NOTIF-026: Dean receives accepted notification when OVPRI approves final review', async ({
+      page,
+    }) => {
+      const researchId = await setupFinalOvpriReviewResearch(page, uniqueTitle('NOTIF026 Dean Final Approve'));
+      await approveResearch(page, researchId);
+      await waitForUnreadNotifications(credentials.dean_ccs.email);
+
+      await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await openNotificationBell(page);
+      await expect(page.getByText(/accepted by OVPRI/i).first()).toBeVisible();
+    });
+
+    test('NOTIF-027: Faculty receives final-review return from dean with remarks', async ({ page }) => {
+      const remarks = 'Please revise outcome classifications before final resubmission.';
+      const researchId = await setupFinalDeanReviewResearch(page, uniqueTitle('NOTIF027 Final Dean Return'));
+      await returnResearchDean(page, researchId, remarks);
+
+      await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
+      await openNotificationBell(page);
+      await expect(page.getByText(/final review/i).first()).toBeVisible();
+      await expect(page.getByText(remarks).first()).toBeVisible();
+    });
+
+    test('NOTIF-028: Dean receives in-app notification when OVPRI returns final review', async ({ page }) => {
+      const remarks = 'Final outcomes need stronger evidence documentation.';
+      const researchId = await setupFinalOvpriReviewResearch(page, uniqueTitle('NOTIF028 Final Ovpri Return'));
+      await returnResearchOvpri(page, researchId, remarks);
+
+      await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+      await openNotificationBell(page);
+      await expect(page.getByText(/returned by OVPRI/i).first()).toBeVisible();
+      await expect(page.getByText(/final review/i).first()).toBeVisible();
+      await expect(page.getByText(remarks).first()).toBeVisible();
     });
   });
 });

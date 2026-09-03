@@ -55,24 +55,26 @@ class ProfileController extends Controller
             'programsUrl' => route('api.programs'),
         ];
 
+        $nameFieldsLocked = $this->locksProfileNameFields($user);
+
         return view('profile.edit', compact(
             'user',
             'colleges',
             'programs',
             'programsForSelect',
             'profileCollegeProgramInitial',
+            'nameFieldsLocked',
         ));
     }
 
     public function update(Request $request)
     {
         $user = auth()->user();
+        $nameFieldsLocked = $this->locksProfileNameFields($user);
 
         $currentEmployeeNumber = $user->employee_number;
 
-        $validator = Validator::make($request->all(), [
-            'first_name' => ['required', 'string', 'max:100'],
-            'last_name' => ['required', 'string', 'max:100'],
+        $rules = [
             'middle_name' => ['nullable', 'string', 'max:100'],
             'suffix' => ['nullable', 'string', 'max:20'],
             'employee_number' => [
@@ -91,6 +93,14 @@ class ProfileController extends Controller
                     }
                 },
             ],
+        ];
+
+        if (! $nameFieldsLocked) {
+            $rules['first_name'] = ['required', 'string', 'max:100'];
+            $rules['last_name'] = ['required', 'string', 'max:100'];
+        }
+
+        $validator = Validator::make($request->all(), $rules + [
             'college_id' => ['nullable', 'exists:colleges,id'],
             'program_id' => [
                 'nullable',
@@ -122,12 +132,15 @@ class ProfileController extends Controller
 
         $validated = $validator->validated();
 
+        $firstName = $nameFieldsLocked ? $user->first_name : $validated['first_name'];
+        $lastName = $nameFieldsLocked ? $user->last_name : $validated['last_name'];
+
         $user->update([
-            'first_name' => $validated['first_name'],
-            'last_name' => $validated['last_name'],
+            'first_name' => $firstName,
+            'last_name' => $lastName,
             'middle_name' => $validated['middle_name'] ?: null,
             'suffix' => $validated['suffix'] ?? null,
-            'name' => trim($validated['first_name'].' '.$validated['last_name']),
+            'name' => trim($firstName.' '.$lastName),
             'employee_number' => $validated['employee_number'] ?? null,
             'college_id' => $validated['college_id'] ?? null,
             'program_id' => $validated['program_id'] ?? null,
@@ -174,5 +187,10 @@ class ProfileController extends Controller
 
         return back()->with('success',
             'Password changed successfully.');
+    }
+
+    private function locksProfileNameFields(\App\Models\User $user): bool
+    {
+        return ! $user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'super_admin']);
     }
 }

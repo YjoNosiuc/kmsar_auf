@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\UserApprovedMail;
 use App\Models\College;
 use App\Models\User;
+use App\Support\KmsarUserManagement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,37 +17,13 @@ use Illuminate\View\View;
 
 class UserController extends Controller
 {
-    private const KMSAR_ROLES = [
-        'super_admin',
-        'ovpri_admin',
-        'cdaic_admin',
-        'college_dean',
-        'faculty',
-        'viewer',
-    ];
-
-    /**
-     * Human labels for roles assignable through user management.
-     *
-     * @return array<string, string>
-     */
-    public static function kmsarRoleLabels(): array
-    {
-        return [
-            'super_admin' => __('Super Admin'),
-            'ovpri_admin' => __('OVPRI Admin'),
-            'cdaic_admin' => __('CDAIC Admin'),
-            'college_dean' => __('Dean/Head'),
-            'faculty' => __('Faculty'),
-            'viewer' => __('Viewer'),
-        ];
-    }
-
     public function index(): View
     {
+        $excludedRoles = KmsarUserManagement::excludedDirectoryRoles();
+
         $users = User::query()
             ->where('is_pending', false)
-            ->whereDoesntHave('roles', fn ($q) => $q->where('name', 'registrar'))
+            ->whereDoesntHave('roles', fn ($q) => $q->whereIn('name', $excludedRoles))
             ->with(['roles', 'college', 'program'])
             ->orderBy('name')
             ->get();
@@ -66,7 +43,10 @@ class UserController extends Controller
             'users' => $users,
             'pendingUsers' => $pendingUsers,
             'colleges' => $colleges,
-            'kmsarRoles' => self::kmsarRoleLabels(),
+            'kmsarRoles' => KmsarUserManagement::assignableRoleLabels(),
+            'userTypeLabels' => KmsarUserManagement::userTypeLabels(),
+            'userTypeRoleMap' => config('kmsar.user_type_allowed_roles'),
+            'userTypeDefaultRoles' => config('kmsar.user_type_default_roles'),
         ]);
     }
 
@@ -75,7 +55,7 @@ class UserController extends Controller
         return response('users.create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
         $this->normalizeOptionalUserFields($request);
 
@@ -96,11 +76,13 @@ class UserController extends Controller
             'college_id' => ['required', 'exists:colleges,id'],
             'program_id' => ['nullable', 'exists:programs,id'],
             'office' => ['nullable', 'string', 'max:100'],
-            'user_type' => ['nullable', 'in:faculty,staff,student,external_affiliate'],
+            'user_type' => ['required', Rule::in(KmsarUserManagement::userTypes())],
             'institution' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', 'string', Rule::in(self::KMSAR_ROLES)],
+            'role' => ['required', 'string', Rule::in(KmsarUserManagement::assignableRoles())],
             'is_active' => ['sometimes', 'boolean'],
         ]);
+
+        KmsarUserManagement::assertRoleAllowedForUserType($validated['user_type'], $validated['role']);
 
         $user = User::create([
             'employee_number' => $validated['employee_number'] ?? null,
@@ -114,7 +96,7 @@ class UserController extends Controller
             'college_id' => $validated['college_id'] ?? null,
             'program_id' => $validated['program_id'] ?? null,
             'office' => filled($validated['office'] ?? '') ? strtoupper(trim((string) $validated['office'])) : null,
-            'user_type' => $validated['user_type'] ?? null,
+            'user_type' => $validated['user_type'],
             'institution' => $validated['institution'] ?? null,
             'is_active' => $request->boolean('is_active', true),
             'is_pending' => false,
@@ -184,11 +166,13 @@ class UserController extends Controller
             'college_id' => ['nullable', 'exists:colleges,id'],
             'program_id' => ['nullable', 'exists:programs,id'],
             'office' => ['nullable', 'string', 'max:100'],
-            'user_type' => ['nullable', 'in:faculty,staff,student,external_affiliate'],
+            'user_type' => ['required', Rule::in(KmsarUserManagement::userTypes())],
             'institution' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', 'string', Rule::in(self::KMSAR_ROLES)],
+            'role' => ['required', 'string', Rule::in(KmsarUserManagement::assignableRoles())],
             'is_active' => ['sometimes', 'boolean'],
         ]);
+
+        KmsarUserManagement::assertRoleAllowedForUserType($validated['user_type'], $validated['role']);
 
         $user->fill([
             'employee_number' => $validated['employee_number'] ?? null,
@@ -201,7 +185,7 @@ class UserController extends Controller
             'college_id' => $validated['college_id'] ?? null,
             'program_id' => $validated['program_id'] ?? null,
             'office' => filled($validated['office'] ?? '') ? strtoupper(trim((string) $validated['office'])) : null,
-            'user_type' => $validated['user_type'] ?? null,
+            'user_type' => $validated['user_type'],
             'institution' => $validated['institution'] ?? null,
             'is_active' => $request->boolean('is_active'),
         ]);
@@ -228,11 +212,15 @@ class UserController extends Controller
         abort_unless($user->is_pending, 404);
 
         $validated = $request->validate([
-            'role' => ['required', 'string', 'in:faculty,viewer,college_dean,ovpri_admin,cdaic_admin,super_admin'],
+            'role' => ['nullable', 'string', Rule::in(KmsarUserManagement::assignableRoles())],
         ]);
 
+        $role = $validated['role'] ?? KmsarUserManagement::defaultRoleForUserType($user->user_type);
+
+        KmsarUserManagement::assertRoleAllowedForUserType($user->user_type, $role);
+
         $user->update(['is_active' => true, 'is_pending' => false]);
-        $user->syncRoles([$validated['role']]);
+        $user->syncRoles([$role]);
 
         try {
             Mail::to($user->email)->send(new UserApprovedMail($user));

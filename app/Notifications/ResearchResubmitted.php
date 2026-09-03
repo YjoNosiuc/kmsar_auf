@@ -5,7 +5,7 @@ namespace App\Notifications;
 use App\Models\Research;
 use App\Support\ResearchNotificationCopy;
 
-class ResearchSubmitted extends QueuedResearchNotification
+class ResearchResubmitted extends QueuedResearchNotification
 {
     use SendsResearchNotificationMail;
 
@@ -16,9 +16,9 @@ class ResearchSubmitted extends QueuedResearchNotification
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [
-            'message' => ResearchNotificationCopy::submittedToDean($this->research),
+            'message' => ResearchNotificationCopy::resubmittedToDean($this->research),
             'action_url' => route('approval.review', $this->research),
-            'type' => 'submitted',
+            'type' => 'resubmitted',
         ]);
     }
 }

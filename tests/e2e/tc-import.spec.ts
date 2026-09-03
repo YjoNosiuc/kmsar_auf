@@ -9,6 +9,7 @@ import {
   submitResearchFromDocuments,
   openFacultyResearchList,
   facultyResearchCard,
+  fillRegistrationStep1,
 } from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
@@ -150,9 +151,9 @@ function documentLinksForTitle(title: string): string {
   return out.trim().split(/\r?\n/).pop()?.trim() ?? '';
 }
 
-function setResearchStageByTitle(title: string, stage: string): void {
+function setResearchWorkflowStatusByTitle(title: string, status: string): void {
   runArtisan(
-    `tinker --execute="\\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->update(['approval_stage' => '${stage}']);"`,
+    `tinker --execute="\\App\\Models\\Research::whereRaw('LOWER(title) = ?', [strtolower('${title}')])->update(['status' => '${status}']);"`,
   );
 }
 
@@ -415,14 +416,9 @@ test.describe('Import Data — UAT Test Suite', () => {
 
       const title = `IMPORT-018 NEW RESEARCH ${Date.now()}`;
       await page.goto('/research/create');
+      await page.getByRole('button', { name: 'Register new research', exact: true }).click();
       await page.waitForURL(/\/research\/\d+\/details/);
-      await page.fill('textarea[name="title"]', title);
-      await page.selectOption('select[name="research_classification"]', 'internally_funded');
-      await page.check('input[name="expected_output[]"][value="publication"]');
-      await page.fill('input[name="start_date"]', '2026-01-01');
-      await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-      await page.selectOption('select[name="status"]', 'draft');
-      await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+      await fillRegistrationStep1(page, title);
       await page.getByRole('button', { name: 'Continue to authors' }).click();
       await page.waitForURL(/\/authors/);
       await selectCurrentUserAsPrimary(page);
@@ -480,7 +476,7 @@ test.describe('Import Data — UAT Test Suite', () => {
     });
 
     test('IMPORT-021: Co-author with can_edit=1 — Edit button visible', async ({ page }) => {
-      setResearchStageByTitle(TITLE_TWO_CO, 'draft');
+      setResearchWorkflowStatusByTitle(TITLE_TWO_CO, 'draft');
 
       await logout(page);
       await login(page, importedFaculty.two.email, importedFaculty.two.password);
@@ -491,7 +487,7 @@ test.describe('Import Data — UAT Test Suite', () => {
     });
 
     test('IMPORT-022: Co-author with can_edit=0 — Edit button NOT visible', async ({ page }) => {
-      setResearchStageByTitle(TITLE_ONE_CO, 'draft');
+      setResearchWorkflowStatusByTitle(TITLE_ONE_CO, 'draft');
 
       await logout(page);
       await login(page, importedFaculty.one.email, importedFaculty.one.password);

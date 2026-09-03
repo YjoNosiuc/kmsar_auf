@@ -7,11 +7,13 @@
 @endsection
 
 @section('content')
+    @php
+        $maxUploadFiles = $research->maxFileDocuments();
+        $fileDocumentCount = $research->fileDocumentsCount();
+        $remainingFileUploadSlots = $research->remainingFileUploadSlots();
+    @endphp
     <div
-        x-data="{
-            tab: 'upload',
-            documentCount: {{ (int) $research->documents->count() }},
-        }"
+        x-data="kmsarResearchDocumentsPage({{ $fileDocumentCount }}, {{ $maxUploadFiles }}, {{ (int) $research->documents->count() }})"
         x-init="@if (session('success')) $nextTick(() => document.getElementById('upload-success-alert')?.scrollIntoView({ behavior: 'smooth', block: 'start' })) @endif"
     >
         <x-page-header
@@ -50,6 +52,16 @@
                 </ul>
             </x-alert>
         @endif
+
+        <div class="kmsar-alert kmsar-alert--info mb-6" role="status">
+            <p class="text-sm mb-0 font-semibold text-slate-900">
+                {{ __('File upload limit') }}
+            </p>
+            <p class="text-sm mb-0 mt-1">
+                <span x-text="counterText">{{ $fileDocumentCount }} {{ __('of') }} {{ $maxUploadFiles }} {{ __('files uploaded') }} · {{ $remainingFileUploadSlots }} {{ __('remaining') }}</span>
+            </p>
+            <p class="kmsar-form-hint mt-1 mb-0">{{ __('External links are not counted toward the file limit.') }}</p>
+        </div>
 
         @include('faculty.research.partials.registration-stepper', [
             'currentStep' => 3,
@@ -184,137 +196,25 @@
                     <form action="{{ route('documents.upload', $research) }}" method="POST" enctype="multipart/form-data">
                         @csrf
 
-                        <div x-data="{ uploadType: 'file' }">
+                        @include('faculty.research.partials.document-upload-fields', ['maxUploadFiles' => $maxUploadFiles])
 
-                            {{-- Upload method: kmsar-tabs / kmsar-tab (matches page tab pattern) --}}
-                            <div class="mb-4">
-                                <p class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
-                                    {{ __('Upload method') }}
-                                </p>
-                                <div class="kmsar-tabs mb-4" role="tablist" aria-label="{{ __('Upload method') }}">
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        class="kmsar-tab"
-                                        :class="{ 'active': uploadType === 'file' }"
-                                        :aria-selected="uploadType === 'file'"
-                                        @click="uploadType='file'"
-                                    >{{ __('Upload File') }}</button>
-                                    <button
-                                        type="button"
-                                        role="tab"
-                                        class="kmsar-tab"
-                                        :class="{ 'active': uploadType === 'link' }"
-                                        :aria-selected="uploadType === 'link'"
-                                        @click="uploadType='link'"
-                                    >{{ __('Add Link') }}</button>
-                                </div>
-                            </div>
-
-                            {{-- File upload panel --}}
-                            <div x-show="uploadType==='file'">
-                                <label
-                                    class="kmsar-dropzone block max-w-full cursor-pointer"
-                                    @dragover.prevent="$el.classList.add('kmsar-dropzone--drag')"
-                                    @dragleave.prevent="$el.classList.remove('kmsar-dropzone--drag')"
-                                    @drop.prevent="$el.classList.remove('kmsar-dropzone--drag')"
-                                >
-                                    <svg class="kmsar-dropzone-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                                    </svg>
-                                    <p class="kmsar-dropzone-title"><span>{{ __('Choose files') }}</span> {{ __('or drag and drop') }}</p>
-                                    <p class="kmsar-form-hint kmsar-dropzone-hint mt-0">{{ __('Maximum 2 files · PDF, Word, Excel, Image · Max 100MB each') }}</p>
-                                    <input id="kmsar-document-file-input" type="file" name="files[]" multiple
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                                        class="hidden"
-                                        onchange="
-                                            if(this.files.length > 2){
-                                                alert('{{ __('You can only upload 2 files at a time.') }}');
-                                                this.value='';
-                                                if (typeof window.kmsarClearDocumentFilePreview === 'function') kmsarClearDocumentFilePreview(this);
-                                                return;
-                                            }
-                                            const label = this.closest('label').querySelector('.file-name-display');
-                                            if(label) {
-                                                if(this.files.length === 0) label.textContent = '';
-                                                else if(this.files.length === 1) label.textContent = this.files[0].name;
-                                                else label.textContent = this.files.length + ' files selected';
-                                            }
-                                            if (typeof window.kmsarUpdateDocumentFilePreview === 'function') kmsarUpdateDocumentFilePreview(this);
-                                        ">
-                                    <p class="file-name-display text-sm text-slate-600 mt-2 min-h-[1rem]"></p>
-                                </label>
-
-                                <div id="kmsar-doc-file-preview-root" class="kmsar-doc-file-preview-root" style="display:none;margin-top:16px;border:1px solid #E2E8F0;border-radius:10px;padding:16px;background:#F8FAFC;box-sizing:border-box;" hidden>
-                                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;">
-                                        <span style="font-size:13px;font-weight:600;color:#0F172A;">{{ __('Preview') }}</span>
-                                        <button type="button" id="kmsar-doc-file-preview-dismiss" class="kmsar-doc-file-preview-dismiss" aria-label="{{ __('Clear preview') }}" title="{{ __('Clear preview') }}" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border:none;background:transparent;color:#64748B;border-radius:6px;cursor:pointer;transition:background 0.15s,color 0.15s;">
-                                            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-                                        </button>
-                                    </div>
-                                    <div id="kmsar-doc-file-preview-body" style="display:flex;flex-direction:column;gap:16px;"></div>
-                                </div>
-                            </div>
-
-                            {{-- Link panel --}}
-                            <div x-show="uploadType==='link'" x-cloak>
-                                <div style="border:1px solid #E2E8F0;border-radius:10px;padding:20px;background:#F8FAFC;">
-                                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-                                        <div style="width:36px;height:36px;background:#EFF6FF;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                                            <svg style="width:18px;height:18px;color:#1E3A8A;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <p style="font-size:13px;font-weight:600;color:#0F172A;margin:0 0 2px;">{{ __('Add a document link') }}</p>
-                                            <p style="font-size:12px;color:#94A3B8;margin:0;">{{ __('Google Drive, OneDrive, DOI, or any public URL') }}</p>
-                                        </div>
-                                    </div>
-
-                                    <div style="position:relative;">
-                                        <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94A3B8;">
-                                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/>
-                                            </svg>
-                                        </span>
-                                        <input type="text" name="external_link"
-                                            placeholder=""
-                                            style="width:100%;padding:10px 12px 10px 34px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;color:#0F172A;box-sizing:border-box;transition:border-color 0.15s;"
-                                            onfocus="this.style.borderColor='#1E3A8A';this.style.boxShadow='0 0 0 3px rgba(30,58,138,0.08)'"
-                                            onblur="this.style.borderColor='#E2E8F0';this.style.boxShadow='none'">
-                                    </div>
-
-                                    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-                                        <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">
-                                            <svg style="width:10px;height:10px;" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
-                                            Google Drive
-                                        </span>
-                                        <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">
-                                            <svg style="width:10px;height:10px;" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
-                                            OneDrive
-                                        </span>
-                                        <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;background:#EFF6FF;color:#1D4ED8;border-radius:6px;font-size:11px;font-weight:600;">
-                                            <svg style="width:10px;height:10px;" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"/><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z"/></svg>
-                                            DOI Link
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {{-- Submit button --}}
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 1.5rem;">
-                                <a href="{{ route('research.wizard.authors', $research) }}" class="kmsar-btn kmsar-btn--secondary">{{ __('Back') }}</a>
-                                <button type="submit" class="kmsar-btn kmsar-btn--primary">
-                                    {{ __('Save Document') }}
-                                </button>
-                            </div>
-
+                        {{-- Submit button --}}
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 1.5rem;">
+                            <a href="{{ route('research.wizard.authors', $research) }}" class="kmsar-btn kmsar-btn--secondary">{{ __('Back') }}</a>
+                            <button type="submit" class="kmsar-btn kmsar-btn--primary">
+                                {{ __('Save Document') }}
+                            </button>
                         </div>
                     </form>
 
                     @if ($research->documents->isNotEmpty())
                         <div>
-                            <h3 class="kmsar-h3 mb-3">{{ __('Uploaded files') }}</h3>
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                                <h3 class="kmsar-h3 mb-0">{{ __('Uploaded files') }}</h3>
+                                <p class="text-sm text-slate-600 mb-0">
+                                    <span x-text="counterText">{{ $fileDocumentCount }} {{ __('of') }} {{ $maxUploadFiles }} {{ __('files uploaded') }} · {{ $remainingFileUploadSlots }} {{ __('remaining') }}</span>
+                                </p>
+                            </div>
                             <div class="space-y-0 divide-y divide-[var(--color-border)] border border-[var(--color-border)] rounded-lg overflow-hidden">
                                 @foreach ($research->documents as $document)
                                     @php
@@ -355,7 +255,7 @@
                                                 </a>
                                                 </div>
                                             @endif
-                                            @if(\App\Support\ResearchStatus::isFullyEditable((string) $research->status) && (int) $document->uploaded_by === (int) auth()->id())
+                                            @if(\App\Support\ResearchStatus::canModifyDocuments((string) $research->status) && (int) $document->uploaded_by === (int) auth()->id())
                                                 <form method="POST" action="{{ route('documents.destroy', $document) }}" style="display:inline;">
                                                     @csrf
                                                     @method('DELETE')
@@ -444,154 +344,12 @@
     </div>
 @endsection
 
+@push('scripts-head')
+@include('faculty.research.partials.document-upload-alpine')
+@endpush
+
 @push('scripts')
 <script>
-(function () {
-    var kmsarBlobUrls = [];
-
-    function kmsarRevokeBlobUrls() {
-        kmsarBlobUrls.forEach(function (u) {
-            try { URL.revokeObjectURL(u); } catch (e) {}
-        });
-        kmsarBlobUrls = [];
-    }
-
-    function kmsarFormatFileSize(bytes) {
-        if (!bytes && bytes !== 0) return '—';
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / 1048576).toFixed(1) + ' MB';
-    }
-
-    function kmsarFileTypeLabel(file) {
-        if (file.type) return file.type;
-        var n = file.name || '';
-        var i = n.lastIndexOf('.');
-        return i >= 0 ? n.slice(i + 1).toUpperCase() : @json(__('Unknown type'));
-    }
-
-    function kmsarGetPreviewKind(file) {
-        var name = (file.name || '').toLowerCase();
-        var m = file.type || '';
-        if (m === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
-        if (m.indexOf('image/') === 0 || /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(name)) return 'image';
-        return 'other';
-    }
-
-    function kmsarSetPreviewRootVisible(root, visible) {
-        if (!root) return;
-        if (visible) {
-            root.removeAttribute('hidden');
-            root.style.display = 'block';
-        } else {
-            root.setAttribute('hidden', '');
-            root.style.display = 'none';
-        }
-    }
-
-    window.kmsarClearDocumentFilePreview = function (input) {
-        kmsarRevokeBlobUrls();
-        var root = document.getElementById('kmsar-doc-file-preview-root');
-        var body = document.getElementById('kmsar-doc-file-preview-body');
-        if (body) body.innerHTML = '';
-        kmsarSetPreviewRootVisible(root, false);
-        if (input) {
-            input.value = '';
-            var label = input.closest('label');
-            if (label) {
-                var disp = label.querySelector('.file-name-display');
-                if (disp) disp.textContent = '';
-            }
-        }
-    };
-
-    window.kmsarUpdateDocumentFilePreview = function (input) {
-        var root = document.getElementById('kmsar-doc-file-preview-root');
-        var body = document.getElementById('kmsar-doc-file-preview-body');
-        if (!root || !body) return;
-
-        kmsarRevokeBlobUrls();
-        body.innerHTML = '';
-
-        if (!input || !input.files || input.files.length === 0) {
-            kmsarSetPreviewRootVisible(root, false);
-            return;
-        }
-
-        var cardShell = 'border:1px solid #E2E8F0;border-radius:8px;background:#fff;padding:12px;overflow:hidden;box-sizing:border-box;';
-
-        for (var i = 0; i < input.files.length; i++) {
-            (function (file) {
-                var url = URL.createObjectURL(file);
-                kmsarBlobUrls.push(url);
-                var kind = kmsarGetPreviewKind(file);
-                var wrap = document.createElement('div');
-                wrap.style.cssText = cardShell;
-
-                if (kind === 'pdf' || kind === 'image') {
-                    var fn = document.createElement('p');
-                    fn.style.cssText = 'font-size:12px;font-weight:600;color:#0F172A;margin:0 0 10px;word-break:break-all;';
-                    fn.textContent = file.name;
-                    wrap.appendChild(fn);
-                }
-
-                if (kind === 'pdf') {
-                    var iframe = document.createElement('iframe');
-                    iframe.src = url;
-                    iframe.setAttribute('title', file.name);
-                    iframe.style.cssText = 'width:100%;height:400px;border:none;border-radius:4px;display:block;';
-                    wrap.appendChild(iframe);
-                } else if (kind === 'image') {
-                    var img = document.createElement('img');
-                    img.src = url;
-                    img.alt = file.name;
-                    img.style.cssText = 'max-width:100%;height:auto;display:block;border-radius:4px;';
-                    wrap.appendChild(img);
-                } else {
-                    var row = document.createElement('div');
-                    row.style.cssText = 'display:flex;align-items:flex-start;gap:12px;';
-                    var iconBox = document.createElement('div');
-                    iconBox.style.cssText = 'width:44px;height:44px;background:#EFF6FF;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;';
-                    iconBox.innerHTML = '<svg style="width:22px;height:22px;color:#1E3A8A;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
-                    var meta = document.createElement('div');
-                    meta.style.cssText = 'min-width:0;flex:1;';
-                    var tName = document.createElement('p');
-                    tName.style.cssText = 'font-size:13px;font-weight:600;color:#0F172A;margin:0 0 4px;word-break:break-all;';
-                    tName.textContent = file.name;
-                    var tSize = document.createElement('p');
-                    tSize.style.cssText = 'font-size:12px;color:#64748B;margin:0 0 4px;';
-                    tSize.textContent = kmsarFormatFileSize(file.size);
-                    var tType = document.createElement('p');
-                    tType.style.cssText = 'font-size:12px;color:#94A3B8;margin:0;';
-                    tType.textContent = kmsarFileTypeLabel(file);
-                    meta.appendChild(tName);
-                    meta.appendChild(tSize);
-                    meta.appendChild(tType);
-                    row.appendChild(iconBox);
-                    row.appendChild(meta);
-                    wrap.appendChild(row);
-                }
-
-                body.appendChild(wrap);
-            })(input.files[i]);
-        }
-
-        kmsarSetPreviewRootVisible(root, true);
-    };
-
-    document.addEventListener('DOMContentLoaded', function () {
-        var btn = document.getElementById('kmsar-doc-file-preview-dismiss');
-        var input = document.getElementById('kmsar-document-file-input');
-        if (btn && input) {
-            btn.addEventListener('mouseenter', function () { btn.style.background = '#F1F5F9'; btn.style.color = '#0F172A'; });
-            btn.addEventListener('mouseleave', function () { btn.style.background = 'transparent'; btn.style.color = '#64748B'; });
-            btn.addEventListener('click', function () {
-                window.kmsarClearDocumentFilePreview(input);
-            });
-        }
-    });
-})();
-
 window.kmsarOpenPreviewModal = function(url, filename) {
     var modal = document.getElementById('kmsar-preview-modal');
     var iframe = document.getElementById('kmsar-preview-modal-iframe');

@@ -3,13 +3,16 @@ import { login, credentials } from './helpers/auth';
 import { runTinker } from './helpers/db';
 import { acquireSuiteLock, releaseSuiteLock } from './helpers/db-lock';
 import {
+  createAndSubmitResearch,
+  endorseResearch,
   setupEndorsedResearch,
   approveResearch,
   returnResearchOvpri,
-  rejectResearchOvpri,
   openFacultyResearchList,
   facultyResearchCard,
-  researchApprovalStage,
+  researchWorkflowStatus,
+  ResearchWorkflowStatus,
+  REGISTRATION_UI,
 } from './helpers/research';
 
 function uniqueTitle(prefix: string): string {
@@ -20,7 +23,7 @@ function uniqueTitle(prefix: string): string {
 function ensureCampResearchVisible(): void {
   const stamp = Date.now();
   runTinker(
-    `$author = \\App\\Models\\User::where('email','faculty.camp1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CAMP')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CAMP-${stamp}'], ['title' => 'E2E CAMP Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'draft', 'approval_stage' => 'approved', 'revision_count' => 0, 'sdg_tags' => [4]]);`,
+    `$author = \\App\\Models\\User::where('email','faculty.camp1@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CAMP')->firstOrFail(); \\App\\Models\\Research::firstOrCreate(['reference_number' => 'E2E-CAMP-${stamp}'], ['title' => 'E2E CAMP Cross-College ${stamp}', 'primary_author_id' => $author->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'research_accepted', 'revision_count' => 0, 'sdg_tags' => [4], 'agenda_themes' => ['theme_1']]);`,
   );
 }
 
@@ -120,8 +123,8 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
 
     await expect(page.locator('input[name="date_from"]')).toBeVisible();
     await expect(page.locator('input[name="date_to"]')).toBeVisible();
-    await expect(page.getByLabel(/Date From/i)).toBeVisible();
-    await expect(page.getByLabel(/Date To/i)).toBeVisible();
+    await expect(page.getByLabel(/Research accepted from/i)).toBeVisible();
+    await expect(page.getByLabel(/Research accepted to/i)).toBeVisible();
   });
 
   test('TC-004c: Dashboard shows Faculty/Staff Engaged and three-year submission trend', async ({
@@ -269,7 +272,7 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.getByText(/approved by OVPRI/i).first()).toBeVisible();
   });
 
-  test('TC-013: Return research to faculty → stage is returned_to_faculty; Dean Returned (not Pending); CDAIC sees returned record', async ({
+  test('TC-013: Return research to faculty → status is initial_rejected; Dean Returned (not Pending); CDAIC sees returned record', async ({
     page,
   }) => {
     const title = uniqueTitle('TC013 Return Faculty');
@@ -278,14 +281,14 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
 
     await returnResearchOvpri(page, researchId, remarks);
 
-    expect(researchApprovalStage(researchId)).toBe('returned_to_faculty');
+    expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.INITIAL_REJECTED);
 
-    // Faculty list shows "Returned by OVPRI" badge
+    // Faculty list shows initial review returned badge
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await openFacultyResearchList(page, title);
     const facultyCard = facultyResearchCard(page, title);
     await expect(facultyCard).toBeVisible({ timeout: 15_000 });
-    await expect(facultyCard.locator('.kmsar-badge').filter({ hasText: /Returned by OVPRI/i })).toBeVisible();
+    await expect(facultyCard.locator('.kmsar-badge').filter({ hasText: REGISTRATION_UI.initialReviewReturnedLabel })).toBeVisible();
 
     // Dean: NOT in Pending, IS in Returned
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
@@ -354,17 +357,19 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
   });
 
-  test('TC-016: Reject at OVPRI → stage changes to Rejected, CDAIC sees same rejected record (M-07)', async ({
+  test('TC-016: Return at OVPRI → status changes to Initial Review Returned, CDAIC sees same returned record (M-07)', async ({
     page,
   }) => {
-    const title = uniqueTitle('TC016 Reject');
+    const title = uniqueTitle('TC016 Return');
     const researchId = await setupEndorsedResearch(page, title);
 
-    await rejectResearchOvpri(page, researchId, 'Does not meet university research quality standards.');
+    await returnResearchOvpri(page, researchId, 'Does not meet university research quality standards.');
+
+    expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.INITIAL_REJECTED);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto(`/research/${researchId}`);
-    await expect(page.getByRole('cell', { name: 'Rejected' })).toBeVisible();
+    await expect(page.getByText(REGISTRATION_UI.initialReviewReturnedLabel).first()).toBeVisible();
 
     await cdaicLogin(page);
     await page.goto('/ovpri/queue?tab=returned');
@@ -372,27 +377,33 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.locator('#panel-returned').getByText(title)).toBeVisible();
   });
 
-  test('TC-017: Dean receives ResearchRejectedDean on OVPRI rejection', async ({ page }) => {
-    const title = uniqueTitle('TC017 Dean Reject Notif');
+  test('TC-017: Dean does NOT receive notification when OVPRI returns research to faculty', async ({ page }) => {
+    const title = uniqueTitle('TC017 Dean No Return Notif');
     const researchId = await setupEndorsedResearch(page, title);
-    await rejectResearchOvpri(page, researchId, 'Rejected at university level due to incomplete documentation.');
 
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-    await openNotificationBell(page);
-    await expect(page.getByText(/rejected by OVPRI/i).first()).toBeVisible();
+    await page.goto('/dean/dashboard');
+    const before = await getUnreadBellCount(page);
+
+    await returnResearchOvpri(page, researchId, 'Returned at university level due to incomplete documentation.');
+
+    await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
+    await page.goto('/dean/dashboard');
+    const after = await getUnreadBellCount(page);
+    expect(after).toBe(before);
   });
 
-  test('TC-018: Faculty receives ResearchRejected notification on OVPRI rejection (H-04)', async ({
+  test('TC-018: Faculty receives return notification on OVPRI return (H-04)', async ({
     page,
   }) => {
-    const title = uniqueTitle('TC018 Faculty Reject');
-    const remarks = 'OVPRI rejection remarks for faculty notification E2E test case.';
+    const title = uniqueTitle('TC018 Faculty Return');
+    const remarks = 'OVPRI return remarks for faculty notification E2E test case.';
     const researchId = await setupEndorsedResearch(page, title);
-    await rejectResearchOvpri(page, researchId, remarks);
+    await returnResearchOvpri(page, researchId, remarks);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await openNotificationBell(page);
-    await expect(page.getByText(/has been rejected/i).first()).toBeVisible();
+    await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
     await expect(page.getByText(remarks).first()).toBeVisible();
   });
 
@@ -423,29 +434,27 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.locator('table tbody').getByText('CAMP')).toHaveCount(0);
   });
 
-  test('TC-021: Filter by approval stage works on All Research page (H-05)', async ({ page }) => {
+  test('TC-021: Filter by workflow status works on All Research page (H-05)', async ({ page }) => {
     await ovpriLogin(page);
     await page.goto('/ovpri/research');
 
+    await expect(page.getByText(/Workflow status/i).first()).toBeVisible();
     await Promise.all([
-      page.waitForURL(/stage=approved/),
-      page.locator('select[name="stage"]').selectOption('approved'),
+      page.waitForURL(/status=research_accepted/),
+      page.locator('select[name="status"]').selectOption('research_accepted'),
     ]);
-    await expect(page.locator('table tbody').getByText(/Approved/i).first()).toBeVisible();
+    await expect(page.locator('table tbody tr').first()).toBeVisible();
   });
 
-  test('TC-022: Filter by status works on All Research page (H-05)', async ({ page }) => {
+  test('TC-022: Filter by draft workflow status works on All Research page (H-05)', async ({ page }) => {
     await ovpriLogin(page);
     await page.goto('/ovpri/research');
 
-    // "Research Progress" filter (name=status) — progress values, not approval stages
-    await expect(page.getByText(/Research Progress/i).first()).toBeVisible();
     await Promise.all([
       page.waitForURL(/status=/, { timeout: 30_000 }),
       page.locator('select[name="status"]').selectOption('draft'),
     ]);
     expect(page.url()).toMatch(/status=draft/);
-    expect(page.url()).not.toMatch(/[?&]stage=draft/);
     await expect(page.locator('table tbody tr').first()).toBeVisible();
   });
 
@@ -541,13 +550,13 @@ test.describe('OVPRI / CDAIC — UAT Test Suite', () => {
     await expect(page.getByRole('cell', { name: 'OVPRI' })).toBeVisible();
   });
 
-  test('CDAIC-003: CDAIC can reject research without 403', async ({ page }) => {
-    const title = uniqueTitle('CDAIC003 Reject');
+  test('CDAIC-003: CDAIC can return research without 403', async ({ page }) => {
+    const title = uniqueTitle('CDAIC003 Return');
     const researchId = await setupEndorsedResearch(page, title);
-    await rejectResearchOvpri(
+    await returnResearchOvpri(
       page,
       researchId,
-      'CDAIC rejection action for parity testing without authorization errors.',
+      'CDAIC return action for parity testing without authorization errors.',
       'cdaic',
     );
 

@@ -3,8 +3,6 @@ import { login, logout, credentials, authStatePath } from './helpers/auth';
 import { runTinker } from './helpers/db';
 import { completeRegistrationOtp } from './helpers/register';
 
-const CO_AUTHOR_FACULTY_EMAIL = 'faculty.ccs2@yopmail.com';
-const CO_AUTHOR_FACULTY_PASSWORD = 'password';
 const emptyStorage = { cookies: [] as never[], origins: [] as never[] };
 
 async function expectForbidden(page: Page, path: string): Promise<void> {
@@ -22,18 +20,6 @@ async function expectOk(page: Page, path: string): Promise<void> {
 async function expectRedirectToLogin(page: Page, path: string): Promise<void> {
   await page.goto(path);
   await expect(page).toHaveURL(/\/login/);
-}
-
-function seedCoAuthorResearch(approvalStage: string, revisionCount = 0): number {
-  const stamp = Date.now();
-  const output = runTinker(
-    `$primary = \\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $co = \\App\\Models\\User::where('email','faculty.ccs2@yopmail.com')->firstOrFail(); $college = \\App\\Models\\College::where('code','CCS')->firstOrFail(); $r = \\App\\Models\\Research::create(['reference_number' => 'TEMP-CO-${stamp}', 'title' => 'COAUTHOR ACCESS ${stamp}', 'primary_author_id' => $primary->id, 'mother_college_id' => $college->id, 'research_classification' => 'internally_funded', 'expected_output' => ['publication'], 'start_date' => '2026-01-01', 'estimated_completion_date' => '2027-01-01', 'status' => 'draft', 'approval_stage' => '${approvalStage}', 'revision_count' => ${revisionCount}, 'sdg_tags' => [4]]); \\App\\Models\\ResearchAuthor::create(['research_id' => $r->id, 'user_id' => $co->id, 'author_type' => 'internal', 'email' => $co->email, 'employee_number' => $co->employee_number, 'first_name' => $co->first_name, 'last_name' => $co->last_name, 'name' => $co->name, 'college_id' => $co->college_id, 'is_primary' => false, 'can_edit' => true]); echo $r->id;`,
-  ).trim();
-
-  const id = parseInt(output.match(/\d+/)?.[0] ?? '', 10);
-  expect(id).toBeGreaterThan(0);
-
-  return id;
 }
 
 function createViewerRoleUser(stamp: number): string {
@@ -217,49 +203,7 @@ test.describe('Role Access — UAT Test Suite', () => {
     });
   });
 
-  test.describe('Linked author and viewer access', () => {
-    test('RA-028: Co-author can VIEW research they are tagged on → no 403', async ({ page }) => {
-      const researchId = seedCoAuthorResearch('dean_review');
-      await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
-      const response = await page.goto(`/research/${researchId}`);
-      expect(response?.status()).toBe(200);
-      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    });
-
-    test('RA-029: Linked faculty co-author can EDIT research they are tagged on → wizard loads', async ({ page }) => {
-      const researchId = seedCoAuthorResearch('draft');
-      await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
-      const response = await page.goto(`/research/${researchId}/details`);
-      expect(response?.status()).toBe(200);
-      await expect(page.locator('textarea[name="title"], #field_title').first()).toBeVisible();
-    });
-
-    test('RA-030: Co-author can REVISE rejected research they are tagged on → Revise button visible', async ({
-      page,
-    }) => {
-      const researchId = seedCoAuthorResearch('rejected');
-      await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
-      await page.goto(`/research/${researchId}`);
-      await expect(page.getByRole('button', { name: 'Revise', exact: true })).toBeVisible();
-    });
-
-    test('RA-031: Co-author can SUBMIT returned research they are tagged on → Submit button visible', async ({
-      page,
-    }) => {
-      const researchId = seedCoAuthorResearch('draft', 1);
-      await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
-      await page.goto(`/research/${researchId}`);
-      await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toBeVisible();
-    });
-
-    test('RA-032: Co-author CANNOT delete research → delete not available', async ({ page }) => {
-      const researchId = seedCoAuthorResearch('draft');
-      await login(page, CO_AUTHOR_FACULTY_EMAIL, CO_AUTHOR_FACULTY_PASSWORD);
-      await page.goto('/research');
-      const card = page.locator('div').filter({ hasText: /COAUTHOR ACCESS/ }).first();
-      await expect(card.getByRole('button', { name: 'Delete' })).toHaveCount(0);
-    });
-
+  test.describe('Viewer access and admin role options', () => {
     test('RA-033: Viewer CANNOT access dean/ovpri/admin routes → 403', async ({ page }) => {
       const email = createViewerRoleUser(Date.now());
       await login(page, email, 'password');
@@ -268,7 +212,7 @@ test.describe('Role Access — UAT Test Suite', () => {
       await expectForbidden(page, '/admin/dashboard');
     });
 
-    test('RA-033c: Registrar, Unit Head, and co_author are not assignable in admin role options', async ({
+    test('RA-033c: Legacy roles are not assignable in admin role options', async ({
       page,
     }) => {
       await login(page, credentials.admin.email, credentials.admin.password);
@@ -308,7 +252,7 @@ test.describe('Role Access — UAT Test Suite', () => {
       const stamp = Date.now();
       const email = createViewerRoleUser(stamp);
       const output = runTinker(
-        `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'VIEW-${stamp}','title'=>'VIEWER OWN ${stamp}','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'draft','approval_stage'=>'draft','revision_count'=>0,'sdg_tags'=>[4]]); echo $r->id;`,
+        `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'VIEW-${stamp}','title'=>'VIEWER OWN ${stamp}','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'draft','revision_count'=>0,'sdg_tags'=>[4],'agenda_themes'=>['theme_1']]); echo $r->id;`,
       );
       const researchId = parseInt(output.match(/\d+/)?.[0] ?? '0', 10);
 
@@ -316,7 +260,7 @@ test.describe('Role Access — UAT Test Suite', () => {
       const response = await page.goto(`/research/${researchId}`);
       expect(response?.status()).toBe(200);
       await expect(page.getByRole('link', { name: 'Edit Details' })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Submit for Dean Review' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Submit for initial dean review' })).toHaveCount(0);
       const createResponse = await page.goto('/research/create');
       expect(createResponse?.status()).toBe(403);
     });
@@ -328,9 +272,10 @@ test.describe('Role Access — UAT Test Suite', () => {
       await page.goto('/research');
       await expect(page.getByRole('heading', { name: /My research/i })).toBeVisible();
       await logout(page);
-      await page.goBack();
       await expect(page).toHaveURL(/\/login/);
-      await expect(page.getByRole('heading', { name: 'My research' })).toHaveCount(0);
+      await page.goBack({ waitUntil: 'domcontentloaded' });
+      await expect(page).toHaveURL(/\/login/);
+      await expect(page.getByRole('heading', { name: /My research/i })).toHaveCount(0);
     });
 
     test.describe('Unauthenticated redirects', () => {

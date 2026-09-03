@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Research;
+use App\Support\ResearchNotificationCopy;
 
 class ResearchProgressUpdated extends QueuedResearchNotification
 {
@@ -12,23 +13,12 @@ class ResearchProgressUpdated extends QueuedResearchNotification
         public Research $research
     ) {}
 
-
     public function toArray(object $notifiable): array
     {
-        $status = (string) ($this->research->status ?? '');
-
         return $this->baseResearchPayload($this->research, [
-            'message'          => 'Research '
-                                  . $this->research->reference_number
-                                  . ' progress has been updated to: '
-                                  . ucwords(str_replace(
-                                      '_', ' ',
-                                      $status
-                                  ))
-                                  . ' by the faculty.',
-            'action_url'       => route('approval.review',
-                                    $this->research),
-            'type'             => 'progress_updated',
+            'message' => ResearchNotificationCopy::completionSubmittedToDean($this->research),
+            'action_url' => route('approval.review', $this->research),
+            'type' => 'completion_submitted',
         ]);
     }
 }

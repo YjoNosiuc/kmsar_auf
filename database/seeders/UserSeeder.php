@@ -5,7 +5,9 @@ namespace Database\Seeders;
 use App\Models\College;
 use App\Models\Program;
 use App\Models\User;
+use App\Support\KmsarUserManagement;
 use Illuminate\Database\Seeder;
+use InvalidArgumentException;
 
 class UserSeeder extends Seeder
 {
@@ -110,10 +112,39 @@ class UserSeeder extends Seeder
                 'college_id' => $camp->id,
                 'program_id' => $bsmt?->id,
             ],
+            [
+                'employee_number' => '1040',
+                'first_name' => 'SAMPLE',
+                'last_name' => 'STUDENT',
+                'email' => 'student.viewer@yopmail.com',
+                'role' => 'viewer',
+                'user_type' => 'student',
+                'college_id' => $ccs->id,
+                'program_id' => $bsit?->id,
+            ],
+            [
+                'employee_number' => null,
+                'first_name' => 'EXTERNAL',
+                'last_name' => 'AFFILIATE',
+                'email' => 'external.viewer@yopmail.com',
+                'role' => 'viewer',
+                'user_type' => 'external_affiliate',
+                'institution' => 'Partner University',
+                'college_id' => $ccs->id,
+                'program_id' => null,
+            ],
         ];
 
         foreach ($rows as $row) {
             $role = $row['role'];
+            $userType = $row['user_type'];
+
+            if (! KmsarUserManagement::isRoleAllowedForUserType($userType, $role)) {
+                throw new InvalidArgumentException(
+                    "UserSeeder misconfiguration: role [{$role}] is not allowed for user_type [{$userType}] ({$row['email']})."
+                );
+            }
+
             unset($row['role']);
 
             $user = User::updateOrCreate(

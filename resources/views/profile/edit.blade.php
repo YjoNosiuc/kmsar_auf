@@ -51,15 +51,26 @@
                         First Name
                         <span class="kmsar-form-required" aria-hidden="true">*</span>
                     </label>
-                    <input type="text"
-                           name="first_name"
-                           id="profile_first_name"
-                           class="kmsar-input {{ $errors->profile->has('first_name') ? 'kmsar-input--error' : '' }}"
-                           value="{{ old('first_name', $user->first_name) }}"
-                           required>
-                    @error('first_name', 'profile')
-                        <p class="kmsar-form-error">{{ $message }}</p>
-                    @enderror
+                    @if ($nameFieldsLocked)
+                        <input type="text"
+                               id="profile_first_name"
+                               class="kmsar-input"
+                               value="{{ $user->first_name }}"
+                               disabled
+                               style="background:var(--color-surface);
+                                      color:var(--color-text-muted);
+                                      cursor:not-allowed;">
+                    @else
+                        <input type="text"
+                               name="first_name"
+                               id="profile_first_name"
+                               class="kmsar-input {{ $errors->profile->has('first_name') ? 'kmsar-input--error' : '' }}"
+                               value="{{ old('first_name', $user->first_name) }}"
+                               required>
+                        @error('first_name', 'profile')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    @endif
                 </div>
 
                 <div class="kmsar-form-group">
@@ -67,15 +78,26 @@
                         Last Name
                         <span class="kmsar-form-required" aria-hidden="true">*</span>
                     </label>
-                    <input type="text"
-                           name="last_name"
-                           id="profile_last_name"
-                           class="kmsar-input {{ $errors->profile->has('last_name') ? 'kmsar-input--error' : '' }}"
-                           value="{{ old('last_name', $user->last_name) }}"
-                           required>
-                    @error('last_name', 'profile')
-                        <p class="kmsar-form-error">{{ $message }}</p>
-                    @enderror
+                    @if ($nameFieldsLocked)
+                        <input type="text"
+                               id="profile_last_name"
+                               class="kmsar-input"
+                               value="{{ $user->last_name }}"
+                               disabled
+                               style="background:var(--color-surface);
+                                      color:var(--color-text-muted);
+                                      cursor:not-allowed;">
+                    @else
+                        <input type="text"
+                               name="last_name"
+                               id="profile_last_name"
+                               class="kmsar-input {{ $errors->profile->has('last_name') ? 'kmsar-input--error' : '' }}"
+                               value="{{ old('last_name', $user->last_name) }}"
+                               required>
+                        @error('last_name', 'profile')
+                            <p class="kmsar-form-error">{{ $message }}</p>
+                        @enderror
+                    @endif
                 </div>
 
                 <div class="kmsar-form-group">

@@ -132,7 +132,9 @@ export async function login(
 
 export async function logout(page: Page): Promise<void> {
   stopKeepAlive(page);
-  await page.click('button[type="submit"]:has-text("Sign Out")');
+  const signOut = page.getByRole('button', { name: /sign out/i });
+  await signOut.scrollIntoViewIfNeeded();
+  await signOut.click({ timeout: 15_000 });
   await page.waitForURL((url) => url.pathname.endsWith('/login') || url.pathname === '/', {
     timeout: 15_000,
   });

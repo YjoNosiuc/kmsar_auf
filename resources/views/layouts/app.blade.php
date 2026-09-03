@@ -13,8 +13,8 @@
 
     <link rel="stylesheet" href="{{ asset('css/KMSAR.css') }}">
 
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     @stack('scripts-head')
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
     @stack('styles')
 </head>
@@ -226,6 +226,14 @@
                                                   line-height:1.5;">
                                             {{ $notif->data['message'] ?? '' }}
                                         </p>
+                                        @if(!empty($notif->data['remarks']))
+                                            <p style="font-size:var(--text-xs);
+                                                      color:var(--color-text-muted);
+                                                      line-height:1.5;
+                                                      margin-top:4px;">
+                                                {{ $notif->data['remarks'] }}
+                                            </p>
+                                        @endif
                                         <p style="font-size:var(--text-2xs);
                                                   color:var(--color-text-muted);
                                                   margin-top:4px;">
@@ -679,6 +687,7 @@
             });
 
             persistActivity(Date.now());
+            clearDeadline();
             setInterval(tick, 1000);
             tick();
         })();

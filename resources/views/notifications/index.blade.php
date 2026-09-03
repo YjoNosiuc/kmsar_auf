@@ -46,6 +46,13 @@
                           margin-bottom:2px;">
                     {{ $notif->data['message'] ?? '' }}
                 </p>
+                @if(!empty($notif->data['remarks']))
+                    <p style="font-size:var(--text-xs);
+                              color:var(--color-text-secondary);
+                              margin-bottom:2px;">
+                        {{ $notif->data['remarks'] }}
+                    </p>
+                @endif
                 <p style="font-size:var(--text-xs);
                           color:var(--color-text-muted);">
                     {{ $notif->created_at->format('M d, Y h:i A') }}

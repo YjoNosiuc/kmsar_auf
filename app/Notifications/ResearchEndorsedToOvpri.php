@@ -3,9 +3,10 @@
 namespace App\Notifications;
 
 use App\Models\Research;
+use App\Support\ResearchNotificationCopy;
 
 /**
- * Sent to OVPRI/CDAIC admins when a dean endorses research (forwarded for final review).
+ * Sent to OVPRI/CDAIC admins when a dean endorses research.
  */
 class ResearchEndorsedToOvpri extends QueuedResearchNotification
 {
@@ -15,13 +16,10 @@ class ResearchEndorsedToOvpri extends QueuedResearchNotification
         public Research $research
     ) {}
 
-
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [
-            'message' => 'Research '
-                .$this->research->reference_number
-                .' has been endorsed by the college dean and awaits OVPRI/CDAIC review.',
+            'message' => ResearchNotificationCopy::endorsedToOvpri($this->research),
             'action_url' => route('ovpri.review', $this->research),
             'type' => 'endorsed_to_ovpri',
         ]);

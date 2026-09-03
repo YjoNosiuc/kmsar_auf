@@ -5,6 +5,7 @@ namespace App\Imports;
 use App\Models\College;
 use App\Models\Program;
 use App\Models\User;
+use App\Support\KmsarUserManagement;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\OnEachRow;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
@@ -13,17 +14,6 @@ use Maatwebsite\Excel\Row;
 
 class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
 {
-    private const VALID_ROLES = [
-        'super_admin',
-        'ovpri_admin',
-        'cdaic_admin',
-        'college_dean',
-        'faculty',
-        'viewer',
-    ];
-
-    private const VALID_USER_TYPES = ['faculty', 'staff', 'student', 'external_affiliate'];
-
     public int $imported = 0;
 
     /**
@@ -47,7 +37,7 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
             $employeeNumber = strtoupper(trim((string) ($data['employee_number'] ?? '')));
             $collegeCode = strtoupper(trim((string) ($data['college_code'] ?? '')));
             $officeRaw = trim((string) ($data['office'] ?? ''));
-            $userType = strtolower(trim((string) ($data['user_type'] ?? '')));
+            $userTypeRaw = strtolower(trim((string) ($data['user_type'] ?? '')));
             $roleRaw = strtolower(trim((string) ($data['role'] ?? '')));
             $passwordRaw = trim((string) ($data['password'] ?? ''));
 
@@ -95,14 +85,26 @@ class UserImport implements OnEachRow, WithHeadingRow, WithStartRow
                 }
             }
 
-            $userType = in_array($userType, self::VALID_USER_TYPES, true) ? $userType : 'faculty';
-            $role = match ($userType) {
-                'faculty', 'staff' => 'faculty',
-                'student', 'external_affiliate' => 'viewer',
-            };
-            if (($data['user_type'] ?? '') === '' && in_array($roleRaw, self::VALID_ROLES, true)) {
-                $role = $roleRaw;
+            $userType = in_array($userTypeRaw, KmsarUserManagement::userTypes(), true)
+                ? $userTypeRaw
+                : null;
+
+            if ($userType === null && in_array($roleRaw, KmsarUserManagement::assignableRoles(), true)) {
+                $userType = KmsarUserManagement::inferUserTypeFromRole($roleRaw);
             }
+
+            if ($userType === null) {
+                $userType = 'faculty';
+            }
+
+            $role = in_array($roleRaw, KmsarUserManagement::assignableRoles(), true)
+                ? $roleRaw
+                : KmsarUserManagement::defaultRoleForUserType($userType);
+
+            if (! KmsarUserManagement::isRoleAllowedForUserType($userType, $role)) {
+                $role = KmsarUserManagement::defaultRoleForUserType($userType);
+            }
+
             $office = $officeRaw !== '' ? $officeRaw : null;
             $password = $passwordRaw !== '' ? $passwordRaw : 'password';
 

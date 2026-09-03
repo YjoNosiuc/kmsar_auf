@@ -8,6 +8,9 @@ import {
   endorseResearch,
   selectCurrentUserAsPrimary,
   submitResearchFromDocuments,
+  fillRegistrationStep1,
+  returnResearchDean,
+  REGISTRATION_UI,
 } from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
@@ -35,18 +38,13 @@ async function submitAsFaculty(
 ): Promise<string> {
   await login(page, email, password);
   await page.goto('/research/create');
+  await page.getByRole('button', { name: 'Register new research', exact: true }).click();
   await page.waitForURL(/\/research\/\d+\/details/);
 
-  await page.fill('textarea[name="title"]', title);
-  await page.selectOption('select[name="research_classification"]', 'internally_funded');
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'draft');
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+  await fillRegistrationStep1(page, title);
   await Promise.all([
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
-    page.getByRole('button', { name: 'Continue to authors' }).click(),
+    page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click(),
   ]);
   await selectCurrentUserAsPrimary(page);
   await Promise.all([
@@ -132,7 +130,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
 
-    // Submit puts research in dean_review — must NOT bump OVPRI pending
+    // Submit puts research in initial_dean_review — must NOT bump OVPRI pending
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/dashboard');
     const afterSubmit = await getStatCardValue(page, /Pending.*approval/i);
@@ -140,7 +138,7 @@ test.describe('Dashboard cache invalidation — UAT', () => {
 
     await endorseResearch(page, researchId!);
 
-    // Endorse moves to ovpri_review — pending must increase by 1
+    // Endorse moves to initial_ovpri_review — pending must increase by 1
     await login(page, credentials.ovpri.email, credentials.ovpri.password);
     await page.goto('/ovpri/dashboard');
     const afterEndorse = await getStatCardValue(page, /Pending.*approval/i);
@@ -186,9 +184,9 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     expect(afterTotal).toBe(ovpriTotalBeforeImport + 1);
 
     await page.goto('/ovpri/research');
-    const stage = page.locator('select[name="stage"]');
-    if (await stage.count()) {
-      await stage.selectOption('approved');
+    const statusFilter = page.locator('select[name="status"]');
+    if (await statusFilter.count()) {
+      await statusFilter.selectOption('research_accepted');
       await page.waitForLoadState('networkidle');
     }
     await expect(page.getByText(TITLE_IMPORT_CCS, { exact: false })).toBeVisible({ timeout: 15_000 });
@@ -230,26 +228,17 @@ test.describe('Dashboard cache invalidation — UAT', () => {
     const afterSubmit = await getStatCardValue(page, /Pending Endorsement/i);
     expect(afterSubmit).toBe(before + 1);
 
-    runArtisan(
-      `tinker --execute="\\App\\Models\\Research::find(${researchId})->update(['approval_stage' => 'rejected']);"`,
-    );
-    runArtisan('cache:clear');
+    await returnResearchDean(page, researchId!, 'Cache test return to remove from pending endorsement queue.');
 
     await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
     await page.goto('/dean/dashboard');
-    const afterReject = await getStatCardValue(page, /Pending Endorsement/i);
-    expect(afterReject).toBe(before);
+    const afterReturn = await getStatCardValue(page, /Pending Endorsement/i);
+    expect(afterReturn).toBe(before);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto(`/research/${researchId}`);
-    await page.getByRole('button', { name: 'Revise', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/research/${researchId}$`), { timeout: 20_000 });
-
-    await page.goto(`/research/${researchId}/documents`);
-    const resubmit = page.getByRole('button', { name: 'Submit for Dean Review', exact: true });
-    await expect(resubmit).toBeVisible({ timeout: 15_000 });
-    await resubmit.click();
-    await expect(page.getByRole('alert').filter({ hasText: /submitted for dean review/i })).toBeVisible({
+    await page.getByRole('button', { name: 'Resubmit for initial review', exact: true }).click();
+    await expect(page.getByRole('alert').filter({ hasText: /resubmitted for initial dean review/i })).toBeVisible({
       timeout: 20_000,
     });
 

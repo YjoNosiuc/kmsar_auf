@@ -43,8 +43,8 @@ async function loginViaRequest(
   return csrf;
 }
 
-function researchStage(id: string): string {
-  const out = runTinker(`echo \\App\\Models\\Research::find(${id})?->approval_stage ?? 'missing';`);
+function researchWorkflowStatus(id: string): string {
+  const out = runTinker(`echo \\App\\Models\\Research::find(${id})?->status ?? 'missing';`);
   return out.trim().split(/\r?\n/).pop()?.trim() ?? 'missing';
 }
 
@@ -368,7 +368,7 @@ test.describe('API endpoint validation — UAT', () => {
       expect(a.status()).not.toBe(500);
       expect(b.status()).not.toBe(500);
       expect(countResearchByTitle(title)).toBe(1);
-      expect(researchStage(researchId!)).toBe('dean_review');
+      expect(researchWorkflowStatus(researchId!)).toBe('initial_dean_review');
     });
 
     test('API-018: Concurrent endorse and return on same research → only one action succeeds', async ({
@@ -410,8 +410,8 @@ test.describe('API endpoint validation — UAT', () => {
         expect(endorseRes.status()).not.toBe(500);
         expect(returnRes.status()).not.toBe(500);
 
-        const stage = researchStage(researchId!);
-        expect(['ovpri_review', 'draft']).toContain(stage);
+        const status = researchWorkflowStatus(researchId!);
+        expect(['initial_ovpri_review', 'initial_rejected']).toContain(status);
       } finally {
         await ctxA.close();
         await ctxB.close();

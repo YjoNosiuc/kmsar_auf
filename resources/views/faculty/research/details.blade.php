@@ -327,7 +327,10 @@
 
                 <div style="grid-column:1/-1;">
                     <div class="kmsar-form-group">
-                        <span class="kmsar-form-label">{{ __('Alignment with AUF Research Agenda Theme') }}</span>
+                        <span class="kmsar-form-label">
+                            {{ __('Alignment with AUF Research Agenda Theme') }}
+                            <span class="kmsar-form-required" aria-hidden="true">*</span>
+                        </span>
                         <div style="display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid #E2E8F0;border-radius:8px;background:#F8FAFC;">
                             @foreach ($agendaThemeOptions as $code => $label)
                                 <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#0F172A;">

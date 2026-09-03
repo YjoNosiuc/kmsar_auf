@@ -96,9 +96,11 @@ class ResearchController extends Controller
             ->route('research.wizard.details', $research);
     }
 
-    public function registrationDetails(Research $research): View
+    public function registrationDetails(Research $research): View|RedirectResponse
     {
-        $this->authorize('update', $research);
+        if ($redirect = $this->registrationWizardRedirectIfUnauthorized($research)) {
+            return $redirect;
+        }
 
         return view('faculty.research.details', [
             'research' => $research,
@@ -110,7 +112,7 @@ class ResearchController extends Controller
 
     public function saveRegistrationDetails(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('update', $research);
+        $this->authorize('manageRegistrationWizard', $research);
 
         $this->normalizeResearchFormRequest($request);
 
@@ -148,7 +150,9 @@ class ResearchController extends Controller
 
     public function registrationAuthors(Research $research): View|RedirectResponse
     {
-        $this->authorize('update', $research);
+        if ($redirect = $this->registrationWizardRedirectIfUnauthorized($research)) {
+            return $redirect;
+        }
 
         if (! $this->wizardStep1Complete($research)) {
             return redirect()
@@ -232,7 +236,7 @@ class ResearchController extends Controller
 
     public function saveRegistrationAuthors(Request $request, Research $research): RedirectResponse
     {
-        $this->authorize('update', $research);
+        $this->authorize('manageRegistrationWizard', $research);
 
         $validated = $request->validate([
             'primary_author_user_id' => ['required', 'integer', 'exists:users,id'],
@@ -306,7 +310,7 @@ class ResearchController extends Controller
     {
         $this->authorize('manageRegistrationDocuments', $research);
 
-        $documentsOnlyMode = ResearchStatus::isDocumentsEditable((string) $research->status);
+        $documentsOnlyMode = ResearchStatus::usesDocumentsOnlyUploadPage((string) $research->status);
 
         if (! $documentsOnlyMode) {
             if (! $this->wizardStep1Complete($research)) {
@@ -646,6 +650,23 @@ class ResearchController extends Controller
         ]);
     }
 
+    private function registrationWizardRedirectIfUnauthorized(Research $research): ?RedirectResponse
+    {
+        $user = auth()->user();
+
+        if ($user->can('manageRegistrationWizard', $research)) {
+            return null;
+        }
+
+        if ($user->can('view', $research)) {
+            return redirect()
+                ->route('research.show', $research)
+                ->with('info', __('This research is no longer in registration edit mode. View the record below.'));
+        }
+
+        abort(403);
+    }
+
     private function normalizeSdgTags(Request $request): void
     {
         $raw = $request->input('sdg_tags');
@@ -772,7 +793,7 @@ class ResearchController extends Controller
                 Rule::requiredIf(fn () => request()->input('research_classification') === 'other'),
             ],
             'funding_agency' => ['nullable', 'string', 'max:100'],
-            'agenda_themes' => ['nullable', 'array'],
+            'agenda_themes' => ['required', 'array', 'min:1'],
             'agenda_themes.*' => ['string', Rule::in(array_keys(config('kmsar.agenda_themes', [])))],
             'sdg_tags' => ['required', 'array', 'min:1'],
             'sdg_tags.*' => ['integer', 'between:1,17'],
@@ -796,6 +817,7 @@ class ResearchController extends Controller
     {
         return ! empty($research->title)
             && ! empty($research->research_classification)
+            && ! empty($research->agenda_themes)
             && ! empty($research->sdg_tags)
             && ! empty($research->start_date)
             && filled($research->registration_type);

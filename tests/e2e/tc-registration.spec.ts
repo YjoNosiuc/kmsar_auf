@@ -2,7 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 import { login, credentials } from './helpers/auth';
 import { runTinker } from './helpers/db';
 import { completeRegistrationOtp } from './helpers/register';
-import { selectCurrentUserAsPrimary } from './helpers/research';
+import { selectCurrentUserAsPrimary, fillRegistrationStep1, REGISTRATION_UI } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
 
@@ -49,14 +49,8 @@ async function startAuthors(page: Page, title: string): Promise<string> {
   await page.getByRole('button', { name: 'Register new research', exact: true }).click();
   await page.waitForURL(/\/research\/\d+\/details/);
   const researchId = page.url().match(/\/research\/(\d+)\//)?.[1] ?? '';
-  await page.fill('textarea[name="title"]', title);
-  await page.selectOption('select[name="research_classification"]', 'internally_funded');
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'draft');
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
-  await page.getByRole('button', { name: 'Continue to authors' }).click();
+  await fillRegistrationStep1(page, title);
+  await page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click();
   await expect(page).toHaveURL(/\/authors/);
   return researchId;
 }
@@ -116,7 +110,7 @@ test.describe('Registration and author wizard — UAT', () => {
     const email = await registerAs(page, 'external_affiliate');
     activateRegisteredUser(email);
     const output = runTinker(
-      `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $p=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-VIEW-${stamp()}','title'=>'REG VIEWER COAUTHOR','primary_author_id'=>$p->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'draft','approval_stage'=>'dean_review','revision_count'=>0,'sdg_tags'=>[4]]); \\App\\Models\\ResearchAuthor::create(['research_id'=>$r->id,'user_id'=>$u->id,'name'=>$u->name,'email'=>$u->email,'is_primary'=>false,'can_edit'=>false]); echo $r->id;`,
+      `$u=\\App\\Models\\User::where('email','${email}')->firstOrFail(); $p=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-VIEW-${stamp()}','title'=>'REG VIEWER COAUTHOR','primary_author_id'=>$p->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'initial_dean_review','revision_count'=>0,'sdg_tags'=>[4],'agenda_themes'=>['theme_1']]); \\App\\Models\\ResearchAuthor::create(['research_id'=>$r->id,'user_id'=>$u->id,'name'=>$u->name,'email'=>$u->email,'is_primary'=>false,'can_edit'=>false]); echo $r->id;`,
     );
     const researchId = output.match(/\d+/)?.[0];
     await login(page, email, 'password123', { forceFormLogin: true });
@@ -224,11 +218,11 @@ test.describe('Registration and author wizard — UAT', () => {
     await expect(page).toHaveURL(new RegExp(`/research/${id}/authors`));
   });
 
-  test('REG-021: Documents has Submit for Dean Review and no Finish Registration', async ({ page }) => {
+  test('REG-021: Documents has Submit for initial dean review and no Finish Registration', async ({ page }) => {
     await startAuthors(page, `REG021 ${stamp()}`);
     await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
-    await expect(page.getByRole('button', { name: 'Submit for Dean Review' })).toBeVisible();
+    await expect(page.getByRole('button', { name: REGISTRATION_UI.submitInitialDeanReview })).toBeVisible();
     await expect(page.getByText('Finish Registration')).toHaveCount(0);
   });
 
@@ -236,7 +230,7 @@ test.describe('Registration and author wizard — UAT', () => {
     await startAuthors(page, `REG022 ${stamp()}`);
     await selectCurrentUserAsPrimary(page);
     await page.getByRole('button', { name: 'Continue to documents' }).click();
-    await expect(page.getByRole('button', { name: 'Submit for Dean Review' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: REGISTRATION_UI.submitInitialDeanReview })).toBeDisabled();
   });
 
   test('REG-023: Submit is enabled after a document is uploaded', async ({ page }) => {
@@ -245,28 +239,27 @@ test.describe('Registration and author wizard — UAT', () => {
     await page.getByRole('button', { name: 'Continue to documents' }).click();
     await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_PDF);
     await page.getByRole('button', { name: 'Save Document' }).click();
-    await expect(page.getByRole('button', { name: 'Submit for Dean Review' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: REGISTRATION_UI.submitInitialDeanReview })).toBeEnabled();
   });
 
-  test('REG-024: Revise rejected research redirects to show with info message', async ({ page }) => {
+  test('REG-024: Resubmit initial-review returned research shows confirmation on show page', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     const id = runTinker(
-      `$u=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-REV-${stamp()}','title'=>'REG REVISE','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'draft','approval_stage'=>'rejected','revision_count'=>1,'sdg_tags'=>[4]]); echo $r->id;`,
+      `$u=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-REV-${stamp()}','title'=>'REG REVISE','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'initial_rejected','revision_count'=>1,'sdg_tags'=>[4],'agenda_themes'=>['theme_1']]); echo $r->id;`,
     ).match(/\d+/)?.[0];
     await page.goto(`/research/${id}`);
-    await page.getByRole('button', { name: 'Revise' }).click();
+    await page.getByRole('button', { name: 'Resubmit for initial review', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/research/${id}$`));
-    await expect(page.getByText(/returned to draft/i)).toBeVisible();
+    await expect(page.getByText(/resubmitted for initial dean review/i)).toBeVisible();
   });
 
-  test('REG-025: After Revise Edit Details links to wizard Step 1', async ({ page }) => {
+  test('REG-025: Edit & resubmit links to wizard Step 1 for initial-review returned research', async ({ page }) => {
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     const id = runTinker(
-      `$u=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-EDIT-${stamp()}','title'=>'REG EDIT DETAILS','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'draft','approval_stage'=>'rejected','revision_count'=>1,'sdg_tags'=>[4]]); echo $r->id;`,
+      `$u=\\App\\Models\\User::where('email','faculty.ccs1@yopmail.com')->firstOrFail(); $c=\\App\\Models\\College::where('code','CCS')->firstOrFail(); $r=\\App\\Models\\Research::create(['reference_number'=>'REG-EDIT-${stamp()}','title'=>'REG EDIT DETAILS','primary_author_id'=>$u->id,'mother_college_id'=>$c->id,'research_classification'=>'internally_funded','expected_output'=>['publication'],'start_date'=>'2026-01-01','estimated_completion_date'=>'2027-01-01','status'=>'initial_rejected','revision_count'=>1,'sdg_tags'=>[4],'agenda_themes'=>['theme_1']]); echo $r->id;`,
     ).match(/\d+/)?.[0];
     await page.goto(`/research/${id}`);
-    await page.getByRole('button', { name: 'Revise' }).click();
-    await expect(page.getByRole('link', { name: 'Edit Details' }).first()).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Edit & resubmit' }).first()).toHaveAttribute(
       'href',
       new RegExp(`/research/${id}/details$`),
     );

@@ -41,6 +41,14 @@ function makeFaculty(College $college): User
     return $faculty;
 }
 
+function makeViewer(College $college): User
+{
+    $viewer = User::factory()->create(['college_id' => $college->id, 'is_active' => true]);
+    $viewer->assignRole('viewer');
+
+    return $viewer;
+}
+
 function makeOvpri(): User
 {
     $user = User::factory()->create(['is_active' => true]);

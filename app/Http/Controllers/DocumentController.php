@@ -26,6 +26,10 @@ class DocumentController extends Controller
     {
         $this->authorize('uploadDocuments', $research);
 
+        if ($failedUpload = $this->detectFailedFileUpload($request)) {
+            return $failedUpload;
+        }
+
         if ($request->filled('external_link')) {
             $request->validate(['external_link' => ['required', 'url', 'max:2048']]);
 
@@ -52,9 +56,29 @@ class DocumentController extends Controller
                 ->withErrors(['files' => __('Please choose file(s) or paste a link.')]);
         }
 
+        $remainingSlots = $research->remainingFileUploadSlots();
+
+        if ($remainingSlots === 0) {
+            return back()->withErrors([
+                'files' => __('This research record already has the maximum of :max uploaded files.', [
+                    'max' => $research->maxFileDocuments(),
+                ]),
+            ]);
+        }
+
+        $maxUploadKb = (int) config('kmsar.max_upload_size_kb', 102400);
+
         $request->validate([
-            $fileKey => ['required', 'array', 'max:2'],
-            $fileKey.'.*' => ['file', 'max:102400', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png'],
+            $fileKey => ['required', 'array', 'max:'.$remainingSlots],
+            $fileKey.'.*' => ['file', 'max:'.$maxUploadKb, 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png'],
+        ], [
+            $fileKey.'.max' => __('You may upload up to :remaining more file(s) for this research (maximum :max total).', [
+                'remaining' => $remainingSlots,
+                'max' => $research->maxFileDocuments(),
+            ]),
+            $fileKey.'.*.max' => __('Each file must not exceed :size MB.', [
+                'size' => (int) ($maxUploadKb / 1024),
+            ]),
         ]);
 
         foreach ($request->file($fileKey) as $index => $file) {
@@ -77,6 +101,30 @@ class DocumentController extends Controller
         $document->delete();
 
         return back()->with('success', __('Document deleted.'));
+    }
+
+    private function detectFailedFileUpload(Request $request): ?RedirectResponse
+    {
+        $contentLength = (int) $request->server('CONTENT_LENGTH', 0);
+        if ($contentLength <= 0) {
+            return null;
+        }
+
+        if ($request->hasFile('files') || $request->hasFile('documents') || $request->filled('external_link')) {
+            return null;
+        }
+
+        if ($request->isMethod('POST') && empty($_FILES)) {
+            $maxMb = (int) (config('kmsar.max_upload_size_kb', 102400) / 1024);
+
+            return back()->withErrors([
+                'files' => __('The file could not be uploaded. It may exceed the server limit of :size MB. Ask your administrator to set upload_max_filesize and post_max_size to at least :size MB.', [
+                    'size' => $maxMb,
+                ]),
+            ]);
+        }
+
+        return null;
     }
 
     private function persistUploadedFile(Research $research, User $user, UploadedFile $file, string $attribute): void

@@ -18,13 +18,6 @@
         };
     };
 
-    $userTypeLabels = [
-        'faculty' => __('Faculty'),
-        'staff' => __('Staff'),
-        'student' => __('Student'),
-        'external_affiliate' => __('External Affiliate'),
-    ];
-
     $editUserInitial =
         $errors->any() && old('_form') === 'edit'
             ? [
@@ -264,7 +257,7 @@
                                         <button
                                             type="button"
                                             class="kmsar-btn kmsar-btn--primary kmsar-btn--sm"
-                                            x-on:click="openApprove({{ $pendingUser->id }}, {{ \Illuminate\Support\Js::from($pendingUser->name) }})"
+                                            x-on:click="openApprove({{ $pendingUser->id }}, {{ \Illuminate\Support\Js::from($pendingUser->name) }}, {{ \Illuminate\Support\Js::from($pendingUser->user_type) }})"
                                         >
                                             {{ __('Approve') }}
                                         </button>
@@ -534,14 +527,17 @@
                             @enderror
                         </div>
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="add-user_type">{{ __('User Type') }}</label>
-                            <select id="add-user_type" name="user_type" class="kmsar-select @error('user_type') kmsar-input--error @enderror" x-model="addUserType">
+                            <label class="kmsar-form-label" for="add-user_type">
+                                {{ __('User Type') }}
+                                <span class="kmsar-form-required">*</span>
+                            </label>
+                            <select id="add-user_type" name="user_type" class="kmsar-select @error('user_type') kmsar-input--error @enderror" x-model="addUserType" required x-on:change="onAddUserTypeChange()">
                                 <option value="">{{ __('— Select user type —') }}</option>
-                                <option value="faculty">{{ __('Faculty') }}</option>
-                                <option value="staff">{{ __('Staff') }}</option>
-                                <option value="student">{{ __('Student') }}</option>
-                                <option value="external_affiliate">{{ __('External Affiliate') }}</option>
+                                @foreach ($userTypeLabels as $slug => $label)
+                                    <option value="{{ $slug }}">{{ $label }}</option>
+                                @endforeach
                             </select>
+                            <p class="kmsar-form-hint">{{ __('User type describes who they are. Role controls KMSAR permissions.') }}</p>
                             @error('user_type')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -658,12 +654,13 @@
                     <div class="kmsar-form-row-2">
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="add-role">{{ __('Role') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <select id="add-role" name="role" class="kmsar-select @error('role') kmsar-input--error @enderror" required>
+                            <select id="add-role" name="role" class="kmsar-select @error('role') kmsar-input--error @enderror" required x-model="addRole" x-bind:disabled="!addUserType">
                                 <option value="">{{ __('— Select role —') }}</option>
-                                @foreach ($kmsarRoles as $slug => $label)
-                                    <option value="{{ $slug }}" @selected(old('role') === $slug)>{{ $label }}</option>
-                                @endforeach
+                                <template x-for="role in allowedRolesForUserType(addUserType)" :key="role">
+                                    <option :value="role" x-text="roleLabel(role)" x-bind:selected="role === addRole"></option>
+                                </template>
                             </select>
+                            <p class="kmsar-form-hint" x-show="addUserType" x-cloak x-text="roleHintForUserType(addUserType)"></p>
                             @error('role')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -818,14 +815,17 @@
                             @enderror
                         </div>
                         <div class="kmsar-form-group">
-                            <label class="kmsar-form-label" for="edit-user_type">{{ __('User Type') }}</label>
-                            <select id="edit-user_type" name="user_type" class="kmsar-select @error('user_type') kmsar-input--error @enderror" x-model="editUser.user_type">
+                            <label class="kmsar-form-label" for="edit-user_type">
+                                {{ __('User Type') }}
+                                <span class="kmsar-form-required">*</span>
+                            </label>
+                            <select id="edit-user_type" name="user_type" class="kmsar-select @error('user_type') kmsar-input--error @enderror" x-model="editUser.user_type" required x-on:change="onEditUserTypeChange()">
                                 <option value="">{{ __('— Select user type —') }}</option>
-                                <option value="faculty">{{ __('Faculty') }}</option>
-                                <option value="staff">{{ __('Staff') }}</option>
-                                <option value="student">{{ __('Student') }}</option>
-                                <option value="external_affiliate">{{ __('External Affiliate') }}</option>
+                                @foreach ($userTypeLabels as $slug => $label)
+                                    <option value="{{ $slug }}">{{ $label }}</option>
+                                @endforeach
                             </select>
+                            <p class="kmsar-form-hint">{{ __('User type describes who they are. Role controls KMSAR permissions.') }}</p>
                             @error('user_type')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -952,12 +952,13 @@
 
                         <div class="kmsar-form-group">
                             <label class="kmsar-form-label" for="edit-role">{{ __('Role') }} <span class="kmsar-form-required" aria-hidden="true">*</span></label>
-                            <select id="edit-role" name="role" class="kmsar-select @error('role') kmsar-input--error @enderror" required x-model="editUser.role">
+                            <select id="edit-role" name="role" class="kmsar-select @error('role') kmsar-input--error @enderror" required x-model="editUser.role" x-bind:disabled="!editUser.user_type">
                                 <option value="">{{ __('— Select role —') }}</option>
-                                @foreach ($kmsarRoles as $slug => $label)
-                                    <option value="{{ $slug }}">{{ $label }}</option>
-                                @endforeach
+                                <template x-for="role in allowedRolesForUserType(editUser.user_type)" :key="role">
+                                    <option :value="role" x-text="roleLabel(role)"></option>
+                                </template>
                             </select>
+                            <p class="kmsar-form-hint" x-show="editUser.user_type" x-cloak x-text="roleHintForUserType(editUser.user_type)"></p>
                             @error('role')
                                 <p class="kmsar-form-error">{{ $message }}</p>
                             @enderror
@@ -1023,15 +1024,17 @@
                         {{ __('Assign Role') }}
                         <span class="kmsar-form-required">*</span>
                     </label>
-                    <select id="approve-role" name="role" class="kmsar-select" required>
+                    <p class="kmsar-form-hint" style="margin-top:0;" x-show="approveUserType" x-cloak>
+                        {{ __('User type:') }}
+                        <strong x-text="userTypeLabel(approveUserType)"></strong>
+                    </p>
+                    <select id="approve-role" name="role" class="kmsar-select" required x-model="approveRole">
                         <option value="">{{ __('— Select role —') }}</option>
-                        <option value="faculty">{{ __('Faculty') }}</option>
-                        <option value="viewer">{{ __('Viewer') }}</option>
-                        <option value="college_dean">{{ __('Dean/Head') }}</option>
-                        <option value="ovpri_admin">{{ __('OVPRI Admin') }}</option>
-                        <option value="cdaic_admin">{{ __('CDAIC Admin') }}</option>
-                        <option value="super_admin">{{ __('Super Admin') }}</option>
+                        <template x-for="role in allowedRolesForUserType(approveUserType)" :key="role">
+                            <option :value="role" x-text="roleLabel(role)"></option>
+                        </template>
                     </select>
+                    <p class="kmsar-form-hint" x-show="approveUserType" x-cloak x-text="roleHintForUserType(approveUserType)"></p>
                 </div>
             </form>
             <div class="kmsar-modal-footer" style="display:flex;justify-content:flex-end;gap:8px;">
@@ -1052,12 +1055,19 @@ document.addEventListener('alpine:init', () => {
         showApprove: false,
         approveUserId: null,
         approveUserName: '',
+        approveUserType: '',
+        approveRole: '',
+        roleLabels: @json($kmsarRoles),
+        userTypeLabels: @json($userTypeLabels),
+        userTypeRoleMap: @json($userTypeRoleMap),
+        userTypeDefaultRoles: @json($userTypeDefaultRoles),
         editUser: @json($editUserInitial ?: new \stdClass()),
         adminUsersBase: @json(rtrim(url('/admin/users'), '/')),
         programsUrl: @json(route('api.programs')),
         addCollegeId: @json($errors->any() && old('_form', 'add') === 'add' && old('college_id') ? (string) old('college_id') : ''),
         addProgramId: @json($errors->any() && old('_form', 'add') === 'add' && old('program_id') ? (string) old('program_id') : ''),
         addUserType: @json($errors->any() && old('_form', 'add') === 'add' ? (string) old('user_type', '') : ''),
+        addRole: @json($errors->any() && old('_form', 'add') === 'add' ? (string) old('role', '') : ''),
         addPrograms: [],
         editPrograms: [],
         users: @json($usersForAlpine),
@@ -1068,6 +1078,47 @@ document.addEventListener('alpine:init', () => {
             if (this.editUser && this.editUser.college_id) {
                 this.loadPrograms(this.editUser.college_id, 'edit');
             }
+            if (this.addUserType && !this.addRole) {
+                this.addRole = this.defaultRoleForUserType(this.addUserType);
+            }
+        },
+        roleLabel(role) {
+            return this.roleLabels[role] || role.replace(/_/g, ' ');
+        },
+        userTypeLabel(userType) {
+            return this.userTypeLabels[userType] || userType;
+        },
+        allowedRolesForUserType(userType) {
+            if (!userType || !this.userTypeRoleMap[userType]) {
+                return [];
+            }
+            return this.userTypeRoleMap[userType];
+        },
+        defaultRoleForUserType(userType) {
+            return this.userTypeDefaultRoles[userType] || 'faculty';
+        },
+        roleHintForUserType(userType) {
+            const roles = this.allowedRolesForUserType(userType).map((r) => this.roleLabel(r));
+            if (!roles.length) {
+                return '';
+            }
+            return @json(__('Allowed roles for this user type:')) + ' ' + roles.join(', ');
+        },
+        ensureRoleAllowedForUserType(userType, currentRole) {
+            const allowed = this.allowedRolesForUserType(userType);
+            if (!allowed.length) {
+                return '';
+            }
+            if (allowed.includes(currentRole)) {
+                return currentRole;
+            }
+            return this.defaultRoleForUserType(userType);
+        },
+        onAddUserTypeChange() {
+            this.addRole = this.ensureRoleAllowedForUserType(this.addUserType, this.addRole);
+        },
+        onEditUserTypeChange() {
+            this.editUser.role = this.ensureRoleAllowedForUserType(this.editUser.user_type, this.editUser.role);
         },
         idFieldLabel(type) {
             if (type === 'student') return @json(__('Student Number'));
@@ -1077,15 +1128,19 @@ document.addEventListener('alpine:init', () => {
         idFieldRequired(type) {
             return type !== 'external_affiliate';
         },
-        openApprove(userId, userName) {
+        openApprove(userId, userName, userType = '') {
             this.approveUserId = userId;
             this.approveUserName = userName;
+            this.approveUserType = userType || '';
+            this.approveRole = this.defaultRoleForUserType(userType);
             this.showApprove = true;
         },
         closeApprove() {
             this.showApprove = false;
             this.approveUserId = null;
             this.approveUserName = '';
+            this.approveUserType = '';
+            this.approveRole = '';
         },
         loadPrograms(collegeId, dest = 'add') {
             const listKey = dest === 'edit' ? 'editPrograms' : 'addPrograms';
@@ -1161,6 +1216,8 @@ document.addEventListener('alpine:init', () => {
                     return r.json();
                 })
                 .then((data) => {
+                    const userType = data.user_type ?? '';
+                    const role = data.role ?? '';
                     this.editUser = {
                         id: data.id,
                         employee_number: data.employee_number ?? '',
@@ -1172,9 +1229,9 @@ document.addEventListener('alpine:init', () => {
                         college_id: data.college_id != null ? String(data.college_id) : '',
                         program_id: data.program_id != null ? String(data.program_id) : '',
                         office: data.office ?? '',
-                        user_type: data.user_type ?? '',
+                        user_type: userType,
                         institution: data.institution ?? '',
-                        role: data.role ?? '',
+                        role: this.ensureRoleAllowedForUserType(userType, role),
                         is_active: !!data.is_active,
                     };
                     this.showEdit = true;

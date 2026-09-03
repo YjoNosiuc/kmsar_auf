@@ -4,6 +4,8 @@ import { login, credentials } from './helpers/auth';
 import {
   createAndSubmitResearch,
   setupEndorsedResearch,
+  fillRegistrationStep1,
+  REGISTRATION_UI,
 } from './helpers/research';
 
 function uniqueTitle(prefix: string): string {
@@ -41,13 +43,7 @@ async function assertNoCriticalOrSeriousA11y(page: Page): Promise<void> {
 }
 
 async function fillWizardStep1(page: Page, title: string): Promise<void> {
-  await page.fill('textarea[name="title"]', title);
-  await page.selectOption('select[name="research_classification"]', 'internally_funded');
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'draft');
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+  await fillRegistrationStep1(page, title);
 }
 
 test.describe('Accessibility — UAT', () => {
@@ -406,13 +402,13 @@ test.describe('Accessibility — UAT', () => {
     }) => {
       await login(page, credentials.admin.email, credentials.admin.password);
       await page.goto('/admin/dashboard');
-      await expect(page.getByLabel(/Date From/i)).toBeVisible();
-      await expect(page.getByLabel(/Date To/i)).toBeVisible();
+      await expect(page.getByLabel(/Research accepted from/i)).toBeVisible();
+      await expect(page.getByLabel(/Research accepted to/i)).toBeVisible();
 
       await login(page, credentials.ovpri.email, credentials.ovpri.password);
       await page.goto('/ovpri/dashboard');
-      await expect(page.getByLabel(/Date From/i)).toBeVisible();
-      await expect(page.getByLabel(/Date To/i)).toBeVisible();
+      await expect(page.getByLabel(/Research accepted from/i)).toBeVisible();
+      await expect(page.getByLabel(/Research accepted to/i)).toBeVisible();
     });
   });
 
@@ -463,7 +459,7 @@ test.describe('Accessibility — UAT', () => {
       const count = await badges.count();
       if (count === 0) {
         // Seeded/list cards may use plain text status labels instead
-        await expect(page.getByText(/Draft|Dean Review|Approved|Rejected|OVPRI/i).first()).toBeVisible();
+        await expect(page.getByText(/Draft|Dean Review|Approved|Returned|OVPRI/i).first()).toBeVisible();
         return;
       }
 

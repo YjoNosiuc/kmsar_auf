@@ -9,6 +9,7 @@ use App\Models\PasswordResetOtp;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,14 +20,22 @@ use Throwable;
 
 class RegisterController extends Controller
 {
-    public function create(): View|RedirectResponse
+    public function create(Request $request): View|RedirectResponse|Response
     {
         if (Auth::check()) {
             return redirect()->route('research.index');
         }
+
+        if ($request->boolean('expired') && $request->hasSession()) {
+            $request->session()->regenerateToken();
+        }
+
         $colleges = College::orderBy('name')->get();
 
-        return view('auth.register', compact('colleges'));
+        return response()
+            ->view('auth.register', compact('colleges'))
+            ->header('Cache-Control', 'no-cache, private, max-age=0, must-revalidate')
+            ->header('Pragma', 'no-cache');
     }
 
     public function store(Request $request): RedirectResponse
@@ -205,7 +214,23 @@ class RegisterController extends Controller
 
             return true;
         } catch (Throwable $e) {
-            Log::warning('Verification email failed: '.$e->getMessage());
+            Log::warning('Verification email failed: '.$e->getMessage(), [
+                'email' => $email,
+            ]);
+
+            if (config('app.debug')) {
+                Log::info('Registration OTP (local debug — mail unavailable)', [
+                    'email' => $email,
+                    'otp' => $otp,
+                ]);
+
+                session()->flash(
+                    'warning',
+                    __('Email could not be sent. Your verification code was written to storage/logs/laravel.log (local debug only).'),
+                );
+
+                return true;
+            }
 
             return false;
         }

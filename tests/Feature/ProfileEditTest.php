@@ -61,8 +61,6 @@ describe('Profile edit', function () {
         $this->actingAs($faculty)
             ->from(route('profile.edit'))
             ->patch(route('profile.update'), [
-                'first_name' => 'Faculty',
-                'last_name' => 'User',
                 'middle_name' => null,
                 'college_id' => $college->id,
                 'program_id' => $bscs->id,
@@ -97,8 +95,6 @@ describe('Profile edit', function () {
         $this->actingAs($faculty)
             ->from(route('profile.edit'))
             ->patch(route('profile.update'), [
-                'first_name' => 'Faculty',
-                'last_name' => 'User',
                 'middle_name' => null,
                 'college_id' => $college->id,
                 'program_id' => $bmma->id,
@@ -116,5 +112,89 @@ describe('Profile edit', function () {
         $response->assertSee('BMMA', false);
         $response->assertSee('selectedProgramId', false);
         $response->assertSee((string) $bmma->id, false);
+    });
+
+    it('ignores tampered first or last name updates for faculty', function () {
+        $college = College::factory()->create(['is_active' => true]);
+        $faculty = User::factory()->create([
+            'college_id' => $college->id,
+            'first_name' => 'Original',
+            'last_name' => 'Faculty',
+            'is_active' => true,
+        ]);
+        $faculty->assignRole('faculty');
+
+        $this->actingAs($faculty)
+            ->from(route('profile.edit'))
+            ->patch(route('profile.update'), [
+                'first_name' => 'Changed',
+                'last_name' => 'Name',
+                'middle_name' => null,
+                'college_id' => $college->id,
+            ])
+            ->assertRedirect(route('profile.edit'))
+            ->assertSessionHas('success');
+
+        $faculty->refresh();
+        expect($faculty->first_name)->toBe('Original')
+            ->and($faculty->last_name)->toBe('Faculty');
+    });
+
+    it('shows read-only first and last name fields for faculty profile', function () {
+        $college = College::factory()->create(['is_active' => true]);
+        $faculty = User::factory()->create([
+            'college_id' => $college->id,
+            'first_name' => 'Readonly',
+            'last_name' => 'Faculty',
+            'is_active' => true,
+        ]);
+        $faculty->assignRole('faculty');
+
+        $this->actingAs($faculty)
+            ->get(route('profile.edit'))
+            ->assertOk()
+            ->assertSee('value="Readonly"', false)
+            ->assertSee('value="Faculty"', false)
+            ->assertDontSee('name="first_name"', false)
+            ->assertDontSee('name="last_name"', false);
+    });
+
+    it('shows read-only first and last name fields for viewer profile', function () {
+        $viewer = User::factory()->create([
+            'first_name' => 'Viewer',
+            'last_name' => 'User',
+            'user_type' => 'external_affiliate',
+            'is_active' => true,
+        ]);
+        $viewer->assignRole('viewer');
+
+        $this->actingAs($viewer)
+            ->get(route('profile.edit'))
+            ->assertOk()
+            ->assertDontSee('name="first_name"', false)
+            ->assertDontSee('name="last_name"', false);
+    });
+
+    it('allows ovpri admin to update first and last name on profile', function () {
+        $admin = User::factory()->create([
+            'first_name' => 'Original',
+            'last_name' => 'Admin',
+            'is_active' => true,
+        ]);
+        $admin->assignRole('ovpri_admin');
+
+        $this->actingAs($admin)
+            ->from(route('profile.edit'))
+            ->patch(route('profile.update'), [
+                'first_name' => 'Updated',
+                'last_name' => 'Name',
+                'middle_name' => null,
+            ])
+            ->assertRedirect(route('profile.edit'))
+            ->assertSessionHas('success');
+
+        $admin->refresh();
+        expect($admin->first_name)->toBe('Updated')
+            ->and($admin->last_name)->toBe('Name');
     });
 });

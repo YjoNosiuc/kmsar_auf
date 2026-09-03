@@ -243,6 +243,14 @@
             syncCsrf(meta?.getAttribute('content'));
         });
 
+        try {
+            localStorage.removeItem('kmsar-idle-deadline');
+            localStorage.removeItem('kmsar-last-activity');
+            localStorage.removeItem('kmsar-auth-logout');
+        } catch (e) {
+            /* private mode */
+        }
+
         // If the login page is restored from bfcache, reload so the CSRF token matches the session.
         window.addEventListener('pageshow', function (event) {
             if (event.persisted) {

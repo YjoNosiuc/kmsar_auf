@@ -35,7 +35,7 @@
         $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
         $statusOpts = \App\Support\ResearchStatus::reportProgressFilterOptions();
         $classOpts = config('kmsar.research_classifications', []);
-        $workflowStatusOptions = \App\Support\ResearchStatus::institutionalFilterOptions();
+        $workflowStatusOptions = \App\Support\ResearchStatus::workflowFilterOptions();
         $facultyOpts = ($faculties ?? collect())->mapWithKeys(fn ($u) => [$u->id => $u->name])->all();
         $page = max(1, (int) ($page ?? 1));
         $perPage = max(10, (int) ($perPage ?? 10));

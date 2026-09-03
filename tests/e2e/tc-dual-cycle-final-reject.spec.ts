@@ -7,10 +7,8 @@ import {
   assertRegistrationFieldsLocked,
   assertSingleResearchRecord,
   countFinalCycleApprovals,
-  driveNewRegistrationToOngoing,
+  driveNewRegistrationToRegistered,
   endorseResearch,
-  rejectResearchDean,
-  rejectResearchOvpri,
   researchFinalReviewCount,
   researchHasAuditTransitionToStatus,
   researchOutcomeClassificationCodes,
@@ -27,9 +25,9 @@ function uniqueTitle(prefix: string): string {
 }
 
 async function driveToFinalDeanReview(page: import('@playwright/test').Page, title: string): Promise<string> {
-  const researchId = await driveNewRegistrationToOngoing(page, title);
+  const researchId = await driveNewRegistrationToRegistered(page, title);
 
-  await submitCompletionViaModal(page, researchId, { classificationCode: 'completed_unpublished' });
+  await submitCompletionViaModal(page, researchId, { classificationCode: 'completed_not_presented_submitted' });
   expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.FINAL_DEAN_REVIEW);
   expect(researchHasAuditTransitionToStatus(researchId, ResearchWorkflowStatus.RESEARCH_COMPLETED)).toBe(true);
   expect(researchFinalReviewCount(researchId)).toBe(1);
@@ -84,7 +82,7 @@ test.describe('Dual-cycle final-review rejection', () => {
     expect(countFinalCycleApprovals(researchId, 'returned', 'dean')).toBe(1);
 
     await assertRegistrationFieldsLocked(page, researchId);
-    await facultyReviseOutcomesAndResubmit(page, researchId, 'presented_internal');
+    await facultyReviseOutcomesAndResubmit(page, researchId, 'presented_conference_auf');
 
     expect(researchFinalReviewCount(researchId)).toBe(countBeforeReject);
     assertSingleResearchRecord(researchId);
@@ -111,39 +109,39 @@ test.describe('Dual-cycle final-review rejection', () => {
     expect(countFinalCycleApprovals(researchId, 'returned', 'ovpri')).toBe(1);
 
     await assertRegistrationFieldsLocked(page, researchId);
-    await facultyReviseOutcomesAndResubmit(page, researchId, 'published_non_indexed');
+    await facultyReviseOutcomesAndResubmit(page, researchId, 'published_non_scopus_wos');
 
     expect(researchFinalReviewCount(researchId)).toBe(countBeforeReject);
     assertSingleResearchRecord(researchId);
   });
 
-  test('dean reject at final_dean_review records final-cycle approval without incrementing count', async ({
+  test('dean return at final_dean_review records final-cycle return without incrementing count', async ({
     page,
   }) => {
-    const title = uniqueTitle('E2E FINAL REJECT DEAN HARD');
+    const title = uniqueTitle('E2E FINAL RETURN DEAN HARD');
     const researchId = await driveToFinalDeanReview(page, title);
     const countBeforeReject = researchFinalReviewCount(researchId);
 
-    await rejectResearchDean(page, researchId, 'Final submission does not meet college research standards.');
+    await returnResearchDean(page, researchId, 'Final submission does not meet college research standards.');
 
     expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.FINAL_REJECTED);
     expect(researchFinalReviewCount(researchId)).toBe(countBeforeReject);
-    expect(countFinalCycleApprovals(researchId, 'rejected', 'dean')).toBe(1);
+    expect(countFinalCycleApprovals(researchId, 'returned', 'dean')).toBe(1);
   });
 
-  test('ovpri reject at final_ovpri_review records final-cycle approval without incrementing count', async ({
+  test('ovpri return at final_ovpri_review records final-cycle return without incrementing count', async ({
     page,
   }) => {
-    const title = uniqueTitle('E2E FINAL REJECT OVPRI HARD');
+    const title = uniqueTitle('E2E FINAL RETURN OVPRI HARD');
     const researchId = await driveToFinalDeanReview(page, title);
 
     await endorseResearch(page, researchId);
     const countBeforeReject = researchFinalReviewCount(researchId);
 
-    await rejectResearchOvpri(page, researchId, 'University-level final rejection due to incomplete documentation.');
+    await returnResearchOvpri(page, researchId, 'University-level final return due to incomplete documentation.');
 
     expect(researchWorkflowStatus(researchId)).toBe(ResearchWorkflowStatus.FINAL_REJECTED);
     expect(researchFinalReviewCount(researchId)).toBe(countBeforeReject);
-    expect(countFinalCycleApprovals(researchId, 'rejected', 'ovpri')).toBe(1);
+    expect(countFinalCycleApprovals(researchId, 'returned', 'ovpri')).toBe(1);
   });
 });

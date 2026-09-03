@@ -197,6 +197,10 @@
             <h2 class="kmsar-login-heading">Create account</h2>
             <p class="kmsar-login-lead">Register with your AUF employee details to access KMSAR.</p>
 
+            @if (request()->boolean('expired'))
+                <x-alert type="warning" class="kmsar-form-group" :message="__('Your session expired. Please submit the form again.')" />
+            @endif
+
             @if ($errors->any())
                 <x-alert type="danger" class="kmsar-form-group">
                     <ul style="margin: 0; padding-left: 1.125rem; font-size: var(--text-sm); line-height: 1.5;">
@@ -450,4 +454,44 @@
         </div>
     </div>
 </div>
+
+@push('scripts')
+<script>
+    (function () {
+        const form = document.querySelector('form[action*="register"]');
+        const meta = document.querySelector('meta[name="csrf-token"]');
+
+        function syncCsrf(token) {
+            if (! token) {
+                return;
+            }
+            if (meta) {
+                meta.setAttribute('content', token);
+            }
+            const input = form?.querySelector('input[name="_token"]');
+            if (input) {
+                input.value = token;
+            }
+        }
+
+        form?.addEventListener('submit', function () {
+            syncCsrf(meta?.getAttribute('content'));
+        });
+
+        try {
+            localStorage.removeItem('kmsar-idle-deadline');
+            localStorage.removeItem('kmsar-last-activity');
+            localStorage.removeItem('kmsar-auth-logout');
+        } catch (e) {
+            /* private mode */
+        }
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        });
+    })();
+</script>
+@endpush
 @endsection

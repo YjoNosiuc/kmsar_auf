@@ -28,7 +28,7 @@ function makeUserWithRole(string $role, array $attributes = []): User
 }
 
 /**
- * User tied to a factory college (dean, unit head, faculty, co-author tests).
+ * User tied to a factory college (dean, unit head, faculty tests).
  */
 function userWithCollege(string $role): User
 {

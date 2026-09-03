@@ -39,6 +39,8 @@
     }
     $maxUploadFiles = (int) config('kmsar.max_research_upload_files', 10);
     $maxExternalLinks = (int) config('kmsar.max_research_external_links', 10);
+    $fileDocumentCount = $research->fileDocumentsCount();
+    $remainingFileUploadSlots = $research->remainingFileUploadSlots();
     $progressUploadTab = old('upload_type', 'file');
     if ($errors->hasAny(['external_links', 'external_links.*', 'external_link'])) {
         $progressUploadTab = 'link';
@@ -118,7 +120,7 @@
                         <x-button variant="primary" type="button" @click="showUpdateProgress = true" aria-label="{{ __('Submit completion') }}">{{ __('Submit completion') }}</x-button>
                     @endcan
                 @endif
-                @if ($research->status === ResearchStatus::RESEARCH_REGISTERED)
+                @if (ResearchStatus::showsManageDocumentsAction((string) $research->status))
                     @can('manageRegistrationDocuments', $research)
                         <x-button variant="outline" href="{{ route('research.wizard.documents', $research) }}">{{ __('Manage documents') }}</x-button>
                     @endcan
@@ -266,7 +268,7 @@
                                                             </a>
                                                             </div>
                                                         @endif
-                                                        @if(ResearchStatus::isFullyEditable((string) $research->status) && (int) $document->uploaded_by === (int) auth()->id())
+                                                        @if(ResearchStatus::canModifyDocuments((string) $research->status) && (int) $document->uploaded_by === (int) auth()->id())
                                                             <form method="POST" action="{{ route('documents.destroy', $document) }}" style="display:inline;">
                                                                 @csrf
                                                                 @method('DELETE')
@@ -301,64 +303,10 @@
                                             class="space-y-4"
                                         >
                                             @csrf
-                                            <div class="kmsar-form-group" x-data="researchShowDocumentUpload()">
+                                            <div class="kmsar-form-group" x-data="kmsarDocumentUpload({{ $fileDocumentCount }}, {{ $maxUploadFiles }})">
                                                 <label class="kmsar-form-label">{{ __('Add document') }}</label>
-                                                <div class="kmsar-tabs" style="margin-bottom: 1rem;">
-                                                    <button
-                                                        type="button"
-                                                        class="kmsar-tab"
-                                                        :class="{ 'active': uploadType === 'file' }"
-                                                        @click="uploadType = 'file'"
-                                                    >{{ __('Upload File') }}</button>
-                                                    <button
-                                                        type="button"
-                                                        class="kmsar-tab"
-                                                        :class="{ 'active': uploadType === 'link' }"
-                                                        @click="uploadType = 'link'"
-                                                    >{{ __('Add Link') }}</button>
-                                                </div>
-                                                <div x-show="uploadType==='file'">
-                                                    <div
-                                                        class="kmsar-dropzone"
-                                                        @click="$refs.fileInput.click()"
-                                                        @dragover.prevent
-                                                        @drop.prevent="handleDrop($event)"
-                                                    >
-                                                        <svg class="kmsar-dropzone-icon" xmlns="http://www.w3.org/2000/svg"
-                                                            fill="none" viewBox="0 0 24 24"
-                                                            stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                            <path stroke-linecap="round"
-                                                                stroke-linejoin="round"
-                                                                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-                                                        </svg>
-                                                        <p class="kmsar-dropzone-title">
-                                                            <span>{{ __('Click to upload') }}</span> {{ __('or drag and drop') }}
-                                                        </p>
-                                                        <p class="kmsar-dropzone-hint">
-                                                            {{ __('PDF, Word, Excel, Image · Max 100MB · 2 files max') }}
-                                                        </p>
-                                                        <input
-                                                            id="research_documents"
-                                                            type="file"
-                                                            x-ref="fileInput"
-                                                            name="files[]"
-                                                            multiple
-                                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                                                            class="hidden"
-                                                            style="display:none;"
-                                                            @change="handleFileSelect($event)"
-                                                        >
-                                                        <p class="modal-file-name" style="font-size:12px;color:#475569;margin:10px 0 0;min-height:16px;"></p>
-                                                    </div>
-                                                    <p class="kmsar-form-hint">{{ __('Maximum 2 files per upload · PDF, Word, Excel, Image · Max 100MB each') }}</p>
-                                                </div>
-                                                <div x-show="uploadType==='link'" x-cloak>
-                                                    <input type="text" name="external_link"
-                                                        placeholder=""
-                                                        class="kmsar-input"
-                                                        style="width:100%;">
-                                                    <p class="kmsar-form-hint">{{ __('Paste a Google Drive, OneDrive, DOI, or any public link to your document.') }}</p>
-                                                </div>
+                                                <p class="kmsar-form-hint mb-2" x-text="counterText"></p>
+                                                @include('faculty.research.partials.document-upload-fields', ['maxUploadFiles' => $maxUploadFiles])
                                             </div>
                                             <x-button type="submit" variant="primary">{{ __('Upload') }}</x-button>
                                         </form>
@@ -493,7 +441,9 @@
                     style="margin:0;"
                     x-data="researchProgressProof()"
                     data-initial-links="{{ e(json_encode($oldExternalLinks)) }}"
-                    data-max-files="{{ $maxUploadFiles }}"
+                    data-max-files="{{ $remainingFileUploadSlots }}"
+                    data-max-total-files="{{ $maxUploadFiles }}"
+                    data-existing-file-count="{{ $fileDocumentCount }}"
                     data-max-links="{{ $maxExternalLinks }}"
                     data-upload-type="{{ $progressUploadTab === 'link' ? 'link' : 'file' }}"
                     data-disallowed-hosts="{{ e(json_encode(config('kmsar.disallowed_external_link_hosts', []))) }}"
@@ -644,7 +594,11 @@
                                         <span>{{ __('Add a document') }}</span> {{ __('or drag and drop') }}
                                     </p>
                                     <p class="kmsar-dropzone-hint">
-                                        {{ __('PDF, Word, Excel, Image · Max 100MB · up to :max files', ['max' => $maxUploadFiles]) }}
+                                        {{ __('PDF, Word, Excel, Image · Max 100MB · :count of :max files uploaded · :remaining remaining', [
+                                            'count' => $fileDocumentCount,
+                                            'max' => $maxUploadFiles,
+                                            'remaining' => $remainingFileUploadSlots,
+                                        ]) }}
                                     </p>
                                     <input
                                         type="file"
@@ -861,6 +815,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 @endpush
 
+@push('scripts-head')
+    @include('faculty.research.partials.document-upload-alpine')
+@endpush
+
 @push('scripts')
     <script>
         document.addEventListener('alpine:init', () => {
@@ -929,7 +887,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         return;
                     }
                     if (this.selectedFiles.length >= this.maxFiles) {
-                        this.fileError = 'You may upload up to ' + this.maxFiles + ' files.';
+                        this.fileError = @json(__('You can only upload :count more file(s) for this research.')).replace(':count', String(this.maxFiles));
                         return;
                     }
                     this.fileError = '';
@@ -1073,47 +1031,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     this.addFile(input.files[0]);
                     input.value = '';
-                },
-            }));
-
-            Alpine.data('researchShowDocumentUpload', () => ({
-                uploadType: 'file',
-                handleDrop(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const input = this.$refs.fileInput;
-                    if (!input || !e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) {
-                        return;
-                    }
-                    const files = e.dataTransfer.files;
-                    if (files.length > 2) {
-                        alert(@json(__('Maximum 2 files at a time.')));
-                        input.value = '';
-                        return;
-                    }
-                    const dt = new DataTransfer();
-                    Array.from(files).forEach((f) => dt.items.add(f));
-                    input.files = dt.files;
-                    this.handleFileSelect({ target: input });
-                },
-                handleFileSelect(e) {
-                    const input = e.target;
-                    if (input.files.length > 2) {
-                        alert(@json(__('Maximum 2 files at a time.')));
-                        input.value = '';
-                        return;
-                    }
-                    const root = input.closest('.kmsar-dropzone');
-                    const disp = root ? root.querySelector('.modal-file-name') : null;
-                    if (disp) {
-                        if (input.files.length === 0) {
-                            disp.textContent = '';
-                        } else if (input.files.length === 1) {
-                            disp.textContent = input.files[0].name;
-                        } else {
-                            disp.textContent = input.files.length + ' files selected';
-                        }
-                    }
                 },
             }));
         });

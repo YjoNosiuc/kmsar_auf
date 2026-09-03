@@ -373,6 +373,25 @@ class Research extends Model implements AuditableContract
         return $this->hasMany(Document::class);
     }
 
+    public function fileDocumentsCount(): int
+    {
+        if ($this->relationLoaded('documents')) {
+            return $this->documents->whereNull('external_link')->count();
+        }
+
+        return (int) $this->documents()->whereNull('external_link')->count();
+    }
+
+    public function maxFileDocuments(): int
+    {
+        return (int) config('kmsar.max_research_upload_files', 10);
+    }
+
+    public function remainingFileUploadSlots(): int
+    {
+        return max(0, $this->maxFileDocuments() - $this->fileDocumentsCount());
+    }
+
     /**
      * @return list<string>
      */

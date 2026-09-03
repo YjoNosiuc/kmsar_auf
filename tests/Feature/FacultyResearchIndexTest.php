@@ -55,6 +55,17 @@ describe('Faculty My Research filters', function () {
         $response->assertDontSee('value="draft"', false);
     });
 
+    it('does not offer research completed in the workflow status filter dropdown', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+
+        $this->actingAs($faculty)
+            ->get(route('research.index'))
+            ->assertOk()
+            ->assertDontSee('value="research_completed"', false)
+            ->assertDontSee(ResearchStatus::label(ResearchStatus::RESEARCH_COMPLETED), false);
+    });
+
     it('filters by workflow status on the server', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);

@@ -2,6 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Models\Research;
+use App\Notifications\ResearchResubmitted;
+use App\Support\ResearchDeanRouting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,6 +28,24 @@ class SendNotificationJob implements ShouldQueue
 
     public function handle(): void
     {
-        // Resolve recipients + mail / database notifications per notificationKey (KMSAR §12 table).
+        $research = Research::query()
+            ->with(['primaryAuthor', 'researchAuthors', 'motherCollege'])
+            ->find($this->researchId);
+
+        if ($research === null) {
+            return;
+        }
+
+        match ($this->notificationKey) {
+            'resubmitted' => $this->notifyDeansOfResubmit($research),
+            default => null,
+        };
+    }
+
+    private function notifyDeansOfResubmit(Research $research): void
+    {
+        foreach (ResearchDeanRouting::deanUsersFor($research) as $dean) {
+            $dean->notify(new ResearchResubmitted($research));
+        }
     }
 }

@@ -14,7 +14,7 @@
         $filterHidden = collect($exportFilters)->filter(fn ($v, $k) => $k === 'include_rejected' || ($v !== null && $v !== ''))->all();
         $statusKeys = config('kmsar.outcome_classification_codes', []);
         $classificationKeys = array_keys(config('kmsar.research_classifications', []));
-        $workflowStatusOptions = ResearchStatus::institutionalFilterOptions();
+        $workflowStatusOptions = ResearchStatus::workflowFilterOptions();
         $stats = $reportStats ?? (
             $reportScope === 'college'
                 ? ['matching' => $totalCount, 'published' => 0, 'presented' => 0]

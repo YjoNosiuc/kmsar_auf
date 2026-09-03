@@ -120,15 +120,16 @@ test.describe('Current system UAT — all roles', () => {
       await expect(page.getByText('Telerehabilitation Outcomes Among Outpatients in Pampanga')).toHaveCount(0);
     });
 
-    test('UAT-FAC-002: Search and stage filters apply across all of the faculty records', async ({ page }) => {
+    test('UAT-FAC-002: Search and workflow status filters apply across faculty records', async ({ page }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research?search=Blockchain');
       await expect(page.getByText('Blockchain-Based Academic Credential Verification System')).toBeVisible();
       await expect(page.getByText('Natural Language Processing for Tagalog Sentiment Analysis')).toHaveCount(0);
 
-      await page.goto('/research?approval_stage=draft');
+      await page.goto('/research?status=draft');
       await expect(page.getByText('Natural Language Processing for Tagalog Sentiment Analysis')).toBeVisible();
       await expect(page.getByText('Blockchain-Based Academic Credential Verification System')).toHaveCount(0);
+      await expect(page.getByText('AI-Based Crop Disease Detection')).toHaveCount(0);
     });
 
     test('UAT-FAC-003: Faculty cannot open Reports or other role dashboards', async ({ page }) => {
@@ -148,12 +149,14 @@ test.describe('Current system UAT — all roles', () => {
 
       await page.goto('/profile');
       await expect(page.getByRole('heading', { name: /My Profile/i })).toBeVisible();
-      await expect(page.locator('#profile_first_name, input[name="first_name"]').first()).toBeVisible();
+      await expect(page.locator('#profile_first_name')).toBeVisible();
+      await expect(page.locator('input[name="first_name"]')).toHaveCount(0);
     });
 
     test('FAC-11: Register New opens the details wizard', async ({ page }) => {
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research/create');
+      await page.getByRole('button', { name: 'Register new research', exact: true }).click();
       await expect(page).toHaveURL(/\/research\/\d+\/details/);
       await expect(page.locator('textarea[name="title"], input[name="title"]').first()).toBeVisible();
     });
@@ -203,11 +206,12 @@ test.describe('Current system UAT — all roles', () => {
       await expect(page.getByText(/Crop Disease/i).first()).toBeVisible();
     });
 
-    test('DEAN-17: Dean reports date range uses OVPRI approval month', async ({ page }) => {
+    test('DEAN-17: Dean reports date range filters by research accepted month', async ({ page }) => {
       await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
-      await page.goto('/reports?date_from=2025-03-01&date_to=2025-03-31');
-      await expect(page.getByText('Blockchain-Based Academic', { exact: false })).toBeVisible();
-      await expect(page.locator('table.kmsar-table tbody').getByText('IoT-Enabled Smart Campus', { exact: false })).toHaveCount(0);
+      await page.goto('/reports?date_from=2025-04-01&date_to=2025-04-30');
+      const body = page.locator('table.kmsar-table tbody');
+      await expect(body.getByText('Blockchain-Based Academic', { exact: false })).toBeVisible();
+      await expect(body.getByText('IoT-Enabled Smart Campus', { exact: false })).toHaveCount(0);
     });
 
     test('DEAN-21: CAMP dean reports only CAMP OVPRI-approved rows', async ({ page }) => {
@@ -258,7 +262,7 @@ test.describe('Current system UAT — all roles', () => {
       await expectForbidden(page, '/dean/dashboard');
     });
 
-    test('OVP-05 / OVP-06: OVPRI queue and review open seeded ovpri_review record', async ({ page }) => {
+    test('OVP-05 / OVP-06: OVPRI queue and review open seeded final OVPRI review record', async ({ page }) => {
       await login(page, credentials.ovpri.email, credentials.ovpri.password);
       await page.goto('/ovpri/queue');
       await expect(page.getByText(/Federated Learning|Telerehabilitation/i).first()).toBeVisible();
@@ -275,12 +279,13 @@ test.describe('Current system UAT — all roles', () => {
       await expect(page.locator('table, .kmsar-table').first()).toBeVisible();
     });
 
-    test('OVP-15: University reports date range uses OVPRI approval', async ({ page }) => {
+    test('OVP-15: University reports date range filters by research accepted month', async ({ page }) => {
       await login(page, credentials.ovpri.email, credentials.ovpri.password);
       await page.goto('/reports?date_from=2025-03-01&date_to=2025-03-31');
       const body = page.locator('table.kmsar-table tbody');
-      await expect(body.getByText('Blockchain-Based Academic', { exact: false })).toBeVisible();
+      await expect(body.getByText('Ergonomic Interventions', { exact: false })).toBeVisible();
       await expect(body.getByText('Point-of-Care Testing', { exact: false })).toBeVisible();
+      await expect(body.getByText('Blockchain-Based Academic', { exact: false })).toHaveCount(0);
       await expect(body.getByText('IoT-Enabled Smart Campus', { exact: false })).toHaveCount(0);
       await expect(body.getByText('Antimicrobial Stewardship', { exact: false })).toHaveCount(0);
     });
@@ -325,7 +330,9 @@ test.describe('Current system UAT — all roles', () => {
 
       await page.goto('/reports?date_from=2025-03-01&date_to=2025-03-31');
       const body = page.locator('table.kmsar-table tbody');
-      await expect(body.getByText('Blockchain-Based Academic', { exact: false })).toBeVisible();
+      await expect(body.getByText('Ergonomic Interventions', { exact: false })).toBeVisible();
+      await expect(body.getByText('Point-of-Care Testing', { exact: false })).toBeVisible();
+      await expect(body.getByText('Blockchain-Based Academic', { exact: false })).toHaveCount(0);
       await expect(body.getByText('IoT-Enabled Smart Campus', { exact: false })).toHaveCount(0);
     });
 

@@ -50,6 +50,10 @@
                 <x-alert type="success" class="kmsar-form-group" :message="session('success')" />
             @endif
 
+            @if (session('warning'))
+                <x-alert type="warning" class="kmsar-form-group" :message="session('warning')" />
+            @endif
+
             @if ($errors->any())
                 <x-alert type="danger" class="kmsar-form-group">
                     <ul style="margin:0;padding-left:1.1rem;">
@@ -109,6 +113,27 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('otp-form');
+    const meta = document.querySelector('meta[name="csrf-token"]');
+
+    function syncCsrf(token) {
+        if (! token) {
+            return;
+        }
+        if (meta) {
+            meta.setAttribute('content', token);
+        }
+        document.querySelectorAll('input[name="_token"]').forEach(function (input) {
+            input.value = token;
+        });
+    }
+
+    window.addEventListener('pageshow', function (event) {
+        if (event.persisted) {
+            window.location.reload();
+        }
+    });
+
     const inputs = document.querySelectorAll('.otp-input');
     const form = document.getElementById('otp-form');
     const submitBtn = document.getElementById('otp-submit-btn');
@@ -183,6 +208,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     form.addEventListener('submit', function(e) {
+        syncCsrf(meta?.getAttribute('content'));
         if (submitting) {
             e.preventDefault();
             return;

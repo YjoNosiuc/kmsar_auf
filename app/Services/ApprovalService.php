@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Jobs\SendNotificationJob;
+use App\Mail\ResearchRegisteredFacultyMail;
 use App\Mail\ResearchSubmittedDeanMail;
 use App\Mail\ResearchSubmittedFacultyMail;
 use App\Models\Approval;
@@ -15,6 +16,7 @@ use App\Models\User;
 use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
 use App\Notifications\ResearchReturned;
+use App\Notifications\ResearchReturnedToDean;
 use App\Notifications\ResearchSubmissionConfirmed;
 use App\Notifications\ResearchSubmitted;
 use App\Support\ResearchDeanRouting;
@@ -477,6 +479,16 @@ class ApprovalService
             ->findOrFail($researchId);
 
         if ($fresh->registration_type === 'existing') {
+            $fresh->primaryAuthor?->notify(new ResearchSubmissionConfirmed($fresh));
+
+            if ($fresh->primaryAuthor?->email) {
+                SafeMail::send(
+                    $fresh->primaryAuthor->email,
+                    new ResearchRegisteredFacultyMail($fresh),
+                    0
+                );
+            }
+
             return;
         }
 
@@ -655,7 +667,6 @@ class ApprovalService
             ]);
         });
 
-        SendNotificationJob::dispatch($researchId, 'approved');
     }
 
     public function return(Research $research, User $actor, string $remarks, string $stage = 'dean'): void
@@ -744,7 +755,6 @@ class ApprovalService
             );
         });
 
-        SendNotificationJob::dispatch($researchId, 'completion_submitted');
     }
 
     /**
@@ -979,11 +989,14 @@ class ApprovalService
         $fresh = Research::query()->with('primaryAuthor')->findOrFail($researchId);
 
         if (in_array($fresh->status, [ResearchStatus::INITIAL_REJECTED, ResearchStatus::FINAL_REJECTED], true)) {
-            $fresh->primaryAuthor?->notify(new ResearchReturned($fresh));
-        }
+            $returnedBy = $stage === 'ovpri' ? 'ovpri' : 'dean';
+            $fresh->primaryAuthor?->notify(new ResearchReturned($fresh, $remarks, $returnedBy));
 
-        if ($action === 'rejected') {
-            SendNotificationJob::dispatch($researchId, 'rejected');
+            if ($stage === 'ovpri') {
+                foreach (ResearchDeanRouting::deanUsersFor($fresh) as $dean) {
+                    $dean->notify(new ResearchReturnedToDean($fresh, $remarks));
+                }
+            }
         }
     }
 

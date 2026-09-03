@@ -9,6 +9,7 @@ export function e2eCliEnv(): NodeJS.ProcessEnv {
     ...process.env,
     APP_ENV: 'local',
     DB_DATABASE: 'kmsar_auf',
+    QUEUE_CONNECTION: 'sync',
   };
 }
 
@@ -60,4 +61,52 @@ export function runTinker(php: string) {
     stdio: 'pipe',
     env: e2eCliEnv(),
   }).toString();
+}
+
+/** Drain queued jobs created by the web app (notifications, mail). */
+export function processQueuedJobs(): void {
+  execFileSync(
+    'php',
+    ['artisan', 'queue:work', 'database', '--stop-when-empty', '--max-jobs=200', '--sleep=0'],
+    {
+      cwd: PROJECT_ROOT,
+      stdio: 'pipe',
+      timeout: 120_000,
+      env: {
+        ...process.env,
+        APP_ENV: 'local',
+        DB_DATABASE: 'kmsar_auf',
+      },
+    },
+  );
+}
+
+export function unreadNotificationCountForEmail(email: string): number {
+  const out = runTinker(
+    `echo \\App\\Models\\User::where('email','${email}')->first()?->unreadNotifications()->count() ?? 0;`,
+  );
+
+  return parseInt(out.match(/(\d+)\s*$/)?.[1] ?? '0', 10);
+}
+
+export async function waitForUnreadNotifications(
+  email: string,
+  minCount = 1,
+  timeoutMs = 45_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    processQueuedJobs();
+
+    if (unreadNotificationCountForEmail(email) >= minCount) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  throw new Error(
+    `Timed out waiting for ${minCount}+ unread notification(s) for ${email} (last count: ${unreadNotificationCountForEmail(email)})`,
+  );
 }

@@ -224,6 +224,7 @@ describe('Admin registration approval', function () {
         $pending = User::factory()->create([
             'is_active' => false,
             'is_pending' => true,
+            'user_type' => 'faculty',
             'email' => 'to.approve@example.com',
         ]);
         $pending->assignRole('viewer');
@@ -241,6 +242,43 @@ describe('Admin registration approval', function () {
         Mail::assertSent(UserApprovedMail::class, function (UserApprovedMail $mail) use ($pending) {
             return $mail->user->is($pending);
         });
+    });
+
+    it('rejects approving a student with a faculty role', function () {
+        $admin = approvalMakeSuperAdmin();
+        $pending = User::factory()->create([
+            'is_active' => false,
+            'is_pending' => true,
+            'user_type' => 'student',
+            'email' => 'student.pending@example.com',
+        ]);
+        $pending->assignRole('viewer');
+
+        $this->actingAs($admin)
+            ->from(route('admin.users.index'))
+            ->patch(route('admin.users.approve', $pending), ['role' => 'faculty'])
+            ->assertSessionHasErrors('role');
+
+        expect($pending->fresh()->is_pending)->toBeTrue();
+    });
+
+    it('defaults pending student approval to viewer role', function () {
+        Mail::fake();
+
+        $admin = approvalMakeSuperAdmin();
+        $pending = User::factory()->create([
+            'is_active' => false,
+            'is_pending' => true,
+            'user_type' => 'student',
+            'email' => 'student.auto@example.com',
+        ]);
+        $pending->assignRole('viewer');
+
+        $this->actingAs($admin)
+            ->patch(route('admin.users.approve', $pending))
+            ->assertRedirect(route('admin.users.index'));
+
+        expect($pending->fresh()->hasRole('viewer'))->toBeTrue();
     });
 
     it('lets super_admin reject a pending registration', function () {

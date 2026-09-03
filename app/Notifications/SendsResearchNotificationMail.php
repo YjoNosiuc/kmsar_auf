@@ -60,13 +60,14 @@ trait SendsResearchNotificationMail
         return match ($data['type'] ?? '') {
             'submitted' => $prefix.' — New research submitted for review',
             'submission_confirmed' => $prefix.' — Submission confirmed',
+            'resubmitted' => $prefix.' — Research resubmitted for review',
             'endorsed' => $prefix.' — Endorsed by college dean',
             'endorsed_to_ovpri', 'ovpri_pending' => $prefix.' — Awaiting OVPRI review',
             'approved' => $prefix.' — Research approved',
             'rejected' => $prefix.' — Research rejected',
             'returned' => $prefix.' — Returned for revision',
             'returned_to_dean' => $prefix.' — Returned to college for review',
-            'progress_updated' => $prefix.' — Progress update submitted',
+            'completion_submitted', 'progress_updated' => $prefix.' — Completion submitted for review',
             default => $prefix.' — Notification',
         };
     }

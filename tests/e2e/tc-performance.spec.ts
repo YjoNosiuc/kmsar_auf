@@ -8,6 +8,8 @@ import {
   setupEndorsedResearch,
   selectCurrentUserAsPrimary,
   submitResearchFromDocuments,
+  fillRegistrationStep1,
+  REGISTRATION_UI,
 } from './helpers/research';
 
 const USER_IMPORT = path.resolve('tests/e2e/fixtures/user_import_valid.xlsx');
@@ -113,17 +115,12 @@ test.describe('Performance — UAT', () => {
       test.slow();
       await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
       await page.goto('/research/create');
+      await page.getByRole('button', { name: 'Register new research', exact: true }).click();
       await page.waitForURL(/\/research\/\d+\/details/, { timeout: 90_000 });
 
       const title = uniqueTitle('PERF009 Submit');
-      await page.fill('textarea[name="title"]', title);
-      await page.selectOption('select[name="research_classification"]', 'internally_funded');
-      await page.check('input[name="expected_output[]"][value="publication"]');
-      await page.fill('input[name="start_date"]', '2026-01-01');
-      await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-      await page.selectOption('select[name="status"]', 'draft');
-      await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
-      await page.getByRole('button', { name: 'Continue to authors' }).click();
+      await fillRegistrationStep1(page, title);
+      await page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click();
       await page.waitForURL(/\/authors/, { timeout: 90_000 });
       await selectCurrentUserAsPrimary(page);
       await page.getByRole('button', { name: 'Continue to documents' }).click();

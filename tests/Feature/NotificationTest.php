@@ -11,6 +11,7 @@ use App\Notifications\ResearchEndorsed;
 use App\Notifications\ResearchEndorsedToOvpri;
 use App\Notifications\ResearchProgressUpdated;
 use App\Notifications\ResearchSubmissionConfirmed;
+use App\Notifications\ResearchResubmitted;
 use App\Notifications\ResearchReturned;
 use App\Notifications\ResearchReturnedToDean;
 use App\Notifications\ResearchSubmitted;
@@ -214,7 +215,7 @@ describe('ResearchReturned', function () {
 
 describe('ResearchReturnedToDean', function () {
 
-    it('is NOT sent to the college dean when OVPRI returns — faculty is notified instead', function () {
+    it('is sent to the college dean when OVPRI returns', function () {
         Notification::fake();
         $college = makeCollege();
         $faculty = makeFaculty($college);
@@ -222,13 +223,34 @@ describe('ResearchReturnedToDean', function () {
         $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
         $ovpri = makeOvpri();
         $dean = $college->headUser;
+        $remarks = 'Needs additional documentation from the college.';
 
         $this->actingAs($ovpri)->post(route('ovpri.return', $research), [
-            'remarks' => 'Needs additional documentation from the college.',
+            'remarks' => $remarks,
         ]);
 
         Notification::assertSentTo($faculty, ResearchReturned::class);
-        Notification::assertNotSentTo($dean, ResearchReturnedToDean::class);
+        Notification::assertSentTo($dean, ResearchReturnedToDean::class);
+    });
+
+    it('includes remarks in the faculty return notification payload', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
+        $dean = $college->headUser;
+        $remarks = 'Please revise Section 2 for clarity.';
+
+        $this->actingAs($dean)->post(route('approval.return', $research), [
+            'remarks' => $remarks,
+        ]);
+
+        Notification::assertSentTo($faculty, ResearchReturned::class, function (ResearchReturned $notification) use ($remarks) {
+            $payload = $notification->toArray($notification->research->primaryAuthor);
+
+            return ($payload['remarks'] ?? null) === $remarks;
+        });
     });
 
     it('is sent to the primary author on OVPRI return — not as ResearchReturnedToDean', function () {
@@ -344,5 +366,77 @@ describe('ResearchProgressUpdated', function () {
         ]);
 
         Notification::assertNotSentTo($ovpri, ResearchProgressUpdated::class);
+    });
+});
+
+// ─────────────────────────────────────────────
+// Dual-cycle copy and resubmit
+// ─────────────────────────────────────────────
+
+describe('Dual-cycle notifications', function () {
+
+    it('uses registered copy when OVPRI approves initial review', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['status' => ResearchStatus::INITIAL_OVPRI_REVIEW, 'submitted_at' => now()]);
+        $ovpri = makeOvpri();
+
+        $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Registered.']);
+
+        Notification::assertSentTo($faculty, ResearchApproved::class, function (ResearchApproved $notification) {
+            $payload = $notification->toArray($notification->research->primaryAuthor);
+
+            return str_contains($payload['message'], 'registered by OVPRI');
+        });
+    });
+
+    it('uses accepted copy when OVPRI approves final review', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::FINAL_OVPRI_REVIEW,
+            'submitted_at' => now(),
+            'final_review_count' => 1,
+        ]);
+        $ovpri = makeOvpri();
+
+        $this->actingAs($ovpri)->post(route('ovpri.approve', $research), ['remarks' => 'Accepted.']);
+
+        Notification::assertSentTo($faculty, ResearchApproved::class, function (ResearchApproved $notification) {
+            $payload = $notification->toArray($notification->research->primaryAuthor);
+
+            return str_contains($payload['message'], 'accepted by OVPRI');
+        });
+    });
+
+    it('notifies the dean when faculty resubmits after initial return', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['status' => ResearchStatus::INITIAL_REJECTED, 'submitted_at' => now()]);
+        $dean = $college->headUser;
+
+        $this->actingAs($faculty)->post(route('research.revise', $research));
+
+        Notification::assertSentTo($dean, ResearchResubmitted::class);
+    });
+
+    it('notifies faculty only when existing research is submitted directly', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['registration_type' => 'existing']);
+        $dean = $college->headUser;
+
+        $this->actingAs($faculty)->post(route('research.submit', $research));
+
+        Notification::assertSentTo($faculty, ResearchSubmissionConfirmed::class);
+        Notification::assertNotSentTo($dean, ResearchSubmitted::class);
     });
 });

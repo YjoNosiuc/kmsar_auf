@@ -100,6 +100,8 @@ return [
 
     'max_research_upload_files' => 10,
 
+    'max_upload_size_kb' => 102400,
+
     'max_research_external_links' => 10,
 
     'disallowed_external_link_hosts' => [
@@ -114,4 +116,43 @@ return [
 
     'idle_timeout_minutes' => max(1, (int) env('KMSAR_IDLE_TIMEOUT_MINUTES', 2)),
     'idle_countdown_seconds' => max(10, (int) env('KMSAR_IDLE_COUNTDOWN_SECONDS', 30)),
+
+    /*
+    | Admin user management — user type (profile) vs KMSAR role (permissions).
+    | User type is NOT a role. Roles like registrar and co_author are system-only.
+    */
+    'user_types' => [
+        'faculty' => 'Faculty',
+        'staff' => 'Staff',
+        'student' => 'Student',
+        'external_affiliate' => 'External Affiliate',
+    ],
+
+    'assignable_roles' => [
+        'super_admin' => 'Super Admin',
+        'ovpri_admin' => 'OVPRI Admin',
+        'cdaic_admin' => 'CDAIC Admin',
+        'college_dean' => 'Dean/Head',
+        'faculty' => 'Faculty',
+        'viewer' => 'Viewer',
+    ],
+
+    'user_type_default_roles' => [
+        'faculty' => 'faculty',
+        'staff' => 'faculty',
+        'student' => 'viewer',
+        'external_affiliate' => 'viewer',
+    ],
+
+    'user_type_allowed_roles' => [
+        'faculty' => ['faculty', 'college_dean'],
+        'staff' => ['faculty', 'college_dean', 'ovpri_admin', 'cdaic_admin', 'super_admin'],
+        'student' => ['viewer'],
+        'external_affiliate' => ['viewer'],
+    ],
+
+    'excluded_directory_roles' => [
+        'registrar',
+        'co_author',
+    ],
 ];

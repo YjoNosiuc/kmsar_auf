@@ -11,7 +11,7 @@
         use App\Support\ResearchStatus;
 
         $statusOptions = collect(['' => __('All')])
-            ->merge(collect(ResearchStatus::institutionalFilterOptions()))
+            ->merge(collect(ResearchStatus::workflowFilterOptions()))
             ->all();
 
         $statusBadgeVariant = static function (string $status): string {

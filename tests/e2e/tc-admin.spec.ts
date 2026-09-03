@@ -153,8 +153,8 @@ test.describe('Super Admin — UAT Test Suite', () => {
 
     await expect(page.locator('input[name="date_from"]')).toBeVisible();
     await expect(page.locator('input[name="date_to"]')).toBeVisible();
-    await expect(page.getByLabel(/Date From/i)).toBeVisible();
-    await expect(page.getByLabel(/Date To/i)).toBeVisible();
+    await expect(page.getByLabel(/Research accepted from/i)).toBeVisible();
+    await expect(page.getByLabel(/Research accepted to/i)).toBeVisible();
   });
 
   test('TC-003c: Admin dashboard has SDG Distribution chart', async ({ page }) => {

@@ -7,6 +7,12 @@ import {
   approveResearch,
   selectCurrentUserAsPrimary,
   submitResearchFromDocuments,
+  fillRegistrationStep1,
+  submitCompletionViaModal,
+  returnResearchDean,
+  REGISTRATION_UI,
+  ResearchWorkflowStatus,
+  researchWorkflowStatus,
 } from './helpers/research';
 
 const SAMPLE_PDF = 'tests/e2e/fixtures/sample.pdf';
@@ -26,23 +32,18 @@ async function openNotificationBell(page: Page): Promise<void> {
 async function createAndSubmitResearchAsCamp(page: Page, title: string): Promise<string | undefined> {
   await login(page, credentials.faculty_camp.email, credentials.faculty_camp.password);
   await page.goto('/research/create');
+  await page.getByRole('button', { name: 'Register new research', exact: true }).click();
   await page.waitForURL(/\/research\/\d+\/details/, { timeout: 90_000 });
 
-  await page.fill('textarea[name="title"]', title);
-  await page.selectOption('select[name="research_classification"]', 'internally_funded');
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'draft');
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+  await fillRegistrationStep1(page, title);
   await Promise.all([
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
-    page.getByRole('button', { name: 'Continue to authors' }).click(),
+    page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click(),
   ]);
   await selectCurrentUserAsPrimary(page);
   await Promise.all([
     page.waitForURL(/\/documents/, { timeout: 90_000 }),
-    page.getByRole('button', { name: 'Continue to documents' }).click(),
+    page.getByRole('button', { name: REGISTRATION_UI.continueToDocuments }).click(),
   ]);
   await page.locator('#kmsar-document-file-input').setInputFiles(SAMPLE_PDF);
   await page.getByRole('button', { name: 'Save Document' }).click();
@@ -59,12 +60,10 @@ async function openDeanReview(page: Page, researchId: string): Promise<void> {
   await page.goto(`/approval/${researchId}`);
 }
 
-async function submitProgressUpdate(page: Page, researchId: string): Promise<void> {
-  await page.goto(`/research/${researchId}`);
-  await page.getByRole('button', { name: 'Update Progress' }).click();
-  await page.locator('select[name="status"]').selectOption('research_registered');
-  await page.locator('form[action*="update-progress"] input[name="files[]"]').setInputFiles(SAMPLE_PDF);
-  await page.locator('form[action*="update-progress"] button[type="submit"]').click();
+async function submitCompletion(page: Page, researchId: string): Promise<void> {
+  await submitCompletionViaModal(page, researchId, {
+    classificationCode: 'completed_not_presented_submitted',
+  });
 }
 
 test.describe('Dean/Head — UAT Test Suite', () => {
@@ -112,7 +111,7 @@ test.describe('Dean/Head — UAT Test Suite', () => {
 
     const total = await readCard('Total Research');
     const pending = await readCard('Pending Endorsement');
-    const published = await readCard('Published');
+    const published = await readCard('Presented');
     const scopus = await readCard('Scopus/WoS Indexed');
 
     expect(total).toBeGreaterThan(0);
@@ -141,8 +140,8 @@ test.describe('Dean/Head — UAT Test Suite', () => {
 
     await expect(page.locator('input[name="date_from"]')).toBeVisible();
     await expect(page.locator('input[name="date_to"]')).toBeVisible();
-    await expect(page.getByLabel(/Date From/i)).toBeVisible();
-    await expect(page.getByLabel(/Date To/i)).toBeVisible();
+    await expect(page.getByLabel(/Research accepted from/i)).toBeVisible();
+    await expect(page.getByLabel(/Research accepted to/i)).toBeVisible();
   });
 
   test('TC-005: Dashboard only shows data from own college', async ({ page }) => {
@@ -350,40 +349,39 @@ test.describe('Dean/Head — UAT Test Suite', () => {
     await expect(page.getByText('Revisions').locator('..').getByText('2')).toBeVisible();
   });
 
-  test('TC-018: Reject research → stage changes to Rejected', async ({ page }) => {
-    const title = uniqueTitle('TC018 Reject');
+  test('TC-018: Return research → stage changes to Initial Review Returned', async ({ page }) => {
+    const title = uniqueTitle('TC018 Return');
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
 
     await openDeanReview(page, researchId);
-    await page.getByRole('button', { name: 'Reject', exact: true }).click();
-    await page.fill('#reject-remarks', 'Research scope does not meet college research priorities.');
-    await page.locator('form[action*="reject"] button[type="submit"]').click();
+    await page.getByRole('button', { name: 'Return', exact: true }).click();
+    await page.fill('#return-remarks', 'Research scope needs revision before OVPRI review.');
+    await page.locator('form[action*="return"] button[type="submit"]').click();
     await expect(
-      page.getByRole('alert').filter({ hasText: /submission has been rejected/i }),
+      page.getByRole('alert').filter({ hasText: /returned for revision/i }),
     ).toBeVisible({ timeout: 15_000 });
+
+    expect(researchWorkflowStatus(researchId!)).toBe(ResearchWorkflowStatus.INITIAL_REJECTED);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await page.goto(`/research/${researchId}`);
-    await expect(page.getByRole('cell', { name: 'Rejected' })).toBeVisible();
+    await expect(page.getByText(REGISTRATION_UI.initialReviewReturnedLabel).first()).toBeVisible();
   });
 
-  test('TC-019: Faculty receives ResearchRejected notification on dean rejection (H-04)', async ({
+  test('TC-019: Faculty receives returned notification on dean return', async ({
     page,
   }) => {
-    const title = uniqueTitle('TC019 Reject Notif');
+    const title = uniqueTitle('TC019 Return Notif');
     const remarks = 'Does not meet minimum documentation requirements for college review.';
     const researchId = await createAndSubmitResearch(page, title);
     expect(researchId).toBeTruthy();
 
-    await openDeanReview(page, researchId);
-    await page.getByRole('button', { name: 'Reject', exact: true }).click();
-    await page.fill('#reject-remarks', remarks);
-    await page.locator('form[action*="reject"] button[type="submit"]').click();
+    await returnResearchDean(page, researchId!, remarks);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
     await openNotificationBell(page);
-    await expect(page.getByText(/has been rejected/i).first()).toBeVisible();
+    await expect(page.getByText(/returned for revision/i).first()).toBeVisible();
     await expect(page.getByText(remarks).first()).toBeVisible();
   });
 
@@ -478,7 +476,7 @@ test.describe('Dean/Head — UAT Test Suite', () => {
     await approveResearch(page, researchId);
 
     await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
-    await submitProgressUpdate(page, researchId);
+    await submitCompletion(page, researchId!);
 
     await deanLogin(page);
     await openNotificationBell(page);

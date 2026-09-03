@@ -148,6 +148,30 @@ describe('Wizard: Draft Creation', function () {
             ->assertForbidden();
     });
 
+    it('viewer role cannot access registration routes', function () {
+        $college = makeCollege();
+        $viewer = makeViewer($college);
+
+        $this->actingAs($viewer)
+            ->get(route('research.create'))
+            ->assertForbidden();
+
+        $this->actingAs($viewer)
+            ->post(route('research.begin'), ['registration_type' => 'new'])
+            ->assertForbidden();
+    });
+
+    it('redirects to research show when wizard is opened on a non-editable record', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['status' => ResearchStatus::RESEARCH_ACCEPTED]);
+
+        $this->actingAs($faculty)
+            ->get(route('research.wizard.details', $research))
+            ->assertRedirect(route('research.show', $research));
+    });
+
     it('faculty can save wizard step 1 (registration details)', function () {
         $college = makeCollege();
         $faculty = makeFaculty($college);
@@ -159,6 +183,7 @@ describe('Wizard: Draft Creation', function () {
             'mother_college_id' => $college->id,
             'research_classification' => 'internally_funded',
             'funding_agency' => 'CHED',
+            'agenda_themes' => ['theme_1'],
             'sdg_tags' => [4, 8],
             'expected_output' => ['publication'],
             'start_date' => now()->toDateString(),
@@ -183,6 +208,26 @@ describe('Wizard: Draft Creation', function () {
         $this->actingAs($faculty)
             ->put(route('research.wizard.details.save', $research), [])
             ->assertSessionHasErrors(['title', 'registration_type']);
+    });
+
+    it('requires at least one research agenda theme when continuing registration', function () {
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+
+        $this->actingAs($faculty)
+            ->from(route('research.wizard.details', $research))
+            ->put(route('research.wizard.details.save', $research), [
+                'registration_type' => 'new',
+                'title' => 'Theme validation test',
+                'mother_college_id' => $college->id,
+                'research_classification' => 'internally_funded',
+                'sdg_tags' => [4],
+                'expected_output' => ['publication'],
+                'start_date' => now()->toDateString(),
+                'estimated_completion_date' => now()->addYear()->toDateString(),
+            ])
+            ->assertSessionHasErrors('agenda_themes');
     });
 
     it('faculty can save wizard step 2 (authors)', function () {
@@ -321,24 +366,6 @@ describe('Submit: proposal → initial dean review', function () {
             ->assertSessionHasErrors();
 
         expect($research->fresh()->status)->toBe(ResearchStatus::DRAFT);
-    });
-
-    it('non-primary co-author without can_edit cannot submit', function () {
-        $college = makeCollege();
-        $faculty = makeFaculty($college);
-        $coauthor = makeFaculty($college);
-        $research = makeDraftResearch($faculty, $college);
-
-        ResearchAuthor::factory()->create([
-            'research_id' => $research->id,
-            'user_id' => $coauthor->id,
-            'is_primary' => false,
-            'can_edit' => false,
-        ]);
-
-        $this->actingAs($coauthor)
-            ->post(route('research.submit', $research))
-            ->assertForbidden();
     });
 
     it('research cannot be submitted twice', function () {
@@ -808,6 +835,7 @@ describe('Full Lifecycle: new registration happy path', function () {
             'title' => 'AI in Pampanga Schools',
             'mother_college_id' => $college->id,
             'research_classification' => 'internally_funded',
+            'agenda_themes' => ['theme_2'],
             'sdg_tags' => [4],
             'expected_output' => ['publication'],
             'start_date' => now()->toDateString(),

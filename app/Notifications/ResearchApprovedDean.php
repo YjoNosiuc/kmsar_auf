@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\Research;
+use App\Support\ResearchNotificationCopy;
 
 class ResearchApprovedDean extends QueuedResearchNotification
 {
@@ -12,17 +13,12 @@ class ResearchApprovedDean extends QueuedResearchNotification
         public Research $research
     ) {}
 
-
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [
-            'message'          => 'Research '
-                                  . $this->research->reference_number
-                                  . ' from your college has been '
-                                  . 'approved by OVPRI.',
-            'action_url'       => route('approval.review',
-                                    $this->research),
-            'type'             => 'approved',
+            'message' => ResearchNotificationCopy::approvedDean($this->research),
+            'action_url' => route('approval.review', $this->research),
+            'type' => 'approved',
         ]);
     }
 }

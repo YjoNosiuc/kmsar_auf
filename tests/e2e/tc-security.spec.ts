@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { login, logout, credentials, stopKeepAlive } from './helpers/auth';
 import { runTinker } from './helpers/db';
-import { createAndSubmitResearch, selectCurrentUserAsPrimary } from './helpers/research';
+import { createAndSubmitResearch, selectCurrentUserAsPrimary, fillRegistrationStep1, REGISTRATION_UI } from './helpers/research';
 
 const FIXTURES = path.resolve('tests/e2e/fixtures');
 const SAMPLE_PDF = path.join(FIXTURES, 'sample.pdf');
@@ -30,23 +30,18 @@ function ensureOversizePdfFixture(): string {
 }
 
 async function fillStep1Basics(page: Page, title: string): Promise<void> {
-  await page.fill('textarea[name="title"]', title);
-  await page.selectOption('select[name="research_classification"]', 'internally_funded');
-  await page.check('input[name="expected_output[]"][value="publication"]');
-  await page.fill('input[name="start_date"]', '2026-01-01');
-  await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-  await page.selectOption('select[name="status"]', 'draft');
-  await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
+  await fillRegistrationStep1(page, title);
 }
 
 async function startWizardAtDocuments(page: Page, title: string): Promise<string> {
   await login(page, credentials.faculty_ccs.email, credentials.faculty_ccs.password);
   await page.goto('/research/create');
+  await page.getByRole('button', { name: 'Register new research', exact: true }).click();
   await page.waitForURL(/\/research\/\d+\/details/, { timeout: 90_000 });
   await fillStep1Basics(page, title);
   await Promise.all([
     page.waitForURL(/\/authors/, { timeout: 90_000 }),
-    page.getByRole('button', { name: 'Continue to authors' }).click(),
+    page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click(),
   ]);
   await selectCurrentUserAsPrimary(page);
   await Promise.all([
@@ -63,11 +58,11 @@ async function openDeanReturnModal(page: Page, researchId: string): Promise<void
   await page.locator('#return-remarks').waitFor({ state: 'visible', timeout: 15_000 });
 }
 
-async function openDeanRejectModal(page: Page, researchId: string): Promise<void> {
+async function openDeanReturnModalEmpty(page: Page, researchId: string): Promise<void> {
   await login(page, credentials.dean_ccs.email, credentials.dean_ccs.password);
   await page.goto(`/approval/${researchId}`);
-  await page.getByRole('button', { name: 'Reject', exact: true }).click();
-  await page.locator('#reject-remarks').waitFor({ state: 'visible', timeout: 15_000 });
+  await page.getByRole('button', { name: 'Return', exact: true }).click();
+  await page.locator('#return-remarks').waitFor({ state: 'visible', timeout: 15_000 });
 }
 
 test.describe('Security & sad-path — UAT', () => {
@@ -259,9 +254,9 @@ test.describe('Security & sad-path — UAT', () => {
       await page.check('input[name="expected_output[]"][value="publication"]');
       await page.fill('input[name="start_date"]', '2026-06-01');
       await page.fill('input[name="estimated_completion_date"]', '2026-01-01');
-      await page.selectOption('select[name="status"]', 'draft');
+      await page.check('input[name="agenda_themes[]"][value="theme_1"]');
       await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
-      await page.getByRole('button', { name: 'Continue to authors' }).click();
+      await page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click();
       await expect(page.locator('.kmsar-form-error, .kmsar-alert--danger').first()).toBeVisible({
         timeout: 15_000,
       });
@@ -362,18 +357,18 @@ test.describe('Security & sad-path — UAT', () => {
       expect(tooShort).toBe(true);
     });
 
-    test('SEC-015: Reject research with empty remarks → validation error (remarks required for reject)', async ({
+    test('SEC-015: Return research with empty remarks → validation error (remarks required for return)', async ({
       page,
     }) => {
-      const researchId = await createAndSubmitResearch(page, uniqueTitle('SEC015 Empty Reject'));
+      const researchId = await createAndSubmitResearch(page, uniqueTitle('SEC015 Empty Return'));
       expect(researchId).toBeTruthy();
-      await openDeanRejectModal(page, researchId!);
+      await openDeanReturnModalEmpty(page, researchId!);
 
-      await page.locator('#reject-remarks').evaluate((el: HTMLTextAreaElement) => {
+      await page.locator('#return-remarks').evaluate((el: HTMLTextAreaElement) => {
         el.removeAttribute('required');
         el.value = '';
       });
-      await page.locator('form[action*="reject"] button[type="submit"]').click();
+      await page.locator('form[action*="return"] button[type="submit"]').click();
       await expect(page.locator('.kmsar-form-error, .kmsar-alert--danger').first()).toBeVisible({
         timeout: 15_000,
       });
@@ -666,14 +661,14 @@ test.describe('Security & sad-path — UAT', () => {
       await page.check('input[name="expected_output[]"][value="publication"]');
       await page.fill('input[name="start_date"]', '2026-01-01');
       await page.fill('input[name="estimated_completion_date"]', '2027-01-01');
-      await page.selectOption('select[name="status"]', 'draft');
+      await page.check('input[name="agenda_themes[]"][value="theme_1"]');
       await page.getByRole('button', { name: 'SDG 4', exact: true }).click();
 
       await page.locator('input[name="sdg_tags"]').evaluate((el: HTMLInputElement) => {
         el.value = JSON.stringify([99]);
       });
 
-      await page.getByRole('button', { name: 'Continue to authors' }).click();
+      await page.getByRole('button', { name: REGISTRATION_UI.continueToAuthors }).click();
 
       const errorVisible = await page
         .locator('.kmsar-form-error, .kmsar-alert--danger')

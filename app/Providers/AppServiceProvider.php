@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Notifications\Channels\ResilientMailChannel;
+use App\Services\SmtpSettingsService;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +22,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Notification::extend('resilient-mail', function ($app) {
+            return $app->make(ResilientMailChannel::class);
+        });
+
+        $this->app->make(SmtpSettingsService::class)->applyToConfig();
     }
 }

@@ -16,6 +16,12 @@ class ResearchEndorsedToOvpri extends QueuedResearchNotification
         public Research $research
     ) {}
 
+    /** In-app bell only — branded email sent separately to avoid Mailtrap rate limits. */
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [

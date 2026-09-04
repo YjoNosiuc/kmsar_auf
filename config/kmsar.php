@@ -155,4 +155,49 @@ return [
         'registrar',
         'co_author',
     ],
+
+    /*
+    | Admin SMTP settings — presets and factory defaults (Mailtrap sandbox).
+    | Password is stored encrypted in smtp_settings; set via admin UI or .env on first migrate.
+    */
+    'smtp_defaults' => [
+        'preset' => 'mailtrap_sandbox',
+        'mail_mailer' => 'smtp',
+        'mail_host' => 'sandbox.smtp.mailtrap.io',
+        'mail_port' => 2525,
+        'mail_username' => env('MAIL_USERNAME', ''),
+        'mail_encryption' => 'tls',
+        'mail_from_address' => env('MAIL_FROM_ADDRESS', 'noreply@kmsar.auf.edu.ph'),
+        'mail_from_name' => env('MAIL_FROM_NAME', 'KMSAR'),
+    ],
+
+    'smtp_presets' => [
+        'mailtrap_sandbox' => [
+            'label' => 'Mailtrap Email Testing (Sandbox)',
+            'description' => 'Captures emails in Mailtrap for development. Does not deliver to real inboxes.',
+            'mail_mailer' => 'smtp',
+            'mail_host' => 'sandbox.smtp.mailtrap.io',
+            'mail_port' => 2525,
+            'mail_encryption' => 'tls',
+            'mail_username' => '',
+        ],
+        'mailtrap_live' => [
+            'label' => 'Mailtrap Email Sending (Live)',
+            'description' => 'Delivers to real recipient inboxes. Requires a verified sending domain in Mailtrap.',
+            'mail_mailer' => 'smtp',
+            'mail_host' => 'live.smtp.mailtrap.io',
+            'mail_port' => 587,
+            'mail_encryption' => 'tls',
+            'mail_username' => 'api',
+        ],
+        'custom' => [
+            'label' => 'Custom SMTP',
+            'description' => 'Enter your own SMTP server details (Gmail, Brevo, institutional mail, etc.).',
+            'mail_mailer' => 'smtp',
+            'mail_host' => '',
+            'mail_port' => 587,
+            'mail_encryption' => 'tls',
+            'mail_username' => '',
+        ],
+    ],
 ];

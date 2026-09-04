@@ -569,8 +569,10 @@ class ResearchController extends Controller
 
         $research->refresh();
 
-        foreach (ResearchDeanRouting::deanUsersFor($research) as $dean) {
-            $dean->notify(new ResearchProgressUpdated($research));
+        if (! $isFinalResubmit) {
+            foreach (ResearchDeanRouting::deanUsersFor($research) as $dean) {
+                $dean->notify(new ResearchProgressUpdated($research));
+            }
         }
 
         $this->forgetResearchDashboardCaches($research);

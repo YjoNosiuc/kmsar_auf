@@ -13,6 +13,7 @@
 use App\Models\AuditLog;
 use App\Models\College;
 use App\Models\Program;
+use App\Models\SmtpSetting;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -584,5 +585,78 @@ describe('Admin audit logs', function () {
             ->assertViewHas('logs', fn ($logs) => $logs->getCollection()->every(
                 fn ($log) => $log->action === 'unique_filter_action'
             ));
+    });
+});
+
+// ─────────────────────────────────────────────
+// SMTP SETTINGS
+// ─────────────────────────────────────────────
+
+describe('Admin SMTP settings', function () {
+
+    it('super_admin can view the SMTP settings page', function () {
+        $admin = adminMakeSuperAdmin();
+
+        $this->actingAs($admin)
+            ->get(route('admin.smtp-settings.edit'))
+            ->assertOk()
+            ->assertViewIs('admin.smtp-settings.edit')
+            ->assertViewHas('presets');
+    });
+
+    it('denies non super_admin access to SMTP settings', function () {
+        $dean = adminMakeNonSuperAdmin('college_dean');
+
+        $this->actingAs($dean)
+            ->get(route('admin.smtp-settings.edit'))
+            ->assertForbidden();
+    });
+
+    it('super_admin can save SMTP settings', function () {
+        $admin = adminMakeSuperAdmin();
+
+        $this->actingAs($admin)
+            ->put(route('admin.smtp-settings.update'), [
+                'is_enabled' => '1',
+                'preset' => 'mailtrap_sandbox',
+                'mail_mailer' => 'smtp',
+                'mail_host' => 'sandbox.smtp.mailtrap.io',
+                'mail_port' => 2525,
+                'mail_username' => 'test-user',
+                'mail_password' => 'secret-pass',
+                'mail_encryption' => 'tls',
+                'mail_from_address' => 'noreply@kmsar.auf.edu.ph',
+                'mail_from_name' => 'KMSAR',
+            ])
+            ->assertRedirect(route('admin.smtp-settings.edit'))
+            ->assertSessionHas('success');
+
+        $settings = SmtpSetting::query()->first();
+
+        expect($settings)->not->toBeNull()
+            ->and($settings->mail_host)->toBe('sandbox.smtp.mailtrap.io')
+            ->and($settings->mail_username)->toBe('test-user')
+            ->and($settings->updated_by)->toBe($admin->id);
+    });
+
+    it('applies database SMTP settings to runtime config when enabled', function () {
+        SmtpSetting::query()->create([
+            'is_enabled' => true,
+            'preset' => 'mailtrap_sandbox',
+            'mail_mailer' => 'smtp',
+            'mail_host' => 'sandbox.smtp.mailtrap.io',
+            'mail_port' => 2525,
+            'mail_username' => 'db-user',
+            'mail_password' => 'db-pass',
+            'mail_encryption' => 'tls',
+            'mail_from_address' => 'noreply@kmsar.auf.edu.ph',
+            'mail_from_name' => 'KMSAR Test',
+        ]);
+
+        app(\App\Services\SmtpSettingsService::class)->applyToConfig();
+
+        expect(config('mail.mailers.smtp.host'))->toBe('sandbox.smtp.mailtrap.io')
+            ->and(config('mail.mailers.smtp.username'))->toBe('db-user')
+            ->and(config('mail.from.name'))->toBe('KMSAR Test');
     });
 });

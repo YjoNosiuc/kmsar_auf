@@ -110,112 +110,177 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const inputs = document.querySelectorAll('.otp-input');
     const form = document.getElementById('otp-form');
+    if (!form) {
+        return;
+    }
+
+    const inputs = Array.from(document.querySelectorAll('.otp-input'));
+    const submitBtn = document.getElementById('otp-submit-btn');
+    const combinedInput = document.getElementById('otp-combined');
+    const countdownEl = document.getElementById('otp-countdown');
+    const expiredMsg = document.getElementById('otp-expired-msg');
+    let submitting = false;
+    let timerInterval = null;
+
+    function syncCombined() {
+        if (combinedInput) {
+            combinedInput.value = inputs.map(function(i) { return i.value; }).join('');
+        }
+    }
+
+    function focusInput(index) {
+        if (index >= 0 && index < inputs.length) {
+            inputs[index].focus();
+            inputs[index].select();
+        }
+    }
+
+    function fillFromDigits(startIndex, digits) {
+        digits.forEach(function(digit, offset) {
+            const target = inputs[startIndex + offset];
+            if (target) {
+                target.value = digit;
+            }
+        });
+        syncCombined();
+
+        const nextEmptyIndex = inputs.findIndex(function(i) { return i.value === ''; });
+        if (nextEmptyIndex !== -1) {
+            focusInput(nextEmptyIndex);
+            return;
+        }
+
+        focusInput(inputs.length - 1);
+        submitOtp();
+    }
+
+    function submitOtp() {
+        if (submitting) {
+            return;
+        }
+        syncCombined();
+        if (!combinedInput || combinedInput.value.length !== 6) {
+            return;
+        }
+        submitting = true;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
+        form.submit();
+    }
 
     inputs.forEach(function(input, index) {
-        // Only allow single digit
         input.addEventListener('keydown', function(e) {
-            // Allow: backspace, delete, tab, escape, enter
-            if ([8, 9, 27, 13, 46].indexOf(e.keyCode) !== -1) {
-                if (e.keyCode === 8) {
-                    // Backspace
-                    if (input.value === '' && index > 0) {
-                        // Box is empty — go to previous box and clear it
-                        inputs[index - 1].value = '';
-                        inputs[index - 1].focus();
-                    } else {
-                        // Box has value — clear it
-                        input.value = '';
-                    }
-                    e.preventDefault();
-                }
-                return;
-            }
-            // Only allow digits 0-9
-            if ((e.keyCode < 48 || e.keyCode > 57) &&
-                (e.keyCode < 96 || e.keyCode > 105)) {
+            if (e.key === 'Backspace') {
                 e.preventDefault();
+                if (input.value === '' && index > 0) {
+                    inputs[index - 1].value = '';
+                    focusInput(index - 1);
+                } else {
+                    input.value = '';
+                }
+                syncCombined();
                 return;
             }
-            // Clear current value before entering new digit
-            input.value = '';
+
+            if (e.key === 'ArrowLeft' && index > 0) {
+                e.preventDefault();
+                focusInput(index - 1);
+                return;
+            }
+
+            if (e.key === 'ArrowRight' && index < inputs.length - 1) {
+                e.preventDefault();
+                focusInput(index + 1);
+                return;
+            }
+
+            if (e.key.length === 1 && !/^\d$/.test(e.key)) {
+                e.preventDefault();
+            }
         });
 
         input.addEventListener('input', function() {
-            // Remove non-digits
-            input.value = input.value.replace(/[^0-9]/g, '');
-            if (input.value.length === 1) {
-                if (index < inputs.length - 1) {
-                    // Move to next box
-                    inputs[index + 1].focus();
-                } else {
-                    // Last box filled — auto submit
-                    const allFilled = Array.from(inputs).every(i => i.value !== '');
-                    if (allFilled) {
-                        // Combine all digits into hidden input
-                        const otp = Array.from(inputs).map(i => i.value).join('');
-                        document.getElementById('otp-combined').value = otp;
-                        form.submit();
-                    }
-                }
+            const digits = input.value.replace(/[^0-9]/g, '');
+            if (digits.length === 0) {
+                input.value = '';
+                syncCombined();
+                return;
             }
+
+            if (digits.length === 1) {
+                input.value = digits;
+                syncCombined();
+                if (index < inputs.length - 1) {
+                    focusInput(index + 1);
+                } else if (inputs.every(function(i) { return i.value !== ''; })) {
+                    submitOtp();
+                }
+                return;
+            }
+
+            fillFromDigits(index, digits.split('').slice(0, inputs.length - index));
         });
 
-        // Paste support
         input.addEventListener('paste', function(e) {
             e.preventDefault();
             const paste = (e.clipboardData || window.clipboardData)
                 .getData('text').replace(/[^0-9]/g, '');
-            if (paste.length === 6) {
-                inputs.forEach(function(inp, i) {
-                    inp.value = paste[i] || '';
-                });
-                // Auto submit after paste
-                const otp = Array.from(inputs).map(i => i.value).join('');
-                document.getElementById('otp-combined').value = otp;
-                form.submit();
+            if (paste.length > 0) {
+                fillFromDigits(0, paste.slice(0, 6).split(''));
             }
         });
 
-        // Click focuses the first empty box
         input.addEventListener('click', function() {
-            const firstEmpty = Array.from(inputs).find(i => i.value === '');
-            if (firstEmpty) firstEmpty.focus();
-            else input.focus();
+            const firstEmpty = inputs.find(function(i) { return i.value === ''; });
+            focusInput(firstEmpty ? inputs.indexOf(firstEmpty) : index);
         });
     });
 
-    // Sync combined OTP before manual submit
     form.addEventListener('submit', function() {
-        const otp = Array.from(inputs).map(i => i.value).join('');
-        document.getElementById('otp-combined').value = otp;
+        syncCombined();
+        if (!submitting) {
+            submitting = true;
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+        }
     });
 
-    // Countdown timer — 1 minute
     let seconds = 60;
-    const countdownEl = document.getElementById('otp-countdown');
-    const timerInterval = setInterval(function() {
-        seconds--;
-        if (countdownEl) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            countdownEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
-            if (seconds <= 10) countdownEl.style.color = '#DC2626';
+    function renderCountdown() {
+        if (!countdownEl) {
+            return;
         }
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        countdownEl.textContent = mins + ':' + (secs < 10 ? '0' : '') + secs;
+        countdownEl.style.color = seconds <= 10 ? '#DC2626' : '#64748B';
+    }
+
+    renderCountdown();
+    timerInterval = setInterval(function() {
+        seconds--;
+        renderCountdown();
         if (seconds <= 0) {
             clearInterval(timerInterval);
-            if (countdownEl) countdownEl.textContent = 'Expired';
-            // Disable all inputs
-            inputs.forEach(i => i.disabled = true);
-            // Show expired message
-            const expiredMsg = document.getElementById('otp-expired-msg');
-            if (expiredMsg) expiredMsg.style.display = 'block';
+            if (countdownEl) {
+                countdownEl.textContent = 'Expired';
+            }
+            inputs.forEach(function(i) { i.disabled = true; });
+            if (expiredMsg) {
+                expiredMsg.style.display = 'block';
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
         }
     }, 1000);
 
-    // Focus first input on load
-    if (inputs.length > 0) inputs[0].focus();
+    if (inputs.length > 0) {
+        focusInput(0);
+    }
 });
 </script>
 @endpush

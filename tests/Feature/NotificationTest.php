@@ -153,6 +153,25 @@ describe('ResearchEndorsedToOvpri', function () {
         Notification::assertNotSentTo($faculty, ResearchEndorsedToOvpri::class);
         Notification::assertSentTo($faculty, ResearchEndorsed::class);
     });
+
+    it('includes the endorsing college in the OVPRI notification message', function () {
+        Notification::fake();
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $ovpri = makeOvpri();
+        $research = makeDraftResearch($faculty, $college);
+        $research->update(['status' => ResearchStatus::INITIAL_DEAN_REVIEW, 'submitted_at' => now()]);
+        $dean = $college->headUser;
+
+        $this->actingAs($dean)->post(route('approval.endorse', $research), ['remarks' => 'Endorsed.']);
+
+        Notification::assertSentTo($ovpri, ResearchEndorsedToOvpri::class, function (ResearchEndorsedToOvpri $notification) use ($college) {
+            $payload = $notification->toArray($notification->research->primaryAuthor);
+
+            return str_contains($payload['message'], (string) $college->code)
+                && str_contains($payload['message'], 'endorsed research');
+        });
+    });
 });
 
 // ─────────────────────────────────────────────
@@ -438,5 +457,30 @@ describe('Dual-cycle notifications', function () {
 
         Notification::assertSentTo($faculty, ResearchSubmissionConfirmed::class);
         Notification::assertNotSentTo($dean, ResearchSubmitted::class);
+    });
+
+    it('notifies the dean only once when faculty resubmits final outcomes', function () {
+        Notification::fake();
+        Storage::fake('local');
+        $college = makeCollege();
+        $faculty = makeFaculty($college);
+        $research = makeDraftResearch($faculty, $college);
+        $research->update([
+            'status' => ResearchStatus::FINAL_REJECTED,
+            'final_review_count' => 1,
+            'research_registered_at' => now()->subMonth(),
+        ]);
+        $dean = $college->headUser;
+
+        seedOutcomeClassifications();
+
+        submitResearchCompletion($research, $faculty, [
+            'outcome_classifications' => ['presented_conference_auf'],
+            'remarks' => 'Revised outcome package.',
+            'external_link' => 'https://example.com/final-resubmit-proof',
+        ]);
+
+        Notification::assertSentTo($dean, ResearchResubmitted::class);
+        Notification::assertNotSentTo($dean, ResearchProgressUpdated::class);
     });
 });

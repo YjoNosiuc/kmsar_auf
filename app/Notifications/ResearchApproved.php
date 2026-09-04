@@ -13,6 +13,12 @@ class ResearchApproved extends QueuedResearchNotification
         public Research $research
     ) {}
 
+    /** In-app bell only — faculty approval email sent separately (priority). */
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [

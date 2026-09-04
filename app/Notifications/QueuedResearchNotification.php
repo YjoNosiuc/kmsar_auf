@@ -2,15 +2,13 @@
 
 namespace App\Notifications;
 
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
- * Research lifecycle notifications — always queued so HTTP requests are not blocked by SMTP.
+ * Research lifecycle notifications — sent synchronously so in-app bell and mail
+ * work without a queue worker. (Mail still uses SMTP during the HTTP request.)
  */
-abstract class QueuedResearchNotification extends Notification implements ShouldQueue
+abstract class QueuedResearchNotification extends Notification
 {
-    use Queueable;
     use SendsResearchNotificationMail;
 }

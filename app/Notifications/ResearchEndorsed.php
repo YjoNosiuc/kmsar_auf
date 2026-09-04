@@ -13,6 +13,12 @@ class ResearchEndorsed extends QueuedResearchNotification
         public Research $research
     ) {}
 
+    /** In-app bell only on endorse — OVPRI gets the priority email. */
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [

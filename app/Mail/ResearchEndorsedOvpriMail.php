@@ -24,7 +24,19 @@ class ResearchEndorsedOvpriMail extends ResearchNotificationMail
 
     protected function bodyText(): string
     {
-        return 'A research has been endorsed by the Dean and is now pending your review. College: '.$this->collegeName().'. Faculty: '.$this->authorName().'.';
+        $research = $this->research;
+        $college = $research->motherCollege;
+        $collegeLabel = $college !== null && filled($college->code)
+            ? $college->name.' ('.$college->code.')'
+            : $this->collegeName();
+
+        $cycle = \App\Support\ResearchStatus::reviewCycle($research->status);
+
+        if ($cycle === \App\Support\ResearchStatus::REVIEW_CYCLE_FINAL) {
+            return 'The dean of '.$collegeLabel.' has endorsed a research outcome submission for your final OVPRI/CDAIC review. Faculty: '.$this->authorName().'.';
+        }
+
+        return 'The dean of '.$collegeLabel.' has endorsed a research registration for your initial OVPRI/CDAIC review. Faculty: '.$this->authorName().'.';
     }
 
     protected function actionUrl(): ?string

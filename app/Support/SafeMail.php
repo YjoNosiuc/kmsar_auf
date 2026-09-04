@@ -2,13 +2,15 @@
 
 namespace App\Support;
 
-use App\Jobs\SendKmsarEmail;
 use Illuminate\Mail\Mailable;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 class SafeMail
 {
     /**
-     * Queue a KMSAR email. Use $delaySeconds to stagger sends (Mailtrap rate limits).
+     * Send synchronously. Use $delaySeconds to pause before send (Mailtrap free tier rate limit).
      */
     public static function send(string $to, Mailable $mailable, int $delaySeconds = 0): void
     {
@@ -16,12 +18,17 @@ class SafeMail
             return;
         }
 
-        $job = new SendKmsarEmail($to, $mailable);
-
         if ($delaySeconds > 0) {
-            $job->delay(now()->addSeconds($delaySeconds));
+            sleep($delaySeconds);
         }
 
-        dispatch($job);
+        try {
+            Mail::to($to)->send($mailable);
+        } catch (Throwable $e) {
+            Log::warning('Email failed: '.$e->getMessage(), [
+                'to' => $to,
+                'mailable' => $mailable::class,
+            ]);
+        }
     }
 }

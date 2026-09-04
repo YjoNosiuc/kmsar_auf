@@ -19,15 +19,6 @@ function uniqueTitle(prefix: string): string {
   return `${prefix} ${Date.now()}`;
 }
 
-function queuedMailJobsContaining(className: string, email?: string): number {
-  const escapedClass = className.replace(/\\/g, '\\\\');
-  const emailClause = email ? `->where('payload','like','%${email}%')` : '';
-  const out = runTinker(
-    `echo \\Illuminate\\Support\\Facades\\DB::table('jobs')->where('payload','like','%${escapedClass}%')${emailClause}->count();`,
-  );
-  return parseInt(out.match(/(\d+)\s*$/)?.[1] ?? '0', 10);
-}
-
 async function openNotificationBell(page: Page): Promise<void> {
   processQueuedJobs();
   await page.getByRole('button', { name: 'Notifications' }).click();
@@ -361,20 +352,30 @@ test.describe('Notifications — UAT', () => {
   });
 
   test.describe('Email notification smoke tests', () => {
-    test('NOTIF-020: Research submission queues an email to faculty', async ({ page }) => {
-      const before = queuedMailJobsContaining('ResearchSubmittedFacultyMail', credentials.faculty_ccs.email);
+    function notificationCountForEmail(notificationClass: string, email: string): number {
+      const escapedClass = notificationClass.replace(/\\/g, '\\\\');
+      const out = runTinker(
+        `echo \\App\\Models\\User::where('email','${email}')->first()?->notifications()->where('type','${escapedClass}')->count() ?? 0;`,
+      );
+      return parseInt(out.match(/(\d+)\s*$/)?.[1] ?? '0', 10);
+    }
+
+    test('NOTIF-020: Research submission creates faculty notification (in-app + mail channel)', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF020 Faculty Mail'));
+      await waitForUnreadNotifications(credentials.faculty_ccs.email);
       processQueuedJobs();
-      const after = queuedMailJobsContaining('ResearchSubmittedFacultyMail', credentials.faculty_ccs.email);
-      expect(after).toBeGreaterThan(before);
+      expect(
+        notificationCountForEmail('App\\Notifications\\ResearchSubmissionConfirmed', credentials.faculty_ccs.email),
+      ).toBeGreaterThan(0);
     });
 
-    test('NOTIF-021: Research submission queues an email to the dean', async ({ page }) => {
-      const before = queuedMailJobsContaining('ResearchSubmittedDeanMail', credentials.dean_ccs.email);
+    test('NOTIF-021: Research submission creates dean notification (in-app + mail channel)', async ({ page }) => {
       await createAndSubmitResearch(page, uniqueTitle('NOTIF021 Dean Mail'));
+      await waitForUnreadNotifications(credentials.dean_ccs.email);
       processQueuedJobs();
-      const after = queuedMailJobsContaining('ResearchSubmittedDeanMail', credentials.dean_ccs.email);
-      expect(after).toBeGreaterThan(before);
+      expect(
+        notificationCountForEmail('App\\Notifications\\ResearchSubmitted', credentials.dean_ccs.email),
+      ).toBeGreaterThan(0);
     });
 
     test('NOTIF-022: Password-reset request creates OTP and dispatches email flow', async ({ page }) => {

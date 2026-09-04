@@ -75,13 +75,38 @@ final class ResearchNotificationCopy
     public static function endorsedToOvpri(Research $research): string
     {
         $ref = $research->reference_number;
+        $collegeLabel = self::motherCollegeLabel($research);
         $cycle = ResearchStatus::reviewCycle($research->status);
 
         if ($cycle === ResearchStatus::REVIEW_CYCLE_FINAL) {
-            return __('Research :ref completion has been endorsed and awaits final OVPRI/CDAIC review.', ['ref' => $ref]);
+            return __('The dean of :college has endorsed research :ref for your final OVPRI/CDAIC review.', [
+                'ref' => $ref,
+                'college' => $collegeLabel,
+            ]);
         }
 
-        return __('Research :ref has been endorsed and awaits initial OVPRI/CDAIC review.', ['ref' => $ref]);
+        return __('The dean of :college has endorsed research :ref for your initial OVPRI/CDAIC review.', [
+            'ref' => $ref,
+            'college' => $collegeLabel,
+        ]);
+    }
+
+    private static function motherCollegeLabel(Research $research): string
+    {
+        $college = $research->motherCollege;
+
+        if ($college === null) {
+            return __('the mother college');
+        }
+
+        if (filled($college->code)) {
+            return __(':name (:code)', [
+                'name' => $college->name,
+                'code' => $college->code,
+            ]);
+        }
+
+        return $college->name;
     }
 
     public static function approvedFaculty(Research $research): string

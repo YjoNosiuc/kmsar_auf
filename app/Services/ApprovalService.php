@@ -2,10 +2,9 @@
 
 namespace App\Services;
 
-use App\Jobs\SendNotificationJob;
-use App\Mail\ResearchRegisteredFacultyMail;
-use App\Mail\ResearchSubmittedDeanMail;
+use App\Mail\ResearchEndorsedOvpriMail;
 use App\Mail\ResearchSubmittedFacultyMail;
+use App\Notifications\ResearchResubmitted;
 use App\Models\Approval;
 use App\Models\AuditLog;
 use App\Models\College;
@@ -481,14 +480,6 @@ class ApprovalService
         if ($fresh->registration_type === 'existing') {
             $fresh->primaryAuthor?->notify(new ResearchSubmissionConfirmed($fresh));
 
-            if ($fresh->primaryAuthor?->email) {
-                SafeMail::send(
-                    $fresh->primaryAuthor->email,
-                    new ResearchRegisteredFacultyMail($fresh),
-                    0
-                );
-            }
-
             return;
         }
 
@@ -498,24 +489,7 @@ class ApprovalService
 
         $fresh->primaryAuthor?->notify(new ResearchSubmissionConfirmed($fresh));
 
-        $primaryDean = ResearchDeanRouting::primaryDeanFor($fresh);
-        if ($primaryDean?->email) {
-            SafeMail::send(
-                $primaryDean->email,
-                new ResearchSubmittedDeanMail($fresh, $primaryDean),
-                0
-            );
-        }
-
-        if ($fresh->primaryAuthor?->email) {
-            SafeMail::send(
-                $fresh->primaryAuthor->email,
-                new ResearchSubmittedFacultyMail($fresh),
-                0
-            );
-        }
-
-        $delay = 2;
+        $delay = 0;
         $fresh->researchAuthors
             ->where('is_primary', false)
             ->filter(fn ($author) => filled($author->email))
@@ -589,13 +563,21 @@ class ApprovalService
             ]);
         });
 
-        $fresh = Research::query()->with('primaryAuthor')->findOrFail($researchId);
+        $fresh = Research::query()->with(['primaryAuthor', 'motherCollege'])->findOrFail($researchId);
         $fresh->primaryAuthor?->notify(new ResearchEndorsed($fresh));
 
+        $delay = 0;
         User::query()
             ->whereHas('roles', fn ($q) => $q->whereIn('name', ['ovpri_admin', 'cdaic_admin']))
             ->get()
-            ->each(fn (User $admin) => $admin->notify(new ResearchEndorsedToOvpri($fresh)));
+            ->each(function (User $admin) use ($fresh, &$delay) {
+                $admin->notify(new ResearchEndorsedToOvpri($fresh));
+
+                if (filled($admin->email)) {
+                    SafeMail::send($admin->email, new ResearchEndorsedOvpriMail($fresh, $admin), $delay);
+                    $delay += 2;
+                }
+            });
     }
 
     public function approve(Research $research, User $ovpri, ?string $remarks = null): void
@@ -698,7 +680,7 @@ class ApprovalService
             ]);
         });
 
-        SendNotificationJob::dispatch($researchId, 'resubmitted');
+        $this->notifyDeansOfResubmit($researchId);
     }
 
     public function resubmitFinal(Research $research, User $actor, array $classificationCodes, ?string $remarks = null): void
@@ -725,7 +707,7 @@ class ApprovalService
             );
         });
 
-        SendNotificationJob::dispatch($researchId, 'resubmitted');
+        $this->notifyDeansOfResubmit($researchId);
     }
 
     /**
@@ -1127,5 +1109,20 @@ class ApprovalService
 
             return $prefix.str_pad((string) $next, 4, '0', STR_PAD_LEFT);
         });
+    }
+
+    private function notifyDeansOfResubmit(int $researchId): void
+    {
+        $research = Research::query()
+            ->with(['primaryAuthor', 'researchAuthors', 'motherCollege'])
+            ->find($researchId);
+
+        if ($research === null) {
+            return;
+        }
+
+        foreach (ResearchDeanRouting::deanUsersFor($research) as $dean) {
+            $dean->notify(new ResearchResubmitted($research));
+        }
     }
 }

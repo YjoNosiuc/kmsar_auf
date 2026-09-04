@@ -13,6 +13,12 @@ class ResearchApprovedDean extends QueuedResearchNotification
         public Research $research
     ) {}
 
+    /** In-app bell only on OVPRI approve. */
+    public function via(object $notifiable): array
+    {
+        return ['database'];
+    }
+
     public function toArray(object $notifiable): array
     {
         return $this->baseResearchPayload($this->research, [

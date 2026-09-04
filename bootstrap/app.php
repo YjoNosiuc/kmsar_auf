@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Middleware\RoleMiddleware;
+use App\Support\FriendlyExceptionResponse;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -8,6 +10,7 @@ use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Spatie\Permission\Middleware\PermissionMiddleware;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -24,58 +27,23 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (TokenMismatchException $e, Request $request) {
-            if ($request->expectsJson()) {
-                return null;
+            return FriendlyExceptionResponse::tokenMismatch($request);
+        });
+
+        $exceptions->render(function (AuthorizationException $e, Request $request) {
+            return FriendlyExceptionResponse::forbidden($request, $e->getMessage());
+        });
+
+        $exceptions->render(function (HttpException $e, Request $request) {
+            if ($e->getStatusCode() === 403) {
+                return FriendlyExceptionResponse::forbidden($request, $e->getMessage());
             }
 
-            $accept = strtolower((string) $request->header('Accept', ''));
-            $prefersHtml = $accept === ''
-                || str_contains($accept, 'text/html')
-                || str_contains($accept, 'application/xhtml+xml');
-
-            if (! $prefersHtml && ($request->ajax() || str_contains($accept, 'application/json'))) {
-                return null;
+            if ($e->getStatusCode() === 419) {
+                return FriendlyExceptionResponse::tokenMismatch($request);
             }
 
-            if (! $request->hasSession()) {
-                return redirect()->route('login', ['expired' => 1]);
-            }
-
-            if ($request->isMethod('post') && $request->is('login')) {
-                $request->session()->invalidate();
-                $request->session()->regenerateToken();
-
-                return redirect()->route('login', ['expired' => 1]);
-            }
-
-            if ($request->isMethod('post') && $request->is('register')) {
-                $request->session()->regenerateToken();
-
-                return redirect()->route('register')
-                    ->withInput($request->except('_token', 'password', 'password_confirmation'))
-                    ->withErrors([
-                        'session' => __('Your session expired. Please review the form and submit again.'),
-                    ]);
-            }
-
-            if ($request->isMethod('post') && $request->is('verify-email', 'verify-email/*')) {
-                $request->session()->regenerateToken();
-
-                return redirect()->route('register.verify-email')
-                    ->withErrors([
-                        'otp' => __('Your session expired. Please enter the verification code again or resend a new code.'),
-                    ]);
-            }
-
-            $request->session()->regenerateToken();
-
-            if ($request->user()) {
-                return back()
-                    ->withInput($request->except('_token', 'password', 'password_confirmation', 'current_password'))
-                    ->with('error', __('Your session expired. Please try again.'));
-            }
-
-            return redirect()->route('login', ['expired' => 1]);
+            return null;
         });
 
         $exceptions->render(function (PostTooLargeException $e, Request $request) {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\FriendlyExceptionResponse;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -29,7 +30,10 @@ class RoleMiddleware
         $roleNames = array_values(array_filter(array_map('trim', explode('|', $roles))));
 
         if ($roleNames === [] || ! $authUser->hasAnyRole($roleNames)) {
-            abort(403);
+            return FriendlyExceptionResponse::forbidden(
+                $request,
+                __('You do not have access to that page.')
+            );
         }
 
         return $next($request);

@@ -283,6 +283,15 @@
 
             <main class="kmsar-main-content" id="main-content">
                 <div class="kmsar-page-container">
+                    @if (session('success'))
+                        <x-alert type="success" :message="session('success')" class="mb-4" />
+                    @endif
+                    @if (session('info'))
+                        <x-alert type="info" :message="session('info')" class="mb-4" />
+                    @endif
+                    @if (session('error'))
+                        <x-alert type="danger" :message="session('error')" class="mb-4" />
+                    @endif
                     @yield('content')
                 </div>
             </main>
@@ -424,22 +433,70 @@
     </div>
 
     <script>
-        // Auto-redirect to login when the session / CSRF token has expired (419).
+        // Keep CSRF tokens in sync and recover from expired sessions without showing error pages.
         (function () {
             const loginExpiredUrl = @json(route('login', ['expired' => 1]));
+            const pingUrl = @json(route('session.ping'));
 
-            function redirectIfExpired(status) {
-                if (status === 419) {
-                    window.location.href = loginExpiredUrl;
-                    return true;
-                }
-                return false;
+            function applyCsrf(token) {
+                if (!token) return;
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                if (meta) meta.setAttribute('content', token);
+                document.querySelectorAll('input[name="_token"]').forEach(function (input) {
+                    input.value = token;
+                });
             }
+
+            function recoverFromExpiredSession(status) {
+                if (status !== 419) return false;
+                if (pingUrl) {
+                    fetch(pingUrl, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        },
+                        credentials: 'same-origin',
+                    })
+                        .then(function (response) {
+                            if (response.ok) {
+                                return response.json();
+                            }
+                            window.location.href = loginExpiredUrl;
+                        })
+                        .then(function (data) {
+                            if (data?.csrf) {
+                                applyCsrf(data.csrf);
+                                window.location.reload();
+                            }
+                        })
+                        .catch(function () {
+                            window.location.href = loginExpiredUrl;
+                        });
+                } else {
+                    window.location.href = loginExpiredUrl;
+                }
+                return true;
+            }
+
+            document.addEventListener('submit', function (event) {
+                const form = event.target;
+                if (!(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post') {
+                    return;
+                }
+                const meta = document.querySelector('meta[name="csrf-token"]');
+                const token = meta?.getAttribute('content');
+                const input = form.querySelector('input[name="_token"]');
+                if (token && input) {
+                    input.value = token;
+                }
+            }, true);
 
             const originalFetch = window.fetch;
             window.fetch = function (...args) {
                 return originalFetch.apply(this, args).then(function (response) {
-                    redirectIfExpired(response.status);
+                    recoverFromExpiredSession(response.status);
                     return response;
                 });
             };
@@ -447,7 +504,7 @@
             const originalOpen = XMLHttpRequest.prototype.open;
             XMLHttpRequest.prototype.open = function (...args) {
                 this.addEventListener('load', function () {
-                    redirectIfExpired(this.status);
+                    recoverFromExpiredSession(this.status);
                 });
                 return originalOpen.apply(this, args);
             };
@@ -688,6 +745,11 @@
 
             persistActivity(Date.now());
             clearDeadline();
+            setInterval(function () {
+                if (!document.hidden) {
+                    pingSession();
+                }
+            }, 600000);
             setInterval(tick, 1000);
             tick();
         })();

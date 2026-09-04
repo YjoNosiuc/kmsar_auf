@@ -225,6 +225,7 @@
     (function () {
         const form = document.querySelector('form[method="POST"]');
         const meta = document.querySelector('meta[name="csrf-token"]');
+        const csrfUrl = @json(route('login.csrf'));
 
         function syncCsrf(token) {
             if (! token) {
@@ -239,8 +240,38 @@
             }
         }
 
-        form?.addEventListener('submit', function () {
-            syncCsrf(meta?.getAttribute('content'));
+        form?.addEventListener('submit', function (event) {
+            if (form.dataset.submitting === '1') {
+                event.preventDefault();
+                return;
+            }
+
+            event.preventDefault();
+            form.dataset.submitting = '1';
+
+            const submitBtn = form.querySelector('[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+
+            fetch(csrfUrl, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' },
+            })
+                .then(function (response) {
+                    return response.json();
+                })
+                .then(function (data) {
+                    syncCsrf(data.csrf);
+                    form.submit();
+                })
+                .catch(function () {
+                    form.dataset.submitting = '0';
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                    }
+                    form.submit();
+                });
         });
 
         try {

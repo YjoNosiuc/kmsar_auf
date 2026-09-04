@@ -532,7 +532,8 @@ describe('OVPRI: approve / return (initial cycle)', function () {
 
         $this->actingAs($ovpri)
             ->post(route('ovpri.approve', $research), ['remarks' => 'Early approve.'])
-            ->assertForbidden();
+            ->assertRedirect(route('ovpri.queue'))
+            ->assertSessionHas('info');
     });
 
     it('faculty cannot access the OVPRI queue', function () {

@@ -120,7 +120,11 @@ class ApprovalController extends Controller
     public function endorse(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
         $this->authorize('view', $research);
-        abort_unless(ResearchStatus::isDeanQueueStatus((string) $research->status), 403);
+
+        if ($redirect = $this->ensureDeanQueueStatus($research)) {
+            return $redirect;
+        }
+
         $this->authorizeCollegeScope($request, $research);
 
         $validated = $request->validated();
@@ -141,7 +145,11 @@ class ApprovalController extends Controller
     public function returnSubmission(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
         $this->authorize('view', $research);
-        abort_unless(ResearchStatus::isDeanQueueStatus((string) $research->status), 403);
+
+        if ($redirect = $this->ensureDeanQueueStatus($research)) {
+            return $redirect;
+        }
+
         $this->authorizeCollegeScope($request, $research);
 
         $validated = $request->validated();
@@ -233,7 +241,9 @@ class ApprovalController extends Controller
 
     public function approve(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
-        $this->authorizeOvpriStageAction($request, $research);
+        if ($redirect = $this->authorizeOvpriStageAction($request, $research)) {
+            return $redirect;
+        }
 
         $validated = $request->validated();
 
@@ -268,7 +278,9 @@ class ApprovalController extends Controller
 
     public function ovpriReturn(ApprovalActionRequest $request, Research $research): RedirectResponse
     {
-        $this->authorizeOvpriStageAction($request, $research);
+        if ($redirect = $this->authorizeOvpriStageAction($request, $research)) {
+            return $redirect;
+        }
 
         $validated = $request->validated();
 
@@ -330,16 +342,45 @@ class ApprovalController extends Controller
         );
     }
 
-    private function authorizeOvpriStageAction(Request $request, Research $research): void
+    private function ensureDeanQueueStatus(Research $research): ?RedirectResponse
+    {
+        if (ResearchStatus::isDeanQueueStatus((string) $research->status)) {
+            return null;
+        }
+
+        $cycle = ResearchStatus::reviewCycle($research->status) ?? ResearchStatus::REVIEW_CYCLE_INITIAL;
+
+        return redirect()
+            ->route('approval.queue', ['cycle' => $cycle === ResearchStatus::REVIEW_CYCLE_FINAL ? 'final' : 'initial'])
+            ->with('info', __('This research is no longer awaiting your review.'));
+    }
+
+    private function authorizeOvpriStageAction(Request $request, Research $research): ?RedirectResponse
     {
         $user = $request->user();
 
         abort_unless(
-            $user->hasAnyRole(['ovpri_admin', 'cdaic_admin']),
+            $user->hasAnyRole(['ovpri_admin', 'cdaic_admin', 'super_admin']),
             403,
             __('You are not authorized to perform this action.')
         );
 
-        abort_unless(ResearchStatus::isOvpriQueueStatus((string) $research->status), 403);
+        if (ResearchStatus::isOvpriQueueStatus((string) $research->status)) {
+            return null;
+        }
+
+        if (in_array($research->status, [ResearchStatus::RESEARCH_REGISTERED, ResearchStatus::RESEARCH_ACCEPTED], true)) {
+            $cycle = $research->status === ResearchStatus::RESEARCH_ACCEPTED
+                ? ResearchStatus::REVIEW_CYCLE_FINAL
+                : ResearchStatus::REVIEW_CYCLE_INITIAL;
+
+            return redirect()
+                ->route('ovpri.queue', ['cycle' => $cycle, 'tab' => 'approved'])
+                ->with('info', __('This research was already approved.'));
+        }
+
+        return redirect()
+            ->route('ovpri.queue')
+            ->with('info', __('This research is no longer awaiting OVPRI review.'));
     }
 }

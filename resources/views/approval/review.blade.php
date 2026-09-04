@@ -63,7 +63,7 @@
 
 @section('content')
     <div
-        x-data="{ tab: 'info', showEndorse: {{ ($errors->has('remarks') && old('_form') === 'endorse') ? 'true' : 'false' }}, showReturn: false }"
+        x-data="{ tab: 'info', showEndorse: {{ ($errors->has('remarks') && old('_form') === 'endorse') ? 'true' : 'false' }}, showReturn: false, endorsing: false, returning: false }"
         @keydown.escape.window="showEndorse = false; showReturn = false"
     >
         {{-- PAGE HEADER --}}
@@ -358,7 +358,7 @@
         @if ($canDeanReview)
             <div x-show="showEndorse" x-cloak class="kmsar-modal-overlay" style="display: none;" @click.self="showEndorse = false">
                 <div class="kmsar-modal kmsar-modal--sm" @click.stop role="dialog" aria-modal="true" aria-labelledby="kmsar-endorse-title">
-                    <form method="post" action="{{ route('approval.endorse', $research) }}">
+                    <form method="post" action="{{ route('approval.endorse', $research) }}" @submit="endorsing = true">
                         @csrf
                         <input type="hidden" name="_form" value="endorse">
                         <div class="kmsar-modal-header">
@@ -385,8 +385,11 @@
                             </div>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">
-                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--outline" @click="showEndorse = false">{{ __('Cancel') }}</button>
-                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--success">{{ __('Endorse') }}</button>
+                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--outline" @click="showEndorse = false" :disabled="endorsing">{{ __('Cancel') }}</button>
+                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--success" :disabled="endorsing">
+                                <span x-show="!endorsing">{{ __('Endorse') }}</span>
+                                <span x-show="endorsing" x-cloak>{{ __('Endorsing…') }}</span>
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -397,7 +400,7 @@
                         <h2 id="kmsar-return-title" class="kmsar-modal-title">{{ __('Return for revision') }}</h2>
                         <button type="button" class="kmsar-modal-close" @click="showReturn = false" aria-label="{{ __('Close') }}">&times;</button>
                     </div>
-                    <form method="post" action="{{ route('approval.return', $research) }}" class="kmsar-modal-body space-y-4">
+                    <form method="post" action="{{ route('approval.return', $research) }}" class="kmsar-modal-body space-y-4" @submit="returning = true">
                         @csrf
                         <p class="kmsar-body" style="font-size:var(--text-xs);color:var(--color-warning);margin:0;">{{ __('Faculty will be notified and must revise before resubmitting.') }}</p>
                         <div>
@@ -414,8 +417,11 @@
                             ></textarea>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">
-                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--secondary" @click="showReturn = false">{{ __('Cancel') }}</button>
-                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--warning">{{ __('Return') }}</button>
+                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--secondary" @click="showReturn = false" :disabled="returning">{{ __('Cancel') }}</button>
+                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--warning" :disabled="returning">
+                                <span x-show="!returning">{{ __('Return') }}</span>
+                                <span x-show="returning" x-cloak>{{ __('Returning…') }}</span>
+                            </button>
                         </div>
                     </form>
                 </div>

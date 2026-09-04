@@ -132,7 +132,9 @@ class LoginController extends Controller
         $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
         $host = $parts['host'] ?? null;
         if (is_string($host) && is_string($appHost) && strcasecmp($host, $appHost) !== 0) {
-            return false;
+            if (! app()->environment('local') || ! $this->isLocalDevHost($host) || ! $this->isLocalDevHost($appHost)) {
+                return false;
+            }
         }
 
         $path = '/'.ltrim((string) ($parts['path'] ?? '/'), '/');
@@ -155,5 +157,10 @@ class LoginController extends Controller
         }
 
         return false;
+    }
+
+    protected function isLocalDevHost(string $host): bool
+    {
+        return in_array(strtolower($host), ['127.0.0.1', 'localhost', 'kmsar_auf.test'], true);
     }
 }

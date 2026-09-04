@@ -63,7 +63,7 @@
 
 @section('content')
     <div
-        x-data="{ tab: 'info', showApprove: false, showReturn: false }"
+        x-data="{ tab: 'info', showApprove: false, showReturn: false, approving: false, returning: false }"
         @keydown.escape.window="showApprove = false; showReturn = false"
     >
         {{-- PAGE HEADER --}}
@@ -358,7 +358,7 @@
         @if ($canOvpriReview)
             <div x-show="showApprove" x-cloak class="kmsar-modal-overlay" style="display: none;" @click.self="showApprove = false">
                 <div class="kmsar-modal kmsar-modal--sm" @click.stop role="dialog" aria-modal="true" aria-labelledby="kmsar-approve-title">
-                    <form method="post" action="{{ route('ovpri.approve', $research) }}">
+                    <form method="post" action="{{ route('ovpri.approve', $research) }}" @submit="approving = true">
                         @csrf
                         <div class="kmsar-modal-header">
                             <h2 id="kmsar-approve-title" class="kmsar-modal-title">{{ __('Approve Submission') }}</h2>
@@ -381,8 +381,11 @@
                             </div>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">
-                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--outline" @click="showApprove = false">{{ __('Cancel') }}</button>
-                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--success">{{ __('Approve') }}</button>
+                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--outline" @click="showApprove = false" :disabled="approving">{{ __('Cancel') }}</button>
+                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--success" :disabled="approving">
+                                <span x-show="!approving">{{ __('Approve') }}</span>
+                                <span x-show="approving" x-cloak>{{ __('Approving…') }}</span>
+                            </button>
                         </div>
                     </form>
                 </div>
@@ -393,7 +396,7 @@
                         <h2 id="kmsar-ovpri-return-title" class="kmsar-modal-title">{{ __('Return for revision') }}</h2>
                         <button type="button" class="kmsar-modal-close" @click="showReturn = false" aria-label="{{ __('Close') }}">&times;</button>
                     </div>
-                    <form method="post" action="{{ route('ovpri.return', $research) }}" class="kmsar-modal-body space-y-4">
+                    <form method="post" action="{{ route('ovpri.return', $research) }}" class="kmsar-modal-body space-y-4" @submit="returning = true">
                         @csrf
                         <p class="kmsar-body" style="font-size:var(--text-xs);color:var(--color-warning);margin:0;">{{ __('Faculty will be notified and must revise before resubmitting.') }}</p>
                         <div>
@@ -410,8 +413,11 @@
                             ></textarea>
                         </div>
                         <div class="kmsar-modal-footer flex justify-end gap-2">
-                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--secondary" @click="showReturn = false">{{ __('Cancel') }}</button>
-                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--warning">{{ __('Return') }}</button>
+                            <button type="button" class="kmsar-btn kmsar-btn--md kmsar-btn--secondary" @click="showReturn = false" :disabled="returning">{{ __('Cancel') }}</button>
+                            <button type="submit" class="kmsar-btn kmsar-btn--md kmsar-btn--warning" :disabled="returning">
+                                <span x-show="!returning">{{ __('Return') }}</span>
+                                <span x-show="returning" x-cloak>{{ __('Returning…') }}</span>
+                            </button>
                         </div>
                     </form>
                 </div>

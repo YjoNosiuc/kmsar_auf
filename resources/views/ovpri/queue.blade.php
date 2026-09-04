@@ -172,6 +172,12 @@
 @if (session('success'))
     <x-alert type="success" :message="session('success')" class="mb-6" />
 @endif
+@if (session('info'))
+    <x-alert type="info" :message="session('info')" class="mb-6" />
+@endif
+@if (session('error'))
+    <x-alert type="danger" :message="session('error')" class="mb-6" />
+@endif
 
 @if ($errors->any())
     <x-alert type="danger" class="mb-6">

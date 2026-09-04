@@ -69,6 +69,12 @@ return Application::configure(basePath: dirname(__DIR__))
 
             $request->session()->regenerateToken();
 
+            if ($request->user()) {
+                return back()
+                    ->withInput($request->except('_token', 'password', 'password_confirmation', 'current_password'))
+                    ->with('error', __('Your session expired. Please try again.'));
+            }
+
             return redirect()->route('login', ['expired' => 1]);
         });
 
